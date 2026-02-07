@@ -431,7 +431,7 @@ export default function StudentDashboard() {
                 activities={activities}
                 student={learner}
                 isSubmitting={isSaving}
-                // existingSessions={existingSessions}
+                activitySessions={existingSessions}
                 onConfirm={handleConfirmSession}
             />
         </div>

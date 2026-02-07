@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { motion, Reorder, useDragControls } from 'framer-motion';
+import { useDragControls } from 'framer-motion';
 import { GripVertical, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ interface ItemCardProps {
     onActionClick: () => void;
     mode: 'add' | 'delete';
     itemValue: any;
+    dragControls?: any; // Pass controls from parent
 }
 
 const ItemCard = ({
@@ -28,11 +29,11 @@ const ItemCard = ({
     onActionClick,
     mode,
     itemValue,
+    dragControls,
 }: ItemCardProps) => {
-    const controls = useDragControls();
     const isDeleteMode = mode === 'delete';
 
-    const CardContent = (
+    return (
         <div
             className={cn(
                 'flex items-center gap-4 p-3 rounded-[22px] transition-all duration-300 group w-full select-none',
@@ -40,14 +41,14 @@ const ItemCard = ({
                 isLocked && 'opacity-60 grayscale-[0.5] pointer-events-none',
             )}
         >
-            {/* Leading: Grip for Timeline, Thumbnail for Library */}
-
+            {/* GRIP HANDLE: Now uses dragControls passed from the Modal's Reorder.Item */}
             <div
-                onPointerDown={(e) => !isLocked && controls.start(e)}
+                onPointerDown={(e) => dragControls?.start(e)}
                 className={cn(
                     'pl-1 shrink-0 text-slate-300 transition-colors',
                     !isLocked &&
                         'cursor-grab active:cursor-grabbing hover:text-slate-500',
+                    !isDeleteMode && 'hidden', // Only show grip in the timeline
                 )}
             >
                 {!isLocked ? (
@@ -62,18 +63,18 @@ const ItemCard = ({
                     <img
                         src={imageSrc}
                         className="h-full w-full object-cover"
-                        alt={title}
+                        alt={title || 'Activity'}
                     />
                 ) : (
                     <div className="h-full w-full flex items-center justify-center bg-indigo-50/50 text-indigo-600 font-bold text-[10px] uppercase">
-                        {title.charAt(0)}
+                        {title?.charAt(0) || '?'}
                     </div>
                 )}
             </div>
 
             <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-semibold text-slate-900 truncate tracking-tight">
-                    {title}
+                    {title || 'Untitled Activity'}
                 </p>
                 <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mt-0.5">
                     {subtitle}
@@ -100,32 +101,6 @@ const ItemCard = ({
                     </Button>
                 </div>
             )}
-        </div>
-    );
-
-    if (isDeleteMode) {
-        return (
-            <Reorder.Item
-                value={itemValue}
-                dragListener={false}
-                dragControls={controls}
-                className="list-none"
-            >
-                {CardContent}
-            </Reorder.Item>
-        );
-    }
-
-    return (
-        <div
-            id={id}
-            draggable={!isLocked}
-            onDragStart={(e) =>
-                e.dataTransfer.setData('newActivity', JSON.stringify(itemValue))
-            }
-            className={cn('cursor-pointer', isLocked && 'cursor-not-allowed')}
-        >
-            {CardContent}
         </div>
     );
 };
