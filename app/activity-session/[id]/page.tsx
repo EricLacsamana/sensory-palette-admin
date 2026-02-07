@@ -69,7 +69,7 @@ export default function ActivitySessionPage() {
 
     const handleExit = () => {
         if (document.fullscreenElement) document.exitFullscreen();
-        router.push('/dashboard');
+        router.push('/');
     };
 
     if (isLoading) return <ActivityLoadingState />;

@@ -10,10 +10,11 @@ import {
     PanelLeftOpen,
     Coffee,
     Loader2,
+    Plus,
+    Trash2,
 } from 'lucide-react';
 import { Reorder, AnimatePresence } from 'framer-motion';
 
-// Shadcn UI
 import {
     Dialog,
     DialogContent,
@@ -32,83 +33,53 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
-// Hooks & Components
-import { useSessionPlan, SessionActivity } from '@/hooks/useSessionPlan';
-import ActivityCard from '@/components/ActivityCard';
+import { useSessionPlan } from '@/hooks/useSessionPlan';
+import ItemCard from '@/components/ItemCard';
 import CapacityGauge from '@/components/CapacityGauge';
-import TimelineItem from '@/components/TimelineItem';
 
 interface SessionPlanningModalProps {
     isOpen: boolean;
     onClose: () => void;
-    activities: SessionActivity[];
-    onConfirm: (data: { plan: any[]; date: string; start: string }) => void;
-    learnerName: string;
+    activities: any[];
+    onConfirm: (plan: any[]) => void;
+    student: any;
     isSubmitting?: boolean;
 }
-
-const timeToSeconds = (timeStr: string) => {
-    const [h, m] = timeStr.split(':').map(Number);
-    return h * 3600 + m * 60;
-};
 
 const SessionPlanningModal = ({
     isOpen,
     onClose,
     activities,
     onConfirm,
-    learnerName,
+    student,
     isSubmitting = false,
 }: SessionPlanningModalProps) => {
-    const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+    const todayStr = useMemo(
+        () => new Date().toISOString().split('T', 1)[0],
+        [],
+    );
     const [startDate, setStartDate] = useState(todayStr);
     const [startTimeStr, setStartTimeStr] = useState('09:00');
     const [searchTerm, setSearchTerm] = useState('');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
-    const OPERATION_END_TIME = '18:00';
-
     const [pendingChange, setPendingChange] = useState<{
         type: 'date' | 'time';
         value: string;
     } | null>(null);
 
-    const {
-        plan,
-        setPlan,
-        timeline,
-        capacityMetrics,
-        dragState,
-        setDragState,
-        resetDrag,
-    } = useSessionPlan(startDate, startTimeStr);
-
-    const canActivityFit = useCallback(
-        (durationInMinutes: number) => {
-            const durationInSeconds = durationInMinutes * 60;
-            const startSeconds = timeToSeconds(startTimeStr);
-            const cutoffSeconds = timeToSeconds(OPERATION_END_TIME);
-
-            const currentUsedSeconds = plan.reduce((acc, item) => {
-                return acc + Number(item.duration || 0) * 60;
-            }, 0);
-
-            return (
-                startSeconds + currentUsedSeconds + durationInSeconds <=
-                cutoffSeconds
-            );
-        },
-        [plan, startTimeStr, OPERATION_END_TIME],
+    const { plan, setPlan, capacityMetrics, resetDrag } = useSessionPlan(
+        startDate,
+        startTimeStr,
+        student,
     );
 
     const handleAttemptChange = (type: 'date' | 'time', value: string) => {
         if (plan.length === 0) {
-            if (type === 'date') setStartDate(value);
-            if (type === 'time') setStartTimeStr(value);
+            type === 'date' ? setStartDate(value) : setStartTimeStr(value);
             return;
         }
         setPendingChange({ type, value });
@@ -116,62 +87,21 @@ const SessionPlanningModal = ({
 
     const confirmReset = () => {
         if (!pendingChange) return;
-        if (pendingChange.type === 'date') setStartDate(pendingChange.value);
-        if (pendingChange.type === 'time') setStartTimeStr(pendingChange.value);
+        pendingChange.type === 'date'
+            ? setStartDate(pendingChange.value)
+            : setStartTimeStr(pendingChange.value);
         setPlan([]);
         setPendingChange(null);
     };
 
-    const handleLibraryDragStart = (
-        e: React.DragEvent,
-        activity: any,
-        isBreak = false,
-        breakDur = 15,
-    ) => {
-        const dur = isBreak ? breakDur : activity?.duration || 30;
-        if (!canActivityFit(dur)) {
-            e.preventDefault();
-            return;
-        }
-        const data = {
-            ...activity,
-            isBreak,
-            duration: dur,
-            name: isBreak ? `${dur}m Rest Break` : activity.name,
-        };
-        e.dataTransfer.setData('newActivity', JSON.stringify(data));
-        setDragState((prev) => ({
-            ...prev,
-            isLibraryDrag: true,
-            draggedIndex: -1,
-        }));
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        const dataStr = e.dataTransfer.getData('newActivity');
+        if (!dataStr) return resetDrag();
+        const raw = JSON.parse(dataStr);
+        setPlan([...plan, { ...raw, instanceId: crypto.randomUUID() }]);
+        resetDrag();
     };
-
-    const handleDrop = useCallback(
-        (e: React.DragEvent) => {
-            e.preventDefault();
-            const dataStr = e.dataTransfer.getData('newActivity');
-            if (!dataStr) return resetDrag();
-            const activity = JSON.parse(dataStr);
-
-            if (!canActivityFit(activity.duration)) return resetDrag();
-
-            const newPlan = [...plan];
-            const target =
-                dragState.dragOverIndex !== null
-                    ? dragState.dragOverIndex
-                    : plan.length;
-            newPlan.splice(target, 0, {
-                ...activity,
-                instanceId: `inst-${crypto.randomUUID()}`,
-            });
-            setPlan(newPlan);
-            resetDrag();
-        },
-        [plan, dragState, canActivityFit, setPlan, resetDrag],
-    );
-
-    const breakOptions = [5];
 
     return (
         <>
@@ -180,14 +110,13 @@ const SessionPlanningModal = ({
                 onOpenChange={(open) => !open && !isSubmitting && onClose()}
             >
                 <DialogContent className="!max-w-[1400px] !w-[65vw] h-[92vh] p-0 gap-0 overflow-hidden flex flex-col bg-white border-slate-200 shadow-2xl transition-all duration-300 sm:rounded-3xl">
-                    <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between space-y-0 shrink-0 bg-slate-50/50 backdrop-blur-md">
+                    <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between shrink-0 bg-slate-50/50 backdrop-blur-md z-30">
                         <div className="flex items-center gap-5">
                             <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                                 className="text-slate-400 hover:text-indigo-600"
-                                disabled={isSubmitting}
                             >
                                 {isSidebarOpen ? (
                                     <PanelLeftClose size={18} />
@@ -196,23 +125,21 @@ const SessionPlanningModal = ({
                                 )}
                             </Button>
                             <div className="flex items-center gap-3">
-                                <div className="h-9 w-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold shadow-sm uppercase">
-                                    {learnerName.charAt(0)}
+                                <div className="h-9 w-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-semibold">
+                                    {student?.firstName?.charAt(0)}
                                 </div>
-                                <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">
-                                    {learnerName}
+                                <DialogTitle className="text-lg font-semibold tracking-tight text-slate-900">
+                                    {student?.firstName} {student?.lastName}
                                 </DialogTitle>
                             </div>
                             <Separator orientation="vertical" className="h-6" />
                             <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-white">
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-white shadow-sm">
                                     <CalendarIcon className="h-4 w-4 text-slate-400" />
                                     <input
                                         type="date"
-                                        className="bg-transparent border-none text-sm font-semibold focus:outline-none"
+                                        className="bg-transparent border-none text-sm font-medium focus:outline-none"
                                         value={startDate}
-                                        min={todayStr}
-                                        disabled={isSubmitting}
                                         onChange={(e) =>
                                             handleAttemptChange(
                                                 'date',
@@ -221,12 +148,11 @@ const SessionPlanningModal = ({
                                         }
                                     />
                                 </div>
-                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-white">
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-white shadow-sm">
                                     <Clock className="h-4 w-4 text-slate-400" />
                                     <select
-                                        className="bg-transparent border-none text-sm font-semibold focus:outline-none cursor-pointer"
+                                        className="bg-transparent border-none text-sm font-medium focus:outline-none cursor-pointer"
                                         value={startTimeStr}
-                                        disabled={isSubmitting}
                                         onChange={(e) =>
                                             handleAttemptChange(
                                                 'time',
@@ -236,24 +162,17 @@ const SessionPlanningModal = ({
                                     >
                                         {Array.from({ length: 41 }, (_, i) => {
                                             const totalMin = 8 * 60 + i * 15;
-                                            const h24 = Math.floor(
+                                            const val = `${Math.floor(
                                                 totalMin / 60,
-                                            );
-                                            const m = totalMin % 60;
-                                            const val24 = `${h24.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                                            const h12 = h24 % 12 || 12;
-                                            const ampm =
-                                                h24 >= 12 ? 'PM' : 'AM';
+                                            )
+                                                .toString()
+                                                .padStart(
+                                                    2,
+                                                    '0',
+                                                )}:${(totalMin % 60).toString().padStart(2, '0')}`;
                                             return (
-                                                <option
-                                                    key={val24}
-                                                    value={val24}
-                                                >
-                                                    {h12}:
-                                                    {m
-                                                        .toString()
-                                                        .padStart(2, '0')}{' '}
-                                                    {ampm}
+                                                <option key={val} value={val}>
+                                                    {val}
                                                 </option>
                                             );
                                         })}
@@ -266,106 +185,86 @@ const SessionPlanningModal = ({
                     <div className="flex-1 flex overflow-hidden min-h-0">
                         <aside
                             className={cn(
-                                'border-r bg-slate-50/40 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
-                                isSidebarOpen
-                                    ? 'w-[380px]'
-                                    : 'w-0 opacity-0 pointer-events-none',
+                                'border-r bg-slate-50/40 flex flex-col transition-all duration-300 shrink-0',
+                                isSidebarOpen ? 'w-[380px]' : 'w-0 opacity-0',
                             )}
                         >
                             <div className="p-5 pb-2 min-w-[380px] shrink-0">
-                                <div className="relative group">
+                                <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                     <Input
                                         placeholder="Search activities..."
                                         className="pl-9 bg-white border-slate-200 rounded-xl h-11"
                                         value={searchTerm}
-                                        disabled={isSubmitting}
                                         onChange={(e) =>
                                             setSearchTerm(e.target.value)
                                         }
                                     />
                                 </div>
                             </div>
-
-                            <ScrollArea className="flex-1 min-w-[380px] min-h-0">
-                                <div className="px-5 space-y-6 pb-10 pt-4">
-                                    <div className="space-y-3">
-                                        <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
-                                            Quick Breaks
-                                        </h3>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            {breakOptions.map((mins) => (
-                                                <ActivityCard
-                                                    key={`break-${mins}`}
-                                                    isBreak
-                                                    activity={{
-                                                        name: `${mins}m Rest Break`,
-                                                        duration: mins,
-                                                    }}
-                                                    isLocked={
-                                                        !canActivityFit(mins) ||
-                                                        isSubmitting
-                                                    }
-                                                    onAdd={() =>
-                                                        !isSubmitting &&
-                                                        canActivityFit(mins) &&
-                                                        setPlan((p) => [
-                                                            ...p,
-                                                            {
-                                                                id: crypto.randomUUID(),
-                                                                isBreak: true,
-                                                                duration: mins,
-                                                                name: `${mins}m Rest Break`,
-                                                                instanceId:
-                                                                    crypto.randomUUID(),
-                                                            },
-                                                        ])
-                                                    }
-                                                    onDragStart={(e) =>
-                                                        !isSubmitting &&
-                                                        handleLibraryDragStart(
-                                                            e,
-                                                            {},
-                                                            true,
-                                                            mins,
-                                                        )
-                                                    }
-                                                    onDragEnd={resetDrag}
-                                                />
-                                            ))}
+                            <div className="flex-1 min-h-0 min-w-[380px]">
+                                <ScrollArea className="h-full">
+                                    <div className="p-5 space-y-6 pb-20">
+                                        <div className="space-y-3">
+                                            <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-1">
+                                                Quick Breaks
+                                            </h3>
+                                            <ItemCard
+                                                id="break"
+                                                title="5m Rest Break"
+                                                subtitle="5m"
+                                                mode="add"
+                                                actionIcon={<Plus size={16} />}
+                                                itemValue={{
+                                                    name: '5m Rest Break',
+                                                    duration: 5,
+                                                    isBreak: true,
+                                                }}
+                                                onActionClick={() =>
+                                                    setPlan([
+                                                        ...plan,
+                                                        {
+                                                            isBreak: true,
+                                                            duration: 5,
+                                                            name: '5m Rest Break',
+                                                            instanceId:
+                                                                crypto.randomUUID(),
+                                                        },
+                                                    ])
+                                                }
+                                            />
                                         </div>
-                                    </div>
-                                    <Separator />
-                                    <div className="space-y-3">
-                                        <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
-                                            Learner Activities
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {activities
-                                                .filter((a) =>
-                                                    a?.name
-                                                        .toLowerCase()
-                                                        .includes(
-                                                            searchTerm.toLowerCase(),
-                                                        ),
-                                                )
-                                                .map((act) => {
-                                                    const dur =
-                                                        act.duration || 30;
-                                                    const locked =
-                                                        !canActivityFit(dur) ||
-                                                        act.activityStatus ===
-                                                            'disabled' ||
-                                                        isSubmitting;
-                                                    return (
-                                                        <ActivityCard
+                                        <Separator />
+                                        <div className="space-y-3">
+                                            <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-1">
+                                                Learner Activities
+                                            </h3>
+                                            <div className="flex flex-col gap-3">
+                                                {activities
+                                                    .filter((a) =>
+                                                        a.name
+                                                            .toLowerCase()
+                                                            .includes(
+                                                                searchTerm.toLowerCase(),
+                                                            ),
+                                                    )
+                                                    .map((act) => (
+                                                        <ItemCard
                                                             key={act.id}
-                                                            activity={act}
-                                                            isLocked={locked}
-                                                            onAdd={() =>
-                                                                !locked &&
-                                                                setPlan((p) => [
-                                                                    ...p,
+                                                            id={act.id}
+                                                            title={act.name}
+                                                            subtitle={`${act.duration || 30}m`}
+                                                            imageSrc={null}
+                                                            mode="add"
+                                                            actionIcon={
+                                                                <Plus
+                                                                    size={16}
+                                                                />
+                                                            }
+                                                            itemValue={act}
+                                                            onActionClick={() =>
+                                                                setPlan([
+                                                                    ...plan,
                                                                     {
                                                                         ...act,
                                                                         instanceId:
@@ -373,149 +272,96 @@ const SessionPlanningModal = ({
                                                                     },
                                                                 ])
                                                             }
-                                                            onDragStart={(e) =>
-                                                                !locked &&
-                                                                handleLibraryDragStart(
-                                                                    e,
-                                                                    act,
-                                                                )
-                                                            }
-                                                            onDragEnd={
-                                                                resetDrag
-                                                            }
                                                         />
-                                                    );
-                                                })}
+                                                    ))}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </ScrollArea>
+                                </ScrollArea>
+                            </div>
                         </aside>
 
-                        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
-                            <div className="w-full p-5 shrink-0 bg-slate-50/50 backdrop-blur-sm z-10 border-b flex items-center justify-between">
+                        <main className="flex-1 flex flex-col min-w-0 bg-white overflow-hidden relative">
+                            <div className="w-full p-5 border-b flex items-center justify-between bg-white/80 backdrop-blur-sm z-20 shrink-0">
                                 <div className="flex-1 max-w-md">
                                     <CapacityGauge
                                         percent={capacityMetrics.percentUsed}
                                     />
                                 </div>
-                                <div className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 uppercase tracking-tight">
+                                <div className="text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200 uppercase tracking-widest">
                                     Operation Ends: 6:00 PM
                                 </div>
                             </div>
 
                             <div
-                                className="flex-1 overflow-y-auto scroll-smooth bg-slate-50/20"
-                                onDragOver={(e) =>
-                                    !isSubmitting && e.preventDefault()
-                                }
+                                className="flex-1 overflow-y-auto bg-slate-50/20 relative min-h-0"
+                                onDragOver={(e) => e.preventDefault()}
                                 onDrop={handleDrop}
                             >
                                 <div className="max-w-4xl mx-auto relative px-8 pb-40 pt-10 min-h-full">
-                                    {/* --- THE PHYSICAL TIMELINE LINE --- */}
                                     <div className="absolute left-[110px] top-0 bottom-0 w-px bg-slate-200 z-0" />
-
-                                    {plan.length === 0 ? (
-                                        <div className="ml-[110px] h-64 border-2 border-dashed border-slate-200 rounded-[32px] bg-white flex flex-col items-center justify-center text-slate-400 gap-3 shadow-sm">
-                                            <Coffee
-                                                size={32}
-                                                strokeWidth={1.5}
-                                            />
-                                            <p className="font-black text-[10px] uppercase tracking-widest">
-                                                Timeline is empty
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <Reorder.Group
-                                            axis="y"
-                                            values={plan}
-                                            onReorder={
-                                                !isSubmitting
-                                                    ? setPlan
-                                                    : () => {}
-                                            }
-                                            className="space-y-8 relative z-10"
-                                        >
-                                            <AnimatePresence mode="popLayout">
-                                                {plan.map((item, index) => (
-                                                    <div
-                                                        key={item.instanceId}
-                                                        className="relative flex gap-12 group"
-                                                    >
-                                                        {/* --- TIME INDICATOR --- */}
-                                                        <div className="w-16 pt-2 flex flex-col items-end shrink-0">
-                                                            <span className="text-[11px] font-[1000] text-slate-900 tabular-nums">
-                                                                {timeline[index]
-                                                                    ?.start ||
-                                                                    '--:--'}
-                                                            </span>
-                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
-                                                                {
-                                                                    timeline[
-                                                                        index
-                                                                    ]?.end
-                                                                }
-                                                            </span>
-                                                        </div>
-
-                                                        {/* --- THE DOT ON THE LINE --- */}
-                                                        <div className="absolute left-[73px] top-3 h-3 w-3 rounded-full border-2 border-indigo-600 bg-white z-20 shadow-sm transition-transform group-hover:scale-125" />
-
-                                                        {/* --- THE CARD --- */}
-                                                        <div className="flex-1">
-                                                            <TimelineItem
-                                                                item={item}
-                                                                startTime={
-                                                                    timeline[
-                                                                        index
-                                                                    ]?.start
-                                                                }
-                                                                endTime={
-                                                                    timeline[
-                                                                        index
-                                                                    ]?.end
-                                                                }
-                                                                onRemove={(
-                                                                    id,
-                                                                ) =>
-                                                                    !isSubmitting &&
-                                                                    setPlan(
-                                                                        (p) =>
-                                                                            p.filter(
-                                                                                (
-                                                                                    i,
-                                                                                ) =>
-                                                                                    i.instanceId !==
-                                                                                    id,
-                                                                            ),
-                                                                    )
-                                                                }
-                                                            />
-                                                        </div>
+                                    <Reorder.Group
+                                        axis="y"
+                                        values={plan}
+                                        onReorder={setPlan}
+                                        className="space-y-8 relative z-10"
+                                        layoutScroll
+                                    >
+                                        <AnimatePresence mode="popLayout">
+                                            {plan.map((item) => (
+                                                <div
+                                                    key={item.instanceId}
+                                                    className="relative flex gap-10 group"
+                                                >
+                                                    <div className="w-14 pt-3 flex flex-col items-end shrink-0 select-none">
+                                                        <span className="text-[12px] font-bold text-slate-900 tabular-nums">
+                                                            {item.displayStart}
+                                                        </span>
                                                     </div>
-                                                ))}
-                                            </AnimatePresence>
-                                        </Reorder.Group>
-                                    )}
+                                                    <div className="absolute left-[73px] top-5 h-2.5 w-2.5 rounded-full border-2 border-indigo-600 bg-white z-20 shadow-sm transition-transform group-hover:scale-125" />
+                                                    <div className="flex-1">
+                                                        <ItemCard
+                                                            id={item.instanceId}
+                                                            title={item.name}
+                                                            subtitle={`${(item.durationSeconds || 1800) / 60}m • Ends ${item.displayEnd}`}
+                                                            imageSrc={
+                                                                item.imageUrl
+                                                            }
+                                                            mode="delete"
+                                                            actionIcon={
+                                                                <Trash2
+                                                                    size={16}
+                                                                />
+                                                            }
+                                                            itemValue={item}
+                                                            onActionClick={() =>
+                                                                setPlan(
+                                                                    plan.filter(
+                                                                        (p) =>
+                                                                            p.instanceId !==
+                                                                            item.instanceId,
+                                                                    ),
+                                                                )
+                                                            }
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </AnimatePresence>
+                                    </Reorder.Group>
                                 </div>
                             </div>
 
-                            <div className="p-6 border-t flex justify-end shrink-0 bg-slate-50/50 backdrop-blur-sm z-10">
+                            <div className="p-6 border-t flex justify-end shrink-0 bg-white/80 backdrop-blur-sm z-30">
                                 <Button
-                                    className="px-12 font-bold rounded-xl h-12 shadow-lg bg-indigo-600 hover:bg-indigo-700 text-white"
-                                    onClick={() =>
-                                        onConfirm({
-                                            plan,
-                                            date: startDate,
-                                            start: startTimeStr,
-                                        })
-                                    }
+                                    className="px-12 font-semibold rounded-xl h-12 shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all active:scale-95"
+                                    onClick={() => onConfirm(plan)}
                                     disabled={plan.length === 0 || isSubmitting}
                                 >
                                     {isSubmitting ? (
                                         <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            Saving Session...
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />{' '}
+                                            Saving...
                                         </>
                                     ) : (
                                         'Confirm Session Plan'
@@ -531,36 +377,30 @@ const SessionPlanningModal = ({
                 open={!!pendingChange}
                 onOpenChange={(o) => !o && setPendingChange(null)}
             >
-                <AlertDialogContent className="rounded-[40px] border-none shadow-[0_32px_64px_-12px_rgba(0,0,0,0.14)] bg-white p-10 max-w-[440px]">
+                <AlertDialogContent className="rounded-[40px] border-none shadow-2xl bg-white p-10 max-w-[440px]">
                     <AlertDialogHeader className="flex flex-col items-center text-center">
-                        <div className="relative mb-6">
-                            <div className="absolute inset-0 bg-amber-500 blur-2xl opacity-20 animate-pulse rounded-full" />
-                            <div className="relative h-20 w-20 rounded-[28px] bg-amber-50 flex items-center justify-center text-amber-500 shadow-inner ring-1 ring-amber-100">
-                                <AlertTriangle size={36} strokeWidth={2.5} />
-                            </div>
+                        <div className="h-20 w-20 rounded-[28px] bg-amber-50 flex items-center justify-center text-amber-500 mb-6 shadow-inner ring-1 ring-amber-100">
+                            <AlertTriangle size={36} strokeWidth={2.5} />
                         </div>
-
-                        <AlertDialogTitle className="text-2xl font-[1000] text-slate-900 tracking-tight leading-tight">
-                            Reset Current <br /> Session Draft?
+                        <AlertDialogTitle className="text-2xl font-semibold text-slate-900 tracking-tight">
+                            Reset Current Draft?
                         </AlertDialogTitle>
-
-                        <AlertDialogDescription className="text-[15px] font-bold text-slate-400 leading-relaxed mt-4 px-2">
-                            Modifying the{' '}
-                            <span className="text-indigo-600 font-black uppercase tracking-widest text-[11px]">
+                        <AlertDialogDescription className="text-slate-400 mt-4 leading-relaxed">
+                            Changing the{' '}
+                            <span className="text-indigo-600 font-medium uppercase tracking-widest text-[11px]">
                                 session {pendingChange?.type}
                             </span>{' '}
-                            will clear your timeline to ensure all activities
-                            fit the new operating hours.
+                            will clear your timeline to ensure schedule
+                            accuracy.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-
                     <AlertDialogFooter className="flex flex-col sm:flex-row gap-3 mt-10 w-full">
-                        <AlertDialogCancel className="flex-1 h-14 rounded-2xl border-slate-200 bg-white font-black uppercase tracking-widest text-[11px] hover:bg-slate-50 transition-all active:scale-95 shadow-sm">
+                        <AlertDialogCancel className="flex-1 h-14 rounded-2xl border-slate-200 font-medium text-[10px] uppercase tracking-widest">
                             Keep Draft
                         </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={confirmReset}
-                            className="flex-1 h-14 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black uppercase tracking-widest text-[11px] shadow-lg shadow-amber-200/50 transition-all active:scale-95"
+                            className="flex-1 h-14 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-medium text-[10px] uppercase tracking-widest shadow-lg shadow-amber-200/50"
                         >
                             Clear & Reset
                         </AlertDialogAction>

@@ -67,7 +67,7 @@ export function ScheduleAgenda({
                 <ScrollArea className="h-full w-full">
                     <div className="p-6 relative">
                         {/* Vertical Timeline Path */}
-                        <div className="absolute left-[31px] top-0 bottom-0 w-px bg-slate-200/60" />
+                        <div className="absolute left-[31px] top-0 bottom-0 w-px bg-slate-300/60" />
 
                         <div className="space-y-6">
                             {aggregatedLearnerDays.length > 0 ? (
@@ -108,14 +108,12 @@ export function ScheduleAgenda({
                                     return (
                                         <div
                                             key={group.id}
-                                            className="flex gap-5 relative group animate-in fade-in slide-in-from-right-4 duration-500"
+                                            className="flex gap-2 relative group animate-in fade-in slide-in-from-right-10 duration-1000"
                                         >
                                             <div
                                                 className={cn(
-                                                    'h-3 w-3 rounded-full border-2 z-10 mt-2.5 shrink-0 transition-transform group-hover:scale-125',
-                                                    isBreak
-                                                        ? 'border-amber-400 bg-white'
-                                                        : 'border-indigo-600 bg-white',
+                                                    'h-4 w-4 rounded-full border-2 z-10 mt-16 shrink-0 transition-transform group-hover:scale-125',
+                                                    'border-indigo-600 bg-white',
                                                 )}
                                             />
 

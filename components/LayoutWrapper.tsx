@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useSelector } from 'react-redux'; // Add this
 import Sidebar from '@/components/Sidebar';
 import { cn } from '@/lib/utils';
+import { RootState } from '@/redux/store'; // Adjust path to your store
 
 export default function LayoutWrapper({
     children,
@@ -12,17 +14,34 @@ export default function LayoutWrapper({
 }) {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
+    const router = useRouter();
 
-    // Remove sidebar and layout spacing for Auth pages
-    const isAuthPage = pathname === '/login' || pathname === '/register';
+    // 1. Get auth state from Redux
+    const { isAuthenticated, isLoading } = useSelector(
+        (state: RootState) => state.auth,
+    );
 
-    if (isAuthPage) {
+    // 2. Identify Auth Pages
+    const isAuthPage =
+        pathname.startsWith('/auth') ||
+        pathname === '/login' ||
+        pathname === '/register';
+
+    // 3. Optional: Redirect to login if not authenticated and not on an auth page
+    useEffect(() => {
+        if (!isLoading && !isAuthenticated && !isAuthPage) {
+            router.push('/auth/login');
+        }
+    }, [isAuthenticated, isLoading, isAuthPage, router]);
+
+    // If it's an auth page or user isn't authenticated yet, don't show Sidebar
+    if (isAuthPage || !isAuthenticated) {
         return <main className="min-h-screen bg-white">{children}</main>;
     }
 
     return (
         <div className="flex min-h-screen bg-[#F8FAFC] selection:bg-indigo-100">
-            {/* Sidebar receives state as props to sync with Main */}
+            {/* Sidebar only renders if isAuthenticated is true */}
             <Sidebar
                 isCollapsed={isCollapsed}
                 setIsCollapsed={setIsCollapsed}
@@ -34,7 +53,6 @@ export default function LayoutWrapper({
                     isCollapsed ? 'ml-[80px]' : 'ml-[280px]',
                 )}
             >
-                {/* Standardized Padding & Max-Width for readability */}
                 <div className="p-6 lg:p-10 max-w-[1600px] mx-auto w-full">
                     {children}
                 </div>

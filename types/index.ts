@@ -21,6 +21,7 @@ export interface Student {
     username: string;
     email: string;
     firstName?: string;
+    fullName?: string;
     lastName?: string;
     diagnosis?: string;
     createdAt: string;

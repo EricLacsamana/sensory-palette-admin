@@ -1,7 +1,6 @@
-"use client";
+'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { useMutation } from '@tanstack/react-query';
@@ -10,11 +9,9 @@ import { AxiosError } from 'axios';
 import { loginUser } from '@/api/auth';
 import { loginStart, loginSuccess, loginFailure } from '@/redux/auth/authSlice';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ShieldAlert } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ShieldAlert, Info } from 'lucide-react';
 
-import studentImg from '@/assets/student.png';
 import LoginForm from '@/components/LoginForm';
 import { Login, LoginResponse } from '@/types';
 
@@ -29,7 +26,6 @@ export default function LoginPage() {
     const dispatch = useDispatch();
     const [error, setError] = useState<string>('');
 
-
     const mutation = useMutation<LoginResponse, AxiosError<ApiError>, Login>({
         mutationFn: (data: Login) => loginUser(data.identifier, data.password),
         onMutate: () => {
@@ -38,10 +34,11 @@ export default function LoginPage() {
         },
         onSuccess: (data) => {
             dispatch(loginSuccess(data));
-            router.push('/dashboard');
+            router.push('/');
         },
         onError: (err) => {
-            const errorMessage = err.response?.data?.error?.message || 'Invalid credentials';
+            const errorMessage =
+                err.response?.data?.error?.message || 'Invalid credentials';
             dispatch(loginFailure(errorMessage));
             setError(errorMessage);
         },
@@ -52,45 +49,44 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-screen w-full items-center justify-center bg-slate-50 p-4">
-            <div className="grid w-full max-w-5xl items-center gap-12 lg:grid-cols-2">
-                
-                <div className="hidden flex-col items-center justify-center space-y-4 lg:flex">
-                    <Image 
-                        src={studentImg} 
-                        alt="Student Login Illustration" 
-                        width={450} 
-                        height={450} 
-                        priority 
-                        className="drop-shadow-2xl"
-                    />
-                </div>
+        <div className="min-h-screen w-full flex items-center justify-center bg-[#F8FAFC] relative overflow-hidden">
+            {/* --- THEME BACKGROUND ELEMENTS --- */}
+            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/5 rounded-full blur-[120px]" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500/5 rounded-full blur-[120px]" />
 
-                <div className="flex flex-col items-center">
-                    <Card className="w-full max-w-[400px] border-none shadow-2xl ring-1 ring-black/5">
-                        <CardHeader className="space-y-1 text-center">
-                            <CardTitle className="text-3xl font-extrabold tracking-tight">
-                                Welcome Back
-                            </CardTitle>
-                            <CardDescription className="text-sm text-muted-foreground">
-                                Please enter your credentials to log in
-                            </CardDescription>
-                        </CardHeader>
+            <div className="w-full max-w-[440px] px-6 relative z-10">
+                {/* --- ERROR FEEDBACK (Themed) --- */}
+                {error && (
+                    <Alert
+                        variant="destructive"
+                        className="mb-6 rounded-[24px] border-none bg-red-50 text-red-600 shadow-xl shadow-red-100/50 animate-in fade-in slide-in-from-top-2 duration-500"
+                    >
+                        <ShieldAlert className="h-4 w-4 stroke-[3px]" />
+                        <AlertDescription className="font-bold text-xs uppercase tracking-tight">
+                            {error}
+                        </AlertDescription>
+                    </Alert>
+                )}
 
-                        <CardContent className="grid gap-4">
-                            {error && (
-                                <Alert variant="destructive" className="animate-in fade-in zoom-in duration-300">
-                                    <ShieldAlert className="h-4 w-4" />
-                                    <AlertDescription>{error}</AlertDescription>
-                                </Alert>
-                            )}
-                 
-                            <LoginForm 
-                                onSubmit={handleLoginSubmit} 
-                                isLoading={mutation.isPending} 
-                            />
-                        </CardContent>
-                    </Card>
+                {/* --- THE LOGIN FORM COMPONENT --- */}
+                <LoginForm
+                    onSubmit={handleLoginSubmit}
+                    isLoading={mutation.isPending}
+                />
+
+                {/* --- ADDITIONAL THEMED FOOTER --- */}
+                <div className="mt-12 flex items-center justify-center gap-6">
+                    <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            Server: Online
+                        </span>
+                    </div>
+                    <div className="h-4 w-px bg-slate-200" />
+                    <button className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest transition-colors">
+                        <Info size={12} />
+                        Help Center
+                    </button>
                 </div>
             </div>
         </div>
