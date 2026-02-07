@@ -73,33 +73,36 @@ const SessionPlanningModal = ({
     } | null>(null);
 
     const scrollAnchorRef = useRef<HTMLDivElement>(null);
-    const prevLengthRef = useRef(0);
+    const prevPlanLengthRef = useRef(0);
 
-    const { plan, setPlan, dragState, setDragState, capacityMetrics } =
-        useSessionPlan(startDate, startTimeStr, student, activitySessions);
+    const { plan, setPlan, capacityMetrics } = useSessionPlan(
+        startDate,
+        startTimeStr,
+        student,
+        activitySessions,
+    );
 
+    // Animation and Scroll Logic
     useEffect(() => {
-        if (plan.length > prevLengthRef.current && plan.length > 3) {
+        const currentLength = plan.length;
+        const previousLength = prevPlanLengthRef.current;
+
+        // Only scroll if we added an item (avoids jumping during deletion)
+        if (currentLength > previousLength && currentLength > 0) {
             scrollAnchorRef.current?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'nearest',
             });
         }
-        prevLengthRef.current = plan.length;
+        prevPlanLengthRef.current = currentLength;
     }, [plan.length]);
 
-    const handleInsert = (raw: any, index: number | null) => {
-        const newItem = { ...raw, instanceId: crypto.randomUUID() };
-        setPlan((prev) => {
-            const updated = [...prev];
-            if (index !== null) {
-                updated.splice(index, 0, newItem);
-            } else {
-                updated.push(newItem);
-            }
-            return updated;
-        });
-        setDragState({ isLibraryDrag: false, dragOverIndex: null });
+    const handleAttemptChange = (type: 'date' | 'time', value: string) => {
+        if (plan.length === 0) {
+            type === 'date' ? setStartDate(value) : setStartTimeStr(value);
+            return;
+        }
+        setPendingChange({ type, value });
     };
 
     const confirmReset = () => {
@@ -109,6 +112,17 @@ const SessionPlanningModal = ({
             : setStartTimeStr(pendingChange.value);
         setPlan([]);
         setPendingChange(null);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        const dataStr = e.dataTransfer.getData('newActivity');
+        if (!dataStr) return;
+        const raw = JSON.parse(dataStr);
+        setPlan((prev) => [
+            ...prev,
+            { ...raw, instanceId: crypto.randomUUID() },
+        ]);
     };
 
     const baseUrl =
@@ -121,7 +135,7 @@ const SessionPlanningModal = ({
                 open={isOpen}
                 onOpenChange={(open) => !open && !isSubmitting && onClose()}
             >
-                <DialogContent className="!max-w-[1400px] !w-[65vw] h-[92vh] p-0 gap-0 overflow-hidden flex flex-col bg-white shadow-2xl transition-all duration-300 sm:rounded-3xl">
+                <DialogContent className="!max-w-[1400px] !w-[65vw] h-[92vh] p-0 gap-0 overflow-hidden flex flex-col bg-white border-slate-200 shadow-2xl transition-all duration-300 sm:rounded-3xl">
                     <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between shrink-0 bg-slate-50/50 backdrop-blur-md z-30">
                         <div className="flex items-center gap-5">
                             <Button
@@ -152,12 +166,10 @@ const SessionPlanningModal = ({
                                         className="bg-transparent border-none text-sm font-medium focus:outline-none"
                                         value={startDate}
                                         onChange={(e) =>
-                                            plan.length === 0
-                                                ? setStartDate(e.target.value)
-                                                : setPendingChange({
-                                                      type: 'date',
-                                                      value: e.target.value,
-                                                  })
+                                            handleAttemptChange(
+                                                'date',
+                                                e.target.value,
+                                            )
                                         }
                                     />
                                 </div>
@@ -167,25 +179,22 @@ const SessionPlanningModal = ({
                                         className="bg-transparent border-none text-sm font-medium focus:outline-none cursor-pointer"
                                         value={startTimeStr}
                                         onChange={(e) =>
-                                            plan.length === 0
-                                                ? setStartTimeStr(
-                                                      e.target.value,
-                                                  )
-                                                : setPendingChange({
-                                                      type: 'time',
-                                                      value: e.target.value,
-                                                  })
+                                            handleAttemptChange(
+                                                'time',
+                                                e.target.value,
+                                            )
                                         }
                                     >
                                         {Array.from({ length: 41 }, (_, i) => {
+                                            const totalMin = 8 * 60 + i * 15;
                                             const val = `${Math.floor(
-                                                (8 * 60 + i * 15) / 60,
+                                                totalMin / 60,
                                             )
                                                 .toString()
                                                 .padStart(
                                                     2,
                                                     '0',
-                                                )}:${((8 * 60 + i * 15) % 60).toString().padStart(2, '0')}`;
+                                                )}:${(totalMin % 60).toString().padStart(2, '0')}`;
                                             return (
                                                 <option key={val} value={val}>
                                                     {val}
@@ -205,12 +214,12 @@ const SessionPlanningModal = ({
                                 isSidebarOpen ? 'w-[380px]' : 'w-0 opacity-0',
                             )}
                         >
-                            <div className="p-5 pb-2 min-w-[380px]">
+                            <div className="p-5 pb-2 min-w-[380px] shrink-0">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                     <Input
                                         placeholder="Search activities..."
-                                        className="pl-9 bg-white rounded-xl h-11"
+                                        className="pl-9 bg-white border-slate-200 rounded-xl h-11"
                                         value={searchTerm}
                                         onChange={(e) =>
                                             setSearchTerm(e.target.value)
@@ -218,136 +227,156 @@ const SessionPlanningModal = ({
                                     />
                                 </div>
                             </div>
-                            <ScrollArea className="flex-1 min-w-[380px]">
-                                <div className="p-5 space-y-6">
-                                    <ItemCard
-                                        id="break"
-                                        title="5m Rest Break"
-                                        subtitle="5m"
-                                        mode="add"
-                                        actionIcon={<Plus size={16} />}
-                                        itemValue={{
-                                            name: '5m Rest Break',
-                                            duration: 5,
-                                            isBreak: true,
-                                        }}
-                                        onActionClick={() =>
-                                            handleInsert(
-                                                {
+                            <div className="flex-1 min-h-0 min-w-[380px]">
+                                <ScrollArea className="h-full">
+                                    <div className="p-5 space-y-6 pb-20">
+                                        <div className="space-y-3">
+                                            <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-1">
+                                                Quick Breaks
+                                            </h3>
+                                            <ItemCard
+                                                id="break"
+                                                title="5m Rest Break"
+                                                subtitle="5m"
+                                                mode="add"
+                                                actionIcon={<Plus size={16} />}
+                                                itemValue={{
                                                     name: '5m Rest Break',
                                                     duration: 5,
                                                     isBreak: true,
-                                                },
-                                                null,
-                                            )
-                                        }
-                                    />
-                                    <Separator />
-                                    {activities
-                                        .filter((a) =>
-                                            a.name
-                                                ?.toLowerCase()
-                                                .includes(
-                                                    searchTerm.toLowerCase(),
-                                                ),
-                                        )
-                                        .map((act) => {
-                                            const bannerData =
-                                                act.attributes?.banner?.data
-                                                    ?.attributes || act.banner;
-                                            const bannerPath =
-                                                bannerData?.formats?.thumbnail
-                                                    ?.url || bannerData?.url;
-                                            const img = bannerPath
-                                                ? bannerPath.startsWith('http')
-                                                    ? bannerPath
-                                                    : `${baseUrl}${bannerPath}`
-                                                : null;
-                                            return (
-                                                <ItemCard
-                                                    key={act.id}
-                                                    id={act.id}
-                                                    title={act.name}
-                                                    subtitle={`${act.duration || 30}m`}
-                                                    imageSrc={img}
-                                                    mode="add"
-                                                    actionIcon={
-                                                        <Plus size={16} />
-                                                    }
-                                                    itemValue={act}
-                                                    onActionClick={() =>
-                                                        handleInsert(act, null)
-                                                    }
-                                                />
-                                            );
-                                        })}
-                                </div>
-                            </ScrollArea>
+                                                }}
+                                                onActionClick={() =>
+                                                    setPlan((prev) => [
+                                                        ...prev,
+                                                        {
+                                                            isBreak: true,
+                                                            duration: 5,
+                                                            name: '5m Rest Break',
+                                                            instanceId:
+                                                                crypto.randomUUID(),
+                                                        },
+                                                    ])
+                                                }
+                                            />
+                                        </div>
+                                        <Separator />
+                                        <div className="space-y-3">
+                                            <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-1">
+                                                Learner Activities
+                                            </h3>
+                                            <div className="flex flex-col gap-3">
+                                                {activities
+                                                    .filter((a) =>
+                                                        a.name
+                                                            ?.toLowerCase()
+                                                            .includes(
+                                                                searchTerm.toLowerCase(),
+                                                            ),
+                                                    )
+                                                    .map((act) => {
+                                                        const bannerData =
+                                                            act.attributes
+                                                                ?.banner?.data
+                                                                ?.attributes ||
+                                                            act.banner;
+                                                        const bannerPath =
+                                                            bannerData?.formats
+                                                                ?.thumbnail
+                                                                ?.url ||
+                                                            bannerData?.url;
+                                                        const sidebarImg =
+                                                            bannerPath
+                                                                ? bannerPath.startsWith(
+                                                                      'http',
+                                                                  )
+                                                                    ? bannerPath
+                                                                    : `${baseUrl}${bannerPath}`
+                                                                : null;
+                                                        return (
+                                                            <ItemCard
+                                                                key={act.id}
+                                                                id={act.id}
+                                                                title={act.name}
+                                                                subtitle={`${act.duration || 30}m`}
+                                                                imageSrc={
+                                                                    sidebarImg
+                                                                }
+                                                                mode="add"
+                                                                actionIcon={
+                                                                    <Plus
+                                                                        size={
+                                                                            16
+                                                                        }
+                                                                    />
+                                                                }
+                                                                itemValue={act}
+                                                                onActionClick={() =>
+                                                                    setPlan(
+                                                                        (
+                                                                            prev,
+                                                                        ) => [
+                                                                            ...prev,
+                                                                            {
+                                                                                ...act,
+                                                                                instanceId:
+                                                                                    crypto.randomUUID(),
+                                                                            },
+                                                                        ],
+                                                                    )
+                                                                }
+                                                            />
+                                                        );
+                                                    })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </ScrollArea>
+                            </div>
                         </aside>
 
-                        <main className="flex-1 flex flex-col min-w-0 bg-white relative">
-                            <div className="w-full p-5 border-b z-20 shrink-0">
-                                <CapacityGauge
-                                    percent={capacityMetrics.percentUsed}
-                                />
+                        <main className="flex-1 flex flex-col min-w-0 bg-white overflow-hidden relative">
+                            <div className="w-full p-5 border-b flex items-center justify-between bg-white/80 backdrop-blur-sm z-20 shrink-0">
+                                <div className="flex-1 max-w-md">
+                                    <CapacityGauge
+                                        percent={capacityMetrics.percentUsed}
+                                    />
+                                </div>
+                                <div className="text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200 uppercase tracking-widest">
+                                    Operation Ends: 6:00 PM
+                                </div>
                             </div>
 
                             <div
-                                className="flex-1 overflow-y-auto bg-slate-50/20 flex flex-col scroll-smooth"
-                                onDragLeave={() =>
-                                    setDragState((prev) => ({
-                                        ...prev,
-                                        dragOverIndex: null,
-                                    }))
-                                }
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    try {
-                                        const data = JSON.parse(
-                                            e.dataTransfer.getData(
-                                                'newActivity',
-                                            ),
-                                        );
-                                        handleInsert(
-                                            data,
-                                            dragState.dragOverIndex,
-                                        );
-                                    } catch (err) {
-                                        setDragState({
-                                            isLibraryDrag: false,
-                                            dragOverIndex: null,
-                                        });
-                                    }
-                                }}
+                                className="flex-1 overflow-y-auto bg-slate-50/20 relative min-h-0 flex flex-col scroll-smooth"
                                 onDragOver={(e) => e.preventDefault()}
+                                onDrop={handleDrop}
                             >
                                 <div
                                     className={cn(
-                                        'w-full max-w-4xl mx-auto relative px-8 pb-40 flex-1 flex flex-col transition-all duration-700 ease-in-out',
-                                        plan.length <= 3
+                                        'w-full max-w-4xl mx-auto relative px-8 pb-40 flex-1 flex flex-col transition-all duration-500',
+                                        plan.length < 5
                                             ? 'justify-center'
-                                            : 'justify-start pt-20',
+                                            : 'justify-start pt-12',
                                     )}
                                 >
                                     {plan.length > 0 && (
                                         <div
                                             className={cn(
-                                                'absolute left-[110px] w-px bg-slate-200 z-0',
-                                                plan.length <= 3
-                                                    ? 'top-[20%] bottom-[20%]'
+                                                'absolute left-[110px] w-px bg-slate-200 z-0 transition-all duration-500',
+                                                plan.length < 5
+                                                    ? 'top-[15%] bottom-[15%]'
                                                     : 'top-0 bottom-0',
                                             )}
                                         />
                                     )}
 
                                     {plan.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center text-slate-300 gap-4 h-full opacity-60">
-                                            <Plus
-                                                size={48}
-                                                className="stroke-[1px]"
-                                            />
-                                            <p className="font-medium">
-                                                Drag activities here to start
+                                        <div className="flex flex-col items-center justify-center text-slate-300 gap-4 opacity-60 h-full">
+                                            <div className="h-24 w-24 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center">
+                                                <Plus size={32} />
+                                            </div>
+                                            <p className="text-sm font-semibold tracking-wide uppercase">
+                                                Your timeline is empty
                                             </p>
                                         </div>
                                     ) : (
@@ -355,133 +384,89 @@ const SessionPlanningModal = ({
                                             axis="y"
                                             values={plan}
                                             onReorder={setPlan}
-                                            className="space-y-1 w-full relative z-10"
+                                            className="space-y-10 relative z-10 w-full"
                                             layoutScroll
                                         >
-                                            <AnimatePresence
-                                                mode="popLayout"
-                                                initial={false}
-                                            >
-                                                {plan.map((item, idx) => (
-                                                    <React.Fragment
+                                            <AnimatePresence mode="popLayout">
+                                                {plan.map((item) => (
+                                                    <motion.div
                                                         key={item.instanceId}
+                                                        layout
+                                                        initial={{
+                                                            opacity: 0,
+                                                            scale: 0.9,
+                                                            y: 20,
+                                                        }}
+                                                        animate={{
+                                                            opacity: 1,
+                                                            scale: 1,
+                                                            y: 0,
+                                                        }}
+                                                        exit={{
+                                                            opacity: 0,
+                                                            scale: 0.8,
+                                                            x: -20,
+                                                        }}
+                                                        className="relative flex gap-10 group"
                                                     >
-                                                        <div
-                                                            onDragEnter={() =>
-                                                                setDragState({
-                                                                    isLibraryDrag: true,
-                                                                    dragOverIndex:
-                                                                        idx,
-                                                                })
-                                                            }
-                                                            className={cn(
-                                                                'h-4 transition-all mx-20 rounded-lg pointer-events-auto',
-                                                                dragState.dragOverIndex ===
-                                                                    idx
-                                                                    ? 'bg-indigo-100 scale-y-110 border-2 border-dashed border-indigo-200'
-                                                                    : 'bg-transparent',
-                                                            )}
-                                                        />
-
-                                                        <Reorder.Item
-                                                            value={item}
-                                                            id={item.instanceId}
-                                                            className="relative flex gap-10 group list-none"
-                                                            initial={{
-                                                                opacity: 0,
-                                                                y: 15,
-                                                            }}
-                                                            animate={{
-                                                                opacity: 1,
-                                                                y: 0,
-                                                            }}
-                                                            exit={{
-                                                                opacity: 0,
-                                                                scale: 0.9,
-                                                            }}
-                                                            whileDrag={{
-                                                                scale: 1.02,
-                                                                zIndex: 50,
-                                                            }}
-                                                        >
-                                                            <div className="w-14 pt-4 flex flex-col items-end shrink-0 text-[11px] font-bold text-slate-400 tabular-nums">
+                                                        <div className="w-14 pt-3.5 flex flex-col items-end shrink-0 select-none">
+                                                            <span className="text-[11px] font-black text-slate-900 tabular-nums tracking-tighter uppercase">
                                                                 {
                                                                     item.displayStart
                                                                 }
-                                                            </div>
-                                                            <div className="absolute left-[73px] top-6 h-2.5 w-2.5 rounded-full border-2 border-indigo-600 bg-white z-20 shadow-md transition-transform group-hover:scale-125" />
-                                                            <div className="flex-1">
-                                                                <ItemCard
-                                                                    id={
-                                                                        item.instanceId
-                                                                    }
-                                                                    title={
-                                                                        item.name
-                                                                    }
-                                                                    subtitle={`${item.durationSeconds / 60}m • ${item.displayEnd}`}
-                                                                    imageSrc={
-                                                                        item.imageUrl
-                                                                    }
-                                                                    mode="delete"
-                                                                    actionIcon={
-                                                                        <Trash2
-                                                                            size={
-                                                                                16
-                                                                            }
-                                                                        />
-                                                                    }
-                                                                    itemValue={
-                                                                        item
-                                                                    }
-                                                                    onActionClick={() =>
-                                                                        setPlan(
-                                                                            (
-                                                                                prev,
-                                                                            ) =>
-                                                                                prev.filter(
-                                                                                    (
-                                                                                        p,
-                                                                                    ) =>
-                                                                                        p.instanceId !==
-                                                                                        item.instanceId,
-                                                                                ),
-                                                                        )
-                                                                    }
-                                                                />
-                                                            </div>
-                                                        </Reorder.Item>
-                                                    </React.Fragment>
+                                                            </span>
+                                                        </div>
+                                                        <div className="absolute left-[73px] top-5 h-2.5 w-2.5 rounded-full border-2 border-indigo-600 bg-white z-20 shadow-[0_0_0_4px_rgba(79,70,229,0.1)] transition-transform group-hover:scale-125" />
+                                                        <div className="flex-1">
+                                                            <ItemCard
+                                                                id={
+                                                                    item.instanceId
+                                                                }
+                                                                title={
+                                                                    item.name
+                                                                }
+                                                                subtitle={`${(item.durationSeconds || 1800) / 60}m • Ends ${item.displayEnd}`}
+                                                                imageSrc={
+                                                                    item.imageUrl
+                                                                }
+                                                                mode="delete"
+                                                                actionIcon={
+                                                                    <Trash2
+                                                                        size={
+                                                                            16
+                                                                        }
+                                                                    />
+                                                                }
+                                                                itemValue={item}
+                                                                onActionClick={() =>
+                                                                    setPlan(
+                                                                        (
+                                                                            prev,
+                                                                        ) =>
+                                                                            prev.filter(
+                                                                                (
+                                                                                    p,
+                                                                                ) =>
+                                                                                    p.instanceId !==
+                                                                                    item.instanceId,
+                                                                            ),
+                                                                    )
+                                                                }
+                                                            />
+                                                        </div>
+                                                    </motion.div>
                                                 ))}
                                             </AnimatePresence>
-
                                             <div
-                                                onDragEnter={() =>
-                                                    setDragState({
-                                                        isLibraryDrag: true,
-                                                        dragOverIndex:
-                                                            plan.length,
-                                                    })
-                                                }
-                                                className={cn(
-                                                    'h-24 mt-4 transition-all mx-20 rounded-xl border-2 border-dashed flex items-center justify-center',
-                                                    dragState.dragOverIndex ===
-                                                        plan.length
-                                                        ? 'bg-indigo-50 border-indigo-300'
-                                                        : 'border-transparent',
-                                                )}
-                                            >
-                                                <div ref={scrollAnchorRef} />
-                                                {dragState.dragOverIndex ===
-                                                    plan.length && (
-                                                    <Plus className="text-indigo-300" />
-                                                )}
-                                            </div>
+                                                ref={scrollAnchorRef}
+                                                className="h-1 w-full"
+                                            />
                                         </Reorder.Group>
                                     )}
                                 </div>
                             </div>
 
-                            <div className="p-6 border-t flex justify-end bg-white/80 backdrop-blur-sm z-30 shrink-0">
+                            <div className="p-6 border-t flex justify-end shrink-0 bg-white/80 backdrop-blur-sm z-30">
                                 <Button
                                     className="px-12 font-semibold rounded-xl h-12 shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all active:scale-95"
                                     onClick={() => onConfirm(plan)}
@@ -506,21 +491,29 @@ const SessionPlanningModal = ({
                 open={!!pendingChange}
                 onOpenChange={(o) => !o && setPendingChange(null)}
             >
-                <AlertDialogContent className="rounded-3xl">
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
+                <AlertDialogContent className="rounded-[40px] border-none shadow-2xl bg-white p-10 max-w-[440px]">
+                    <AlertDialogHeader className="flex flex-col items-center text-center">
+                        <div className="h-20 w-20 rounded-[28px] bg-amber-50 flex items-center justify-center text-amber-500 mb-6 shadow-inner ring-1 ring-amber-100">
+                            <AlertTriangle size={36} strokeWidth={2.5} />
+                        </div>
+                        <AlertDialogTitle className="text-2xl font-semibold text-slate-900 tracking-tight">
                             Reset Current Draft?
                         </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Changing the session {pendingChange?.type} will
-                            clear your timeline.
+                        <AlertDialogDescription className="text-slate-400 mt-4 leading-relaxed">
+                            Changing the{' '}
+                            <span className="text-indigo-600 font-medium uppercase tracking-widest text-[11px]">
+                                session {pendingChange?.type}
+                            </span>{' '}
+                            will clear your timeline.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Keep Draft</AlertDialogCancel>
+                    <AlertDialogFooter className="flex flex-col sm:flex-row gap-3 mt-10 w-full">
+                        <AlertDialogCancel className="flex-1 h-14 rounded-2xl border-slate-200 font-medium text-[10px] uppercase tracking-widest">
+                            Keep Draft
+                        </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={confirmReset}
-                            className="bg-amber-500 hover:bg-amber-600"
+                            className="flex-1 h-14 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-medium text-[10px] uppercase tracking-widest shadow-lg shadow-amber-200/50"
                         >
                             Clear & Reset
                         </AlertDialogAction>

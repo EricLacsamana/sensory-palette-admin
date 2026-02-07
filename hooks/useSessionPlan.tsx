@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 export const useSessionPlan = (
     startDate: string,
@@ -30,6 +30,7 @@ export const useSessionPlan = (
                     sess.name ||
                     sess.attributes?.name ||
                     sess.activity?.name ||
+                    sess.activity?.attributes?.name ||
                     (sess.isBreak ? 'Rest Break' : 'Activity'),
                 isBreak: !!sess.isBreak,
             }));
@@ -52,11 +53,15 @@ export const useSessionPlan = (
                 process.env.NEXT_PUBLIC_STRAPI_URL?.replace(/\/$/, '') ||
                 'http://localhost:1337';
 
+            // DEEP IMAGE RESOLVER
             const bannerData =
                 item?.attributes?.banner?.data?.attributes ||
+                item?.banner?.data?.attributes ||
                 item?.banner ||
-                item?.activity?.banner ||
-                item?.activity?.attributes?.banner?.data?.attributes;
+                item?.activity?.banner?.data?.attributes ||
+                item?.activity?.attributes?.banner?.data?.attributes ||
+                item?.activity?.banner;
+
             const bannerPath =
                 bannerData?.formats?.thumbnail?.url ||
                 bannerData?.url ||
