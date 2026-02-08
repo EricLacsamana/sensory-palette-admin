@@ -404,14 +404,18 @@ const SessionPlanningModal = ({
                             >
                                 <div
                                     className={cn(
-                                        'w-full max-w-4xl mx-auto relative px-8 pb-40 flex-1 flex flex-col transition-all duration-700 ease-in-out',
-                                        !isScrollable && plan.length > 0
-                                            ? 'justify-center'
-                                            : 'justify-start pt-5',
+                                        'w-full max-w-4xl mx-auto relative px-5 pb-0 flex-1 flex flex-col transition-all duration-700 ease-in-out',
+                                        plan.length === 0
+                                            ? 'justify-start items-center'
+                                            : 'justify-center',
+
+                                        plan.length > 0 && !isScrollable
+                                            ? 'pt-[5vh]'
+                                            : 'pt-5',
                                     )}
                                 >
                                     {plan.length > 0 && (
-                                        <div className="absolute left-[110px] w-0.5 bg-slate-200 z-0 top-0 bottom-0" />
+                                        <div className="absolute left-[89px] w-0.5 bg-slate-200 z-0 top-0 bottom-0" />
                                     )}
                                     {plan.length === 0 ? (
                                         <div className="flex-1 flex flex-col items-center justify-center text-slate-300 gap-4 opacity-60">
@@ -441,6 +445,12 @@ const SessionPlanningModal = ({
                                                     />
                                                 ))}
                                             </AnimatePresence>
+                                            <div
+                                                className="flex-1 min-h-[40px] w-full"
+                                                onDragOver={(e) =>
+                                                    e.preventDefault()
+                                                }
+                                            />
                                             <div
                                                 ref={scrollAnchorRef}
                                                 className="h-1 w-full"
