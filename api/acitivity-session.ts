@@ -48,8 +48,24 @@ export const getActivitySession = async (id: string) => {
 };
 
 export const createActivitySession = async (payload: any) => {
+    console.log('payload', payload);
     const { data } = await api.post(ENDPOINTS.ACTIVITY_SESSIONS, {
         data: payload,
     });
     return data;
+};
+
+export const updateActivitySession = async (
+    id: string | number,
+    payload: any,
+) => {
+    console.log('payload', payload);
+    const { data } = await api.put(`${ENDPOINTS.ACTIVITY_SESSIONS}/${id}`, {
+        data: payload,
+    });
+    return data;
+};
+
+export const deleteActivitySession = async (id: string) => {
+    return api.delete(`/activity-sessions/${id}`);
 };

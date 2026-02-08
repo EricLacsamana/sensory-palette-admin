@@ -8,11 +8,9 @@ import {
     Clock,
     PanelLeftClose,
     PanelLeftOpen,
-    Loader2,
     Plus,
-    Trash2,
 } from 'lucide-react';
-import { Reorder, AnimatePresence, motion } from 'framer-motion';
+import { Reorder, AnimatePresence } from 'framer-motion';
 
 import {
     Dialog,
@@ -37,14 +35,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 import { useSessionPlan } from '@/hooks/useSessionPlan';
-import ItemCard from '@/components/ItemCard';
-import CapacityGauge from '@/components/CapacityGauge';
+import ItemCard from './components/ItemCard';
+import CapacityGauge from './components/CapacityGauge';
+import { TimelineItem } from './components/TimelineItem';
 
 interface SessionPlanningModalProps {
     isOpen: boolean;
     onClose: () => void;
     activities: any[];
-    onConfirm: (plan: any[]) => void;
+    onConfirm: (data: { plan: any[]; date: string; start: string }) => void;
     student: any;
     activitySessions: any[];
     isSubmitting?: boolean;
@@ -75,26 +74,25 @@ const SessionPlanningModal = ({
     const scrollAnchorRef = useRef<HTMLDivElement>(null);
     const prevPlanLengthRef = useRef(0);
 
-    const { plan, setPlan, capacityMetrics } = useSessionPlan(
+    const { plan, setPlan, capacityMetrics, toggleLock } = useSessionPlan(
         startDate,
         startTimeStr,
         student,
         activitySessions,
     );
 
-    // Animation and Scroll Logic
-    useEffect(() => {
-        const currentLength = plan.length;
-        const previousLength = prevPlanLengthRef.current;
+    const baseUrl =
+        process.env.NEXT_PUBLIC_STRAPI_URL?.replace(/\/$/, '') ||
+        'http://localhost:1337';
 
-        // Only scroll if we added an item (avoids jumping during deletion)
-        if (currentLength > previousLength && currentLength > 0) {
+    useEffect(() => {
+        if (plan.length > prevPlanLengthRef.current && plan.length > 0) {
             scrollAnchorRef.current?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'nearest',
             });
         }
-        prevPlanLengthRef.current = currentLength;
+        prevPlanLengthRef.current = plan.length;
     }, [plan.length]);
 
     const handleAttemptChange = (type: 'date' | 'time', value: string) => {
@@ -105,6 +103,21 @@ const SessionPlanningModal = ({
         setPendingChange({ type, value });
     };
 
+    const [isScrollable, setIsScrollable] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const checkScroll = () => {
+            if (containerRef.current) {
+                const { scrollHeight, clientHeight } = containerRef.current;
+                setIsScrollable(scrollHeight > clientHeight);
+            }
+        };
+        checkScroll();
+        window.addEventListener('resize', checkScroll);
+        return () => window.removeEventListener('resize', checkScroll);
+    }, [plan]);
+
     const confirmReset = () => {
         if (!pendingChange) return;
         pendingChange.type === 'date'
@@ -114,6 +127,10 @@ const SessionPlanningModal = ({
         setPendingChange(null);
     };
 
+    const handleDragStart = (e: React.DragEvent, item: any) => {
+        e.dataTransfer.setData('newActivity', JSON.stringify(item));
+    };
+
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         const dataStr = e.dataTransfer.getData('newActivity');
@@ -121,13 +138,9 @@ const SessionPlanningModal = ({
         const raw = JSON.parse(dataStr);
         setPlan((prev) => [
             ...prev,
-            { ...raw, instanceId: crypto.randomUUID() },
+            { ...raw, instanceId: crypto.randomUUID(), isLocked: false },
         ]);
     };
-
-    const baseUrl =
-        process.env.NEXT_PUBLIC_STRAPI_URL?.replace(/\/$/, '') ||
-        'http://localhost:1337';
 
     return (
         <>
@@ -234,30 +247,45 @@ const SessionPlanningModal = ({
                                             <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-1">
                                                 Quick Breaks
                                             </h3>
-                                            <ItemCard
-                                                id="break"
-                                                title="5m Rest Break"
-                                                subtitle="5m"
-                                                mode="add"
-                                                actionIcon={<Plus size={16} />}
-                                                itemValue={{
-                                                    name: '5m Rest Break',
-                                                    duration: 5,
-                                                    isBreak: true,
-                                                }}
-                                                onActionClick={() =>
-                                                    setPlan((prev) => [
-                                                        ...prev,
-                                                        {
-                                                            isBreak: true,
-                                                            duration: 5,
-                                                            name: '5m Rest Break',
-                                                            instanceId:
-                                                                crypto.randomUUID(),
-                                                        },
-                                                    ])
+                                            <div
+                                                draggable
+                                                onDragStart={(e) =>
+                                                    handleDragStart(e, {
+                                                        name: '5m Rest Break',
+                                                        duration: 5,
+                                                        isBreak: true,
+                                                    })
                                                 }
-                                            />
+                                                className="cursor-grab active:cursor-grabbing"
+                                            >
+                                                <ItemCard
+                                                    id="break"
+                                                    title="5m Rest Break"
+                                                    subtitle="5m"
+                                                    mode="add"
+                                                    actionIcon={
+                                                        <Plus size={16} />
+                                                    }
+                                                    itemValue={{
+                                                        name: '5m Rest Break',
+                                                        duration: 5,
+                                                        isBreak: true,
+                                                    }}
+                                                    onActionClick={() =>
+                                                        setPlan((p) => [
+                                                            ...p,
+                                                            {
+                                                                isBreak: true,
+                                                                duration: 5,
+                                                                name: '5m Rest Break',
+                                                                instanceId:
+                                                                    crypto.randomUUID(),
+                                                                isLocked: false,
+                                                            },
+                                                        ])
+                                                    }
+                                                />
+                                            </div>
                                         </div>
                                         <Separator />
                                         <div className="space-y-3">
@@ -278,6 +306,8 @@ const SessionPlanningModal = ({
                                                             act.attributes
                                                                 ?.banner?.data
                                                                 ?.attributes ||
+                                                            act.banner?.data
+                                                                ?.attributes ||
                                                             act.banner;
                                                         const bannerPath =
                                                             bannerData?.formats
@@ -293,38 +323,58 @@ const SessionPlanningModal = ({
                                                                     : `${baseUrl}${bannerPath}`
                                                                 : null;
                                                         return (
-                                                            <ItemCard
+                                                            <div
                                                                 key={act.id}
-                                                                id={act.id}
-                                                                title={act.name}
-                                                                subtitle={`${act.duration || 30}m`}
-                                                                imageSrc={
-                                                                    sidebarImg
-                                                                }
-                                                                mode="add"
-                                                                actionIcon={
-                                                                    <Plus
-                                                                        size={
-                                                                            16
-                                                                        }
-                                                                    />
-                                                                }
-                                                                itemValue={act}
-                                                                onActionClick={() =>
-                                                                    setPlan(
-                                                                        (
-                                                                            prev,
-                                                                        ) => [
-                                                                            ...prev,
-                                                                            {
-                                                                                ...act,
-                                                                                instanceId:
-                                                                                    crypto.randomUUID(),
-                                                                            },
-                                                                        ],
+                                                                draggable
+                                                                onDragStart={(
+                                                                    e,
+                                                                ) =>
+                                                                    handleDragStart(
+                                                                        e,
+                                                                        act,
                                                                     )
                                                                 }
-                                                            />
+                                                                className="cursor-grab active:cursor-grabbing"
+                                                            >
+                                                                <ItemCard
+                                                                    id={act.id}
+                                                                    title={
+                                                                        act.name
+                                                                    }
+                                                                    subtitle={`${act.duration || 30}m`}
+                                                                    imageSrc={
+                                                                        sidebarImg
+                                                                    }
+                                                                    mode="add"
+                                                                    actionIcon={
+                                                                        <Plus
+                                                                            size={
+                                                                                16
+                                                                            }
+                                                                        />
+                                                                    }
+                                                                    itemValue={
+                                                                        act
+                                                                    }
+                                                                    onActionClick={() =>
+                                                                        setPlan(
+                                                                            (
+                                                                                p,
+                                                                            ) => [
+                                                                                ...p,
+                                                                                {
+                                                                                    ...act,
+                                                                                    instanceId:
+                                                                                        crypto.randomUUID(),
+                                                                                    isLocked: false,
+                                                                                    imageUrl:
+                                                                                        sidebarImg,
+                                                                                },
+                                                                            ],
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </div>
                                                         );
                                                     })}
                                             </div>
@@ -347,31 +397,24 @@ const SessionPlanningModal = ({
                             </div>
 
                             <div
+                                ref={containerRef}
                                 className="flex-1 overflow-y-auto bg-slate-50/20 relative min-h-0 flex flex-col scroll-smooth"
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={handleDrop}
                             >
                                 <div
                                     className={cn(
-                                        'w-full max-w-4xl mx-auto relative px-8 pb-40 flex-1 flex flex-col transition-all duration-500',
-                                        plan.length < 5
+                                        'w-full max-w-4xl mx-auto relative px-8 pb-40 flex-1 flex flex-col transition-all duration-700 ease-in-out',
+                                        !isScrollable && plan.length > 0
                                             ? 'justify-center'
-                                            : 'justify-start pt-12',
+                                            : 'justify-start pt-5',
                                     )}
                                 >
                                     {plan.length > 0 && (
-                                        <div
-                                            className={cn(
-                                                'absolute left-[110px] w-px bg-slate-200 z-0 transition-all duration-500',
-                                                plan.length < 5
-                                                    ? 'top-[15%] bottom-[15%]'
-                                                    : 'top-0 bottom-0',
-                                            )}
-                                        />
+                                        <div className="absolute left-[110px] w-0.5 bg-slate-200 z-0 top-0 bottom-0" />
                                     )}
-
                                     {plan.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center text-slate-300 gap-4 opacity-60 h-full">
+                                        <div className="flex-1 flex flex-col items-center justify-center text-slate-300 gap-4 opacity-60">
                                             <div className="h-24 w-24 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center">
                                                 <Plus size={32} />
                                             </div>
@@ -384,77 +427,18 @@ const SessionPlanningModal = ({
                                             axis="y"
                                             values={plan}
                                             onReorder={setPlan}
-                                            className="space-y-10 relative z-10 w-full"
-                                            layoutScroll
+                                            className="space-y-5 relative z-10 w-full"
                                         >
                                             <AnimatePresence mode="popLayout">
                                                 {plan.map((item) => (
-                                                    <motion.div
+                                                    <TimelineItem
                                                         key={item.instanceId}
-                                                        layout
-                                                        initial={{
-                                                            opacity: 0,
-                                                            scale: 0.9,
-                                                            y: 20,
-                                                        }}
-                                                        animate={{
-                                                            opacity: 1,
-                                                            scale: 1,
-                                                            y: 0,
-                                                        }}
-                                                        exit={{
-                                                            opacity: 0,
-                                                            scale: 0.8,
-                                                            x: -20,
-                                                        }}
-                                                        className="relative flex gap-10 group"
-                                                    >
-                                                        <div className="w-14 pt-3.5 flex flex-col items-end shrink-0 select-none">
-                                                            <span className="text-[11px] font-black text-slate-900 tabular-nums tracking-tighter uppercase">
-                                                                {
-                                                                    item.displayStart
-                                                                }
-                                                            </span>
-                                                        </div>
-                                                        <div className="absolute left-[73px] top-5 h-2.5 w-2.5 rounded-full border-2 border-indigo-600 bg-white z-20 shadow-[0_0_0_4px_rgba(79,70,229,0.1)] transition-transform group-hover:scale-125" />
-                                                        <div className="flex-1">
-                                                            <ItemCard
-                                                                id={
-                                                                    item.instanceId
-                                                                }
-                                                                title={
-                                                                    item.name
-                                                                }
-                                                                subtitle={`${(item.durationSeconds || 1800) / 60}m • Ends ${item.displayEnd}`}
-                                                                imageSrc={
-                                                                    item.imageUrl
-                                                                }
-                                                                mode="delete"
-                                                                actionIcon={
-                                                                    <Trash2
-                                                                        size={
-                                                                            16
-                                                                        }
-                                                                    />
-                                                                }
-                                                                itemValue={item}
-                                                                onActionClick={() =>
-                                                                    setPlan(
-                                                                        (
-                                                                            prev,
-                                                                        ) =>
-                                                                            prev.filter(
-                                                                                (
-                                                                                    p,
-                                                                                ) =>
-                                                                                    p.instanceId !==
-                                                                                    item.instanceId,
-                                                                            ),
-                                                                    )
-                                                                }
-                                                            />
-                                                        </div>
-                                                    </motion.div>
+                                                        item={item}
+                                                        setPlan={setPlan}
+                                                        onToggleLock={
+                                                            toggleLock
+                                                        }
+                                                    />
                                                 ))}
                                             </AnimatePresence>
                                             <div
@@ -469,17 +453,16 @@ const SessionPlanningModal = ({
                             <div className="p-6 border-t flex justify-end shrink-0 bg-white/80 backdrop-blur-sm z-30">
                                 <Button
                                     className="px-12 font-semibold rounded-xl h-12 shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all active:scale-95"
-                                    onClick={() => onConfirm(plan)}
+                                    onClick={() =>
+                                        onConfirm({
+                                            plan: plan,
+                                            date: startDate,
+                                            start: startTimeStr,
+                                        })
+                                    }
                                     disabled={plan.length === 0 || isSubmitting}
                                 >
-                                    {isSubmitting ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />{' '}
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        'Confirm Session Plan'
-                                    )}
+                                    Confirm Session Plan
                                 </Button>
                             </div>
                         </main>

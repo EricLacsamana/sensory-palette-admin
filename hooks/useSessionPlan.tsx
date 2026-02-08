@@ -9,10 +9,6 @@ export const useSessionPlan = (
     initialSessions?: any[],
 ) => {
     const [rawPlan, setRawPlan] = useState<any[]>([]);
-    const [dragState, setDragState] = useState({
-        isLibraryDrag: false,
-        dragOverIndex: null as number | null,
-    });
 
     useEffect(() => {
         if (
@@ -23,6 +19,8 @@ export const useSessionPlan = (
             const mappedSessions = initialSessions.map((sess) => ({
                 ...sess,
                 instanceId: sess.instanceId || sess.id || crypto.randomUUID(),
+                // Existing sessions from DB are locked by default
+                isLocked: !!(sess.id || sess.documentId),
                 duration:
                     sess.durationMinutes ||
                     (sess.durationSeconds ? sess.durationSeconds / 60 : 30),
@@ -37,6 +35,16 @@ export const useSessionPlan = (
             setRawPlan(mappedSessions);
         }
     }, [initialSessions]);
+
+    const toggleLock = (instanceId: string) => {
+        setRawPlan((prev) =>
+            prev.map((item) =>
+                item.instanceId === instanceId
+                    ? { ...item, isLocked: !item.isLocked }
+                    : item,
+            ),
+        );
+    };
 
     const plan = useMemo(() => {
         const startDateTime = new Date(`${startDate}T${startTimeStr}`);
@@ -53,7 +61,6 @@ export const useSessionPlan = (
                 process.env.NEXT_PUBLIC_STRAPI_URL?.replace(/\/$/, '') ||
                 'http://localhost:1337';
 
-            // DEEP IMAGE RESOLVER
             const bannerData =
                 item?.attributes?.banner?.data?.attributes ||
                 item?.banner?.data?.attributes ||
@@ -101,8 +108,7 @@ export const useSessionPlan = (
     return {
         plan,
         setPlan: setRawPlan,
-        dragState,
-        setDragState,
+        toggleLock,
         capacityMetrics: {
             percentUsed: Math.min(
                 (plan.reduce((acc, s) => acc + (s.durationSeconds || 0), 0) /

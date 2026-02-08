@@ -38,8 +38,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 import { useSessionPlan } from '@/hooks/useSessionPlan';
-import ItemCard from '@/components/ItemCard';
-import CapacityGauge from '@/components/CapacityGauge';
+import ItemCard from '@/components/SessionPlanningModal/components/ItemCard';
+import CapacityGauge from '@/components/SessionPlanningModal/components/CapacityGauge';
 
 interface SessionPlanningModalProps {
     isOpen: boolean;

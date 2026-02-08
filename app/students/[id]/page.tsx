@@ -35,10 +35,12 @@ import { getStudent } from '@/api/students';
 import { useActivities } from '@/hooks/useActivities';
 import {
     createActivitySession,
+    deleteActivitySession,
     getActivitySessions,
+    updateActivitySession,
 } from '@/api/acitivity-session';
 import { cn } from '@/lib/utils';
-import SessionPlanningModal from '@/components/SessionPlanningModal';
+import SessionPlanningModal from '@/components/SessionPlanningModal/index';
 
 export default function StudentDashboard() {
     const params = useParams();
@@ -56,63 +58,94 @@ export default function StudentDashboard() {
 
     const { data: response } = useQuery({
         // Pattern: [Key, Search, Start, End, StudentId]
-        queryKey: ['activity-sessions', '', '', '', ''],
-        queryFn: getActivitySessions,
+        queryKey: ['activity-sessions', '', '', '', id],
+
+        queryFn: () => getActivitySessions({ studentId: id }),
         // enabled: !!id,
     });
 
     const existingSessions = useMemo(() => response?.data || [], [response]);
-    console.log('ress', existingSessions);
 
-    const { mutate: savePlan, isPending: isSaving } = useMutation({
+    const { mutateAsync: savePlanAsync, isPending: isSaving } = useMutation({
         mutationFn: async (data: {
             plan: any[];
             date: string;
             start: string;
         }) => {
             const { plan, date, start } = data;
-            // Linear ISO Calculation for backend
             let currentStartTime = new Date(`${date}T${start}:00`);
 
-            return Promise.all(
-                plan.map((item) => {
-                    const startTimeISO = currentStartTime.toISOString();
-                    const durationMinutes = item.duration || 30;
-                    const endTime = new Date(
-                        currentStartTime.getTime() + durationMinutes * 60000,
-                    );
+            if (!plan) throw new Error('Plan data is missing');
 
-                    const payload = {
-                        student: id,
-                        activity: item.isBreak
-                            ? null
-                            : item.documentId || item.id,
-                        activityStatus: 'started',
-                        startTime: startTimeISO,
-                        endTime: endTime.toISOString(),
-                        durationSeconds: durationMinutes * 60,
-                    };
-                    currentStartTime = endTime;
-                    return createActivitySession(payload);
-                }),
+            const currentPlanSessionIds = new Set(
+                plan.map((p: any) => p.documentId || p.id).filter(Boolean),
             );
+            const sessionsToDelete = existingSessions.filter((s: any) => {
+                const sId = s.documentId || s.id;
+                return !currentPlanSessionIds.has(sId);
+            });
+
+            const deletePromises = sessionsToDelete.map((s: any) =>
+                deleteActivitySession(s.documentId || s.id),
+            );
+
+            const upsertPromises = plan.map((item) => {
+                const startTimeISO = currentStartTime.toISOString();
+                const durationMinutes = item.duration || 30;
+                const endTime = new Date(
+                    currentStartTime.getTime() + durationMinutes * 60000,
+                );
+
+                const activityId = item.isBreak
+                    ? null
+                    : item.activity?.documentId ||
+                      item.activity?.id ||
+                      item.documentId ||
+                      item.id;
+
+                const payload = {
+                    student: id,
+                    activity: activityId,
+                    startTime: startTimeISO,
+                    endTime: endTime.toISOString(),
+                    durationSeconds: durationMinutes * 60,
+                };
+
+                currentStartTime = endTime;
+
+                const isExistingSession = existingSessions.some(
+                    (s: any) =>
+                        (s.documentId || s.id) === (item.documentId || item.id),
+                );
+
+                if (isExistingSession) {
+                    const sessionId = item.documentId || item.id;
+                    return updateActivitySession(sessionId, payload);
+                } else {
+                    return createActivitySession(payload);
+                }
+            });
+
+            return Promise.all([...deletePromises, ...upsertPromises]);
         },
         onSuccess: () => {
             setIsModalOpen(false);
-
             queryClient.invalidateQueries({ queryKey: ['activity-sessions'] });
-            toast.success('Session Plan Synchronized');
+            toast.success('Schedule Synchronized');
+        },
+        onError: (error) => {
+            console.error('Sync Error:', error);
+            toast.error('Failed to sync changes');
         },
     });
-
     const handleConfirmSession = (data: any) => {
-        const syncPromise = new Promise((resolve, reject) => {
-            savePlan(data, { onSuccess: resolve, onError: reject });
-        });
+        const syncPromise = savePlanAsync(data);
+
         toast.promise(syncPromise, {
-            loading: 'Syncing...',
-            success: 'Synchronized',
-            error: (err: any) => 'Sync failed',
+            loading: 'Syncing session plan...',
+            success: 'Session Plan Synchronized',
+            error: (err) =>
+                `Sync failed: ${err.message || 'Check console for details'}`,
         });
     };
 
