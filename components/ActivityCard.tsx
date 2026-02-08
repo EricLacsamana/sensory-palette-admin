@@ -235,7 +235,7 @@ const SessionPlanningModal = ({
                                                     key={act.id}
                                                     id={act.id}
                                                     title={act.name}
-                                                    subtitle={`${act.duration}m`}
+                                                    subtitle={`${act.durationMinutes}m`}
                                                     imageSrc={resolveStrapiImage(
                                                         act,
                                                     )}

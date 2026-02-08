@@ -1,3 +1,4 @@
+import { ActivityEntry } from '@/types/actitivity';
 import api from '.';
 import { ENDPOINTS } from '../constants/api';
 
@@ -11,7 +12,7 @@ export const getActivitySessions = async (args: any = {}) => {
     const studentId = queryKey[4] || args.studentId;
 
     // 2. Base URL
-    let url = `${ENDPOINTS.ACTIVITY_SESSIONS}?populate[activity][populate]=*&sort[0]=startTime:desc`;
+    let url = `${ENDPOINTS.ACTIVITY_SESSIONS}?populate[activity][populate]=*&populate[student][populate]=*&sort[0]=startTime:desc`;
 
     // 3. CONDITIONAL STUDENT FILTERING
     // Only append if studentId is truthy and not the string 'undefined'
@@ -56,10 +57,9 @@ export const createActivitySession = async (payload: any) => {
 };
 
 export const updateActivitySession = async (
-    id: string | number,
-    payload: any,
+    id: string,
+    payload: ActivityEntry,
 ) => {
-    console.log('payload', payload);
     const { data } = await api.put(`${ENDPOINTS.ACTIVITY_SESSIONS}/${id}`, {
         data: payload,
     });

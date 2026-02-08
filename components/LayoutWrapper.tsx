@@ -6,6 +6,8 @@ import { useSelector } from 'react-redux'; // Add this
 import Sidebar from '@/components/Sidebar';
 import { cn } from '@/lib/utils';
 import { RootState } from '@/redux/store'; // Adjust path to your store
+import SessionPlanningModal from './SessionPlanningModal';
+import { ActivityEntry } from '@/types/actitivity';
 
 export default function LayoutWrapper({
     children,
@@ -57,6 +59,19 @@ export default function LayoutWrapper({
                     {children}
                 </div>
             </main>
+            <SessionPlanningModal
+                activities={[]}
+                onConfirm={function (data: {
+                    activitSessionItem: ActivityEntry[];
+                    date: string;
+                    start: string;
+                }): void {
+                    throw new Error('Function not implemented.');
+                }} // onClose={() => setIsModalOpen(false)}
+                // activities={activities}
+                // isSubmitting={isSaving}
+                // onConfirm={handleCreateSession}
+            />
         </div>
     );
 }

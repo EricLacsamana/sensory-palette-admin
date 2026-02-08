@@ -29,6 +29,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { InitializeSessionButton } from './SessionPlanningModal/components/InitializeSessionPlanningButton';
 
 interface SidebarProps {
     isCollapsed: boolean;
@@ -124,11 +125,8 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
 
                 {/* QUICK ACTION BUTTON */}
                 {!isCollapsed && (
-                    <div className="px-5 mb-6 animate-in fade-in zoom-in-95 duration-500">
-                        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-2 h-10 shadow-md shadow-indigo-100 font-semibold text-sm">
-                            <PlusCircle size={16} strokeWidth={2} />
-                            <span>New Session</span>
-                        </Button>
+                    <div className="px-5 mb-6 animate-in fade-in zoom-in-95 duration-500 items-center">
+                        <InitializeSessionButton />
                     </div>
                 )}
 

@@ -4,6 +4,8 @@ import React from 'react';
 import { GripVertical, Lock, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { DragControls } from 'framer-motion';
+// import { ActivityEntry } from '@/types/actitivity'; // Adjust import based on your project structure
 
 interface ItemCardProps {
     id: string;
@@ -15,8 +17,8 @@ interface ItemCardProps {
     onActionClick: () => void;
     onToggleLock?: () => void;
     mode: 'add' | 'delete';
-    itemValue: any;
-    dragControls?: any;
+    itemValue?: unknown; // Made generic to be flexible
+    dragControls?: DragControls;
 }
 
 const ItemCard = ({
@@ -61,6 +63,7 @@ const ItemCard = ({
                 )}
             >
                 {imageSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                         src={imageSrc}
                         className="h-full w-full object-cover pointer-events-none"

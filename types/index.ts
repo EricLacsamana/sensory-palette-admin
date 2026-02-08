@@ -1,8 +1,12 @@
 export interface User {
-    id: string | number;
+    id: number;
     username: string;
     email?: string;
     role?: string;
+    firstName?: string;
+    fullName?: string;
+    lastName?: string;
+    createdAt: string;
 }
 
 export interface Login {
@@ -15,7 +19,7 @@ export interface LoginResponse {
     jwt: string;
 }
 
-export interface Student {
+export interface UserResponse {
     id: number;
     documentId?: string;
     username: string;
@@ -23,7 +27,6 @@ export interface Student {
     firstName?: string;
     fullName?: string;
     lastName?: string;
-    diagnosis?: string;
     createdAt: string;
     publishedAt?: string;
     role?: {
@@ -31,4 +34,40 @@ export interface Student {
         name: string;
         type: string;
     };
+}
+// types/strapi.ts
+
+export interface StrapiImageFormat {
+    url: string;
+    width: number;
+    height: number;
+    size: number;
+    hash: string;
+    ext: string;
+    mime: string;
+    path: string | null;
+}
+
+export interface StrapiMedia {
+    id: number;
+    url: string;
+    alternativeText?: string;
+    caption?: string;
+    width?: number;
+    height?: number;
+    formats?: {
+        thumbnail?: StrapiImageFormat;
+        small?: StrapiImageFormat;
+        medium?: StrapiImageFormat;
+        large?: StrapiImageFormat;
+    };
+}
+
+export interface StrapiResponse<T> {
+    data:
+        | {
+              id: number;
+              attributes: T;
+          }
+        | T;
 }

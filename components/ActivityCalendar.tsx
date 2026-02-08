@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import {
     format,
@@ -15,6 +15,7 @@ import {
     addMonths,
     subMonths,
     isWeekend,
+    addDays,
 } from 'date-fns';
 import {
     ChevronLeft,
@@ -38,8 +39,11 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { getActivitySessions } from '@/api/acitivity-session';
+import { ActivitySessionResponse } from '@/types/activitiy-session';
 
-// Status Configuration: Colors and Icons
+// --- Types ---
+
+// --- Configuration ---
 const statusConfig: Record<
     string,
     { color: string; badge: string; icon: any }
@@ -52,7 +56,7 @@ const statusConfig: Record<
     live: {
         color: 'bg-emerald-500 text-white shadow-emerald-200 animate-pulse ring-2 ring-emerald-500/20',
         badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
-        icon: Play, // Live gets a Play icon
+        icon: Play,
     },
     started: {
         color: 'bg-indigo-500 text-white shadow-indigo-100',
@@ -73,24 +77,20 @@ const statusConfig: Record<
 
 export function ActivityCalendar() {
     const [viewDate, setViewDate] = useState(new Date());
-    const [debouncedDate, setDebouncedDate] = useState(viewDate);
-
-    useEffect(() => {
-        const handler = setTimeout(() => setDebouncedDate(viewDate), 300);
-        return () => clearTimeout(handler);
-    }, [viewDate]);
 
     const { startRange, endRange, days } = useMemo(() => {
-        const monthStart = startOfMonth(debouncedDate);
-        const monthEnd = endOfMonth(debouncedDate);
+        const monthStart = startOfMonth(viewDate);
+        const monthEnd = endOfMonth(viewDate);
         const start = startOfWeek(monthStart);
-        const end = endOfWeek(monthEnd);
+        // Ensure we always render exactly 6 weeks (42 days) to keep grid stable
+        const end = addDays(start, 41);
+
         return {
             startRange: start.toISOString(),
-            endRange: end.toISOString(),
+            endRange: endOfWeek(monthEnd).toISOString(),
             days: eachDayOfInterval({ start, end }),
         };
-    }, [debouncedDate]);
+    }, [viewDate]);
 
     const { data: response, isFetching } = useQuery({
         queryKey: ['activity-sessions', '', startRange, endRange],
@@ -98,13 +98,40 @@ export function ActivityCalendar() {
         placeholderData: keepPreviousData,
     });
 
-    const sessions = response?.data || [];
-    const rowCount = Math.ceil(days.length / 7);
+    const sessions: ActivitySessionResponse[] = useMemo(() => {
+        return response?.data || [];
+    }, [response]);
+
+    const sessionsByDate = useMemo(() => {
+        const groups: Record<string, ActivitySessionResponse[]> = {};
+
+        sessions.forEach((session) => {
+            if (!session.startTime) return;
+            const dateKey = format(parseISO(session.startTime), 'yyyy-MM-dd');
+            if (!groups[dateKey]) groups[dateKey] = [];
+            groups[dateKey].push(session);
+        });
+
+        Object.keys(groups).forEach((key) => {
+            groups[key].sort(
+                (a, b) =>
+                    parseISO(a.startTime).getTime() -
+                    parseISO(b.startTime).getTime(),
+            );
+        });
+
+        return groups;
+    }, [sessions]);
+
     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     return (
-        <TooltipProvider delayDuration={0}>
-            <div className="w-full h-full bg-white rounded-[40px] border border-slate-400/50 overflow-hidden flex flex-col transition-all duration-500 shadow-sm">
+        <TooltipProvider delayDuration={100}>
+            {/* FIX 1: Removed `min-h-[500px]` and replaced with `min-h-0`. 
+               This ensures the container allows itself to shrink if the parent is small.
+               Ensure the parent of this component has a defined height (e.g., h-screen or h-[500px]).
+            */}
+            <div className="w-full h-full min-h-0 bg-white rounded-[40px] border border-slate-400/50 overflow-hidden flex flex-col transition-all duration-500 shadow-sm">
                 {/* --- HEADER --- */}
                 <div className="flex items-center justify-between px-6 md:px-10 py-5 bg-white/50 backdrop-blur-xl border-b border-slate-300 shrink-0">
                     <div className="flex items-center gap-4">
@@ -168,63 +195,58 @@ export function ActivityCalendar() {
                     ))}
                 </div>
 
-                {/* --- CALENDAR GRID --- */}
-                <div
-                    className="grid grid-cols-7 flex-1 overflow-hidden"
-                    style={{
-                        gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))`,
-                    }}
-                >
+                {/* FIX 2: Grid Layout
+                    - Changed `grid-rows-6` to `grid-rows-[repeat(6,minmax(0,1fr))]`
+                    - This forces strictly equal rows that fit in the container, preventing overflow.
+                    - `minmax(0, 1fr)` is crucial here; it allows the row to shrink below its content size if needed.
+                */}
+                <div className="grid grid-cols-7 grid-rows-[repeat(6,minmax(0,1fr))] flex-1 overflow-hidden">
                     {days.map((day, idx) => {
-                        const daySessions = sessions
-                            .filter(
-                                (s: any) =>
-                                    s.startTime &&
-                                    isSameDay(parseISO(s.startTime), day),
-                            )
-                            .sort(
-                                (a: any, b: any) =>
-                                    parseISO(a.startTime).getTime() -
-                                    parseISO(b.startTime).getTime(),
-                            );
-
+                        const dateKey = format(day, 'yyyy-MM-dd');
+                        const daySessions = sessionsByDate[dateKey] || [];
                         const isCurrentMonth = isSameMonth(day, viewDate);
+                        const isToday = isSameDay(day, new Date());
+                        const isWeekendDay = isWeekend(day);
+
                         return (
                             <div
-                                key={day.toString()}
+                                key={dateKey}
                                 className={cn(
-                                    'p-1 border-r border-b border-slate-100 transition-all duration-300 relative group flex flex-col min-w-0',
+                                    'p-1 border-r border-b border-slate-100 transition-all duration-300 relative group flex flex-col min-w-0 min-h-0', // Added min-h-0 here as well
                                     !isCurrentMonth
-                                        ? 'bg-slate-50/20 opacity-25'
+                                        ? 'bg-slate-50/20 opacity-40'
                                         : 'bg-white',
-                                    isWeekend(day) &&
+                                    isWeekendDay &&
                                         isCurrentMonth &&
                                         'bg-rose-50/30',
                                     idx % 7 === 6 && 'border-r-0',
                                 )}
                             >
-                                <div className="flex justify-between items-center mb-1">
+                                <div className="flex justify-between items-center mb-1 shrink-0">
                                     <span
                                         className={cn(
-                                            'text-[11px] font-semibold h-4 w-4 flex items-center justify-center rounded-xl transition-all',
-                                            isSameDay(day, new Date())
-                                                ? 'bg-indigo-600 text-white shadow-md'
-                                                : 'text-slate-400',
+                                            'text-[11px] font-semibold h-5 w-5 flex items-center justify-center rounded-lg transition-all',
+                                            isToday
+                                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                                                : 'text-slate-400 group-hover:text-indigo-600',
                                         )}
                                     >
                                         {format(day, 'd')}
                                     </span>
                                 </div>
 
+                                {/* FIX 3: Content Overflow
+                                    - Changed `overflow-hidden` to `overflow-y-auto` (or scroll).
+                                    - This ensures that if there are too many sessions, we scroll INSIDE the cell 
+                                      instead of expanding the cell height and breaking the grid.
+                                */}
                                 <div
                                     className={cn(
-                                        'flex flex-wrap gap-1 p-0.5 mt-1 overflow-hidden flex-1 content-start transition-opacity',
-                                        isFetching
-                                            ? 'opacity-50'
-                                            : 'opacity-100',
+                                        'flex flex-wrap content-start gap-1 p-0.5 overflow-y-auto flex-1 scrollbar-hide', // Added scrollbar-hide if you have the plugin, otherwise just remove it
+                                        isFetching && 'opacity-50',
                                     )}
                                 >
-                                    {daySessions.map((session: any) => {
+                                    {daySessions.map((session) => {
                                         const config =
                                             statusConfig[
                                                 session.activityStatus
@@ -232,35 +254,37 @@ export function ActivityCalendar() {
                                         const StatusIcon = config.icon;
 
                                         return (
-                                            <Tooltip key={session.id}>
+                                            <Tooltip key={session.documentId}>
                                                 <TooltipTrigger asChild>
                                                     <div
                                                         className={cn(
-                                                            'h-3.5 w-3.5 rounded-full cursor-pointer transition-all hover:scale-125 flex items-center justify-center',
+                                                            'h-3.5 w-3.5 rounded-full cursor-pointer transition-all hover:scale-125 hover:z-10 flex items-center justify-center shrink-0',
                                                             config.color,
                                                         )}
                                                     >
-                                                        {StatusIcon && (
-                                                            <StatusIcon
-                                                                size={8}
-                                                                strokeWidth={3}
-                                                            />
-                                                        )}
+                                                        <StatusIcon
+                                                            size={8}
+                                                            strokeWidth={3}
+                                                        />
                                                     </div>
                                                 </TooltipTrigger>
-                                                <TooltipContent className="bg-slate-900 text-white p-4 rounded-2xl border-none shadow-2xl z-[100]">
+                                                <TooltipContent
+                                                    side="right"
+                                                    sideOffset={5}
+                                                    className="bg-slate-900 text-white p-4 rounded-2xl border-none shadow-xl z-[100]"
+                                                >
                                                     <div className="space-y-2 min-w-[180px]">
-                                                        {/* Header: Student & Status */}
                                                         <div className="flex justify-between items-start border-b border-white/10 pb-2 mb-1">
                                                             <div>
                                                                 <p className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">
                                                                     Student
                                                                 </p>
                                                                 <p className="text-[13px] font-bold text-white">
-                                                                    {session
-                                                                        .student
-                                                                        ?.firstName ||
-                                                                        'Guest'}
+                                                                    {
+                                                                        session
+                                                                            .student
+                                                                            .firstName
+                                                                    }
                                                                 </p>
                                                             </div>
                                                             <div
@@ -275,14 +299,13 @@ export function ActivityCalendar() {
                                                             </div>
                                                         </div>
 
-                                                        {/* Body: Activity & Time */}
                                                         <div className="space-y-1.5">
                                                             <div className="flex items-center gap-2 text-xs font-medium text-slate-100">
                                                                 <Activity
                                                                     size={12}
                                                                     className="text-indigo-400"
                                                                 />
-                                                                <span className="truncate">
+                                                                <span className="truncate max-w-[150px]">
                                                                     {session
                                                                         .activity
                                                                         ?.name ||

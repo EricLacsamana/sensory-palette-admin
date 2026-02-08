@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useEffect } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query'; // Import keepPreviousData
 import {
     Plus,
     Search,
@@ -10,6 +10,7 @@ import {
     List,
     Users,
     FilterX,
+    Loader2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -29,28 +30,52 @@ import { getStudents } from '@/api/students';
 import StudentsTable from '@/components/StudentsTable';
 import { StudentCard } from '@/components/StudentCard';
 import EnrollStudentForm from '@/components/EnrollStudentForm';
-import type { Student } from '@/types/index';
+import type { User } from '@/types/index';
+
+// --- 1. Add a Debounce Hook helper ---
+// This prevents the search from firing on every single keystroke
+function useDebounce<T>(value: T, delay: number): T {
+    const [debouncedValue, setDebouncedValue] = useState(value);
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+        return () => clearTimeout(handler);
+    }, [value, delay]);
+
+    return debouncedValue;
+}
 
 export default function StudentsDirectory() {
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-    const { data: students = [], isLoading } = useQuery<Student[]>({
-        queryKey: ['students'],
+    // Use the hook to wait 500ms after typing stops
+    const debouncedSearch = useDebounce(searchTerm, 500);
+
+    const {
+        data: students = [],
+        isLoading,
+        isFetching,
+    } = useQuery<User[]>({
+        queryKey: [
+            'students',
+            {
+                searchQuery: debouncedSearch,
+            },
+        ],
         queryFn: getStudents,
+
+        placeholderData: keepPreviousData,
     });
 
-    const filteredStudents = useMemo(() => {
-        const term = searchTerm.toLowerCase();
-        return students.filter(
-            (s) =>
-                `${s.firstName} ${s.lastName}`.toLowerCase().includes(term) ||
-                s.id.toString().includes(term),
-        );
-    }, [students, searchTerm]);
+    // --- 3. Fix Loading Logic ---
+    // Only show full screen loader on the INITIAL load, not during search
+    const isInitialLoading = isLoading && students.length === 0;
 
-    if (isLoading)
+    if (isInitialLoading)
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50/50">
                 <div className="flex flex-col items-center gap-4">
@@ -78,8 +103,7 @@ export default function StudentsDirectory() {
                         </h1>
                         <div className="flex items-center gap-3 mt-2.5">
                             <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">
-                                {filteredStudents.length} of {students.length}{' '}
-                                Learners Found
+                                {students?.length} Learners Found
                             </span>
                             <div className="h-1 w-1 rounded-full bg-slate-300" />
                             <span className="text-[10px] text-indigo-600 font-semibold uppercase tracking-widest">
@@ -91,7 +115,13 @@ export default function StudentsDirectory() {
 
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <div className="relative group flex-1 md:flex-none">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors stroke-[1.5px]" />
+                        {/* Show Spinner if fetching, otherwise show Search Icon */}
+                        {isFetching && debouncedSearch ? (
+                            <Loader2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-600 animate-spin" />
+                        ) : (
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors stroke-[1.5px]" />
+                        )}
+
                         <Input
                             className="pl-11 w-full md:w-72 bg-white border-slate-200/60 rounded-xl h-11 shadow-sm focus-visible:ring-indigo-50 transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-normal"
                             placeholder="Search directory..."
@@ -169,11 +199,14 @@ export default function StudentsDirectory() {
             </div>
 
             {/* --- CONTENT AREA --- */}
-            <div className="min-h-[50vh] relative">
-                {filteredStudents.length > 0 ? (
+            {/* Added opacity transition to show background loading state */}
+            <div
+                className={`min-h-[50vh] relative transition-opacity duration-300 ${isFetching && debouncedSearch ? 'opacity-50' : 'opacity-100'}`}
+            >
+                {students.length > 0 ? (
                     viewMode === 'grid' ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                            {filteredStudents.map((student) => (
+                            {students.map((student) => (
                                 <StudentCard
                                     key={student.id}
                                     student={student}
@@ -182,7 +215,7 @@ export default function StudentsDirectory() {
                         </div>
                     ) : (
                         <div className="bg-white rounded-[32px] border border-slate-200/60 shadow-sm overflow-hidden p-2 animate-in fade-in duration-500">
-                            <StudentsTable students={filteredStudents} />
+                            <StudentsTable students={students} />
                         </div>
                     )
                 ) : (

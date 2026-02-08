@@ -1,169 +1,239 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { getActivitySessions } from '@/api/acitivity-session';
+import { ActivitySessionEntry } from '@/types/activitiy-session';
+import { Activity } from '@/types/actitivity';
 
-export const useSessionPlan = (
-    startDate: string,
-    startTimeStr: string,
-    initialSessions?: any[],
-) => {
-    const [rawPlan, setRawPlan] = useState<any[]>([]);
+import { TimelineGapEntry } from '@/components/SessionPlanningModal/components/TimelineItem';
+import {
+    calculateSchedule,
+    ScheduledItem,
+} from '@/components/SessionPlanningModal/utils/scheduler';
 
-    const baseStartTimestamp = useMemo(() => {
-        const d = new Date(`${startDate}T${startTimeStr}`);
-        return isNaN(d.getTime()) ? null : d.getTime();
-    }, [startDate, startTimeStr]);
+interface SessionPlanProps {
+    startDate: string;
+    startTimeStr: string;
+    studentId: number;
+}
 
-    useEffect(() => {
-        if (initialSessions?.length && rawPlan.length === 0) {
-            const mappedSessions = initialSessions.map((sess) => ({
-                ...sess,
-                instanceId: sess.instanceId || sess.id || crypto.randomUUID(),
-                isLocked: !!(sess.id || sess.documentId),
-                duration:
-                    sess.durationMinutes ||
-                    (sess.durationSeconds ? sess.durationSeconds / 60 : 30),
-                name:
-                    sess.name ||
-                    sess.attributes?.name ||
-                    sess.activity?.name ||
-                    (sess.isBreak ? 'Rest Break' : 'Activity'),
-                isBreak: !!sess.isBreak,
-                // Store the original fixed start if it exists
-                startTime: sess.startTime || sess.attributes?.startTime,
-            }));
-            setRawPlan(mappedSessions);
-        }
-    }, [initialSessions]);
+export type TimelineItemUnion =
+    | (ScheduledItem & { type: 'activity' })
+    | TimelineGapEntry;
 
-    const toggleLock = (instanceId: string) => {
-        setRawPlan((prev) =>
-            prev.map((item) =>
-                item.instanceId === instanceId
-                    ? { ...item, isLocked: !item.isLocked }
-                    : item,
-            ),
-        );
-    };
+export const useSessionPlan = ({
+    startDate,
+    startTimeStr,
+    studentId,
+}: SessionPlanProps) => {
+    // --- 1. FETCH ---
+    const {
+        data: apiResponse,
+        isLoading,
+        isError,
+    } = useQuery({
+        queryKey: ['activity-sessions', startDate, studentId],
+        queryFn: () => getActivitySessions({ startDate, studentId }),
+        staleTime: 5 * 60 * 1000,
+        enabled: !!startDate && !!studentId,
+    });
 
-    const setPlan = useCallback(
-        (update: any[] | ((prev: any[]) => any[])) => {
-            setRawPlan((prev) => {
-                const nextOrder =
-                    typeof update === 'function' ? update(prev) : update;
-                if (baseStartTimestamp === null) return nextOrder;
+    // --- 2. NORMALIZE SERVER DATA ---
+    const serverData = useMemo(() => {
+        const rawData = Array.isArray(apiResponse)
+            ? apiResponse
+            : apiResponse?.data && Array.isArray(apiResponse.data)
+              ? apiResponse.data
+              : [];
 
-                let currentTs = baseStartTimestamp;
-                let isValid = true;
+        return rawData
+            .filter((s: any) => s.startTime === startTimeStr)
+            .map((s: any) => ({
+                ...s,
+                documentId: s.documentId ?? null,
+                instanceId: s.instanceId || s.documentId || crypto.randomUUID(),
+                isLocked: !!s.id,
+                durationMinutes: s.durationMinutes,
+                isBreak: s.isBreak || false,
+                type: 'activity',
+            })) as ActivitySessionEntry[];
+    }, [apiResponse, startTimeStr]);
 
-                for (let i = 0; i < nextOrder.length; i++) {
-                    const item = nextOrder[i];
-                    const durationMs = (item.duration || 30) * 60000;
+    // --- 3. LOCAL STATE OVERRIDE ---
+    const [localOverride, setLocalOverride] = useState<
+        ActivitySessionEntry[] | null
+    >(null);
 
-                    if (item.isLocked && item.startTime) {
-                        const lockedStart = new Date(item.startTime).getTime();
+    // NEW: Track the ID of the most recently added item for auto-scrolling
+    const [lastAddedId, setLastAddedId] = useState<string | null>(null);
 
-                        // POSSIBILITY 1: The "Overfill"
-                        // If floating items above this lock push the time past the lock's start.
-                        // We allow a 59-second "mercy" buffer for rounding.
-                        if (currentTs > lockedStart + 59000) {
-                            console.warn(
-                                `Cannot move: "${item.name}" is pushed past its locked time.`,
-                            );
-                            isValid = false;
-                            break;
-                        }
+    // Reset override if date changes
+    const currentViewKey = `${startDate}-${startTimeStr}-${studentId}`;
+    const [lastViewKey, setLastViewKey] = useState(currentViewKey);
+    if (currentViewKey !== lastViewKey) {
+        setLastViewKey(currentViewKey);
+        setLocalOverride(null);
+        setLastAddedId(null);
+    }
 
-                        // POSSIBILITY 2: The "Jump"
-                        // If there is a gap (e.g., items above ended at 10:00 but this lock is at 10:30),
-                        // the timeline "teleports" to the lock. This allows swapping items
-                        // across the lock without breaking the flow.
-                        currentTs = lockedStart + durationMs;
-                    } else {
-                        // POSSIBILITY 3: The "Float"
-                        // Standard items just stack their duration.
-                        currentTs += durationMs;
-                    }
+    // --- 4. CALCULATE SCHEDULE & FLATTEN LIST ---
+    const activeEntries = localOverride ?? serverData;
 
-                    // POSSIBILITY 4: The "End of Day" check (Optional)
-                    // You could add a check here if currentTs > 18:00 (6 PM)
-                    // but usually, it's better to let the user see the overlap first.
-                }
+    const { timelineItems, capacityMetrics } = useMemo(() => {
+        const { items, gaps } = calculateSchedule(activeEntries, startTimeStr);
+        const flatList: TimelineItemUnion[] = [];
 
-                return isValid ? nextOrder : prev;
+        // 1. Initial Gap
+        const startGap = gaps.find((g) => g.afterIndex === -1);
+        if (startGap) {
+            flatList.push({
+                type: 'gap',
+                instanceId: `gap-start-${startGap.startTime}`,
+                startTime: startGap.startTime,
+                endTime: startGap.endTime,
+                durationMinutes: startGap.durationMinutes,
             });
-        },
-        [baseStartTimestamp],
-    );
+        }
 
-    const plan = useMemo(() => {
-        if (baseStartTimestamp === null) return [];
-        let currentTimestamp = baseStartTimestamp;
-        const baseUrl =
-            process.env.NEXT_PUBLIC_STRAPI_URL?.replace(/\/$/, '') ||
-            'http://localhost:1337';
+        // 2. Interleave
+        items.forEach((item, index) => {
+            flatList.push({ ...item, type: 'activity' });
 
-        return rawPlan
-            .map((item) => {
-                if (!item) return null;
-                const durationMs = (item.duration || 30) * 60000;
+            const gap = gaps.find((g) => g.afterIndex === index);
+            if (gap) {
+                flatList.push({
+                    type: 'gap',
+                    instanceId: `gap-${index}-${gap.startTime}`,
+                    startTime: gap.startTime,
+                    endTime: gap.endTime,
+                    durationMinutes: gap.durationMinutes,
+                });
+            }
+        });
 
-                let itemStartTs =
-                    item.isLocked && item.startTime
-                        ? new Date(item.startTime).getTime()
-                        : currentTimestamp;
+        // Metrics
+        const totalDuration = items.reduce(
+            (acc, curr) => acc + (curr.durationMinutes || 0),
+            0,
+        );
+        const MAX_MINUTES = 240;
 
-                const startDateObj = new Date(itemStartTs);
-                const endDateObj = new Date(itemStartTs + durationMs);
+        return {
+            timelineItems: flatList,
+            capacityMetrics: {
+                percentUsed: Math.min((totalDuration / MAX_MINUTES) * 100, 100),
+                totalDuration,
+                count: items.length,
+            },
+        };
+    }, [activeEntries, startTimeStr]);
 
-                const bannerData =
-                    item?.attributes?.banner?.data?.attributes ||
-                    item?.banner?.data?.attributes ||
-                    item?.banner ||
-                    item?.activity?.banner?.data?.attributes ||
-                    item?.activity?.banner;
-                const bannerPath =
-                    bannerData?.formats?.thumbnail?.url ||
-                    bannerData?.url ||
-                    item.imageUrl;
+    // --- 5. HANDLERS ---
 
-                const session = {
-                    ...item,
-                    sessionId:
-                        item.sessionId ||
-                        item.id ||
-                        `sess-${crypto.randomUUID()}`,
-                    startTime: startDateObj.toISOString(),
-                    endTime: endDateObj.toISOString(),
-                    durationSeconds: (item.duration || 30) * 60,
-                    imageUrl: bannerPath
-                        ? bannerPath.startsWith('http')
-                            ? bannerPath
-                            : `${baseUrl}${bannerPath}`
-                        : null,
-                    displayStart: startDateObj.toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true,
-                    }),
-                    displayEnd: endDateObj.toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true,
-                    }),
+    const addActivity = useCallback(
+        (activity: Activity, insertIndex?: number) => {
+            // Generate ID upfront so we can track it
+            const newInstanceId = crypto.randomUUID();
+
+            setLocalOverride((prev) => {
+                const current = prev ?? [...serverData];
+                const newEntry: ActivitySessionEntry = {
+                    instanceId: newInstanceId,
+                    isLocked: false,
+                    isBreak: false,
+                    activity: activity,
+                    startTime: '--:--',
+                    endTime: '--:--',
+                    durationMinutes: activity.durationMinutes,
+                    id: undefined,
+                    documentId: '',
+                    hasConflict: false,
                 };
 
-                currentTimestamp = itemStartTs + durationMs;
-                return session;
-            })
-            .filter(Boolean);
-    }, [rawPlan, baseStartTimestamp]);
+                if (insertIndex !== undefined && insertIndex >= 0) {
+                    const newArr = [...current];
+                    newArr.splice(insertIndex, 0, newEntry);
+                    return newArr;
+                }
+                return [...current, newEntry];
+            });
+
+            // Trigger scroll to this ID
+            setLastAddedId(newInstanceId);
+        },
+        [serverData],
+    );
+
+    const removeActivity = useCallback(
+        (instanceId: string) => {
+            setLocalOverride((prev) => {
+                const current = prev ?? [...serverData];
+                return current.filter((item) => item.instanceId !== instanceId);
+            });
+        },
+        [serverData],
+    );
+
+    const toggleLock = useCallback(
+        (
+            instanceId: string,
+            currentScheduledStartTime: string,
+            currentScheduledEndTime: string,
+        ) => {
+            setLocalOverride((prev) => {
+                const current = prev ?? [...serverData];
+                return current.map((item) => {
+                    if (item.instanceId !== instanceId) return item;
+                    const willLock = !item.isLocked;
+                    return {
+                        ...item,
+                        isLocked: willLock,
+                        startTime: willLock
+                            ? currentScheduledStartTime
+                            : item.startTime,
+                        endTime: willLock
+                            ? currentScheduledEndTime
+                            : item.endTime,
+                    };
+                });
+            });
+        },
+        [serverData],
+    );
+
+    const reorderActivities = useCallback(
+        (newFlatOrder: TimelineItemUnion[]) => {
+            const onlyActivities = newFlatOrder.filter(
+                (item): item is ScheduledItem & { type: 'activity' } =>
+                    item.type === 'activity',
+            );
+
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const cleanActivities = onlyActivities.map(
+                ({ type, startMin, endMin, conflictReason, ...rest }) => {
+                    return rest as ActivitySessionEntry;
+                },
+            );
+
+            setLocalOverride(cleanActivities);
+        },
+        [],
+    );
+
+    const clearPlan = useCallback(() => setLocalOverride([]), []);
 
     return {
-        plan,
-        rawPlan,
-        setPlan,
+        timelineItems,
+        capacityMetrics,
+        isLoading,
+        isError,
+        addActivity,
+        removeActivity,
         toggleLock,
-        capacityMetrics: { percentUsed: 0 },
+        reorderActivities,
+        clearPlan,
+        rawActivities: activeEntries,
+        lastAddedId, // EXPORTED
     };
 };
