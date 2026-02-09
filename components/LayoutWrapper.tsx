@@ -60,17 +60,13 @@ export default function LayoutWrapper({
                 </div>
             </main>
             <SessionPlanningModal
-                activities={[]}
                 onConfirm={function (data: {
                     activitSessionItem: ActivityEntry[];
                     date: string;
                     start: string;
                 }): void {
                     throw new Error('Function not implemented.');
-                }} // onClose={() => setIsModalOpen(false)}
-                // activities={activities}
-                // isSubmitting={isSaving}
-                // onConfirm={handleCreateSession}
+                }}
             />
         </div>
     );

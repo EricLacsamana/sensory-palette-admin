@@ -8,12 +8,10 @@ import {
     Activity,
     Search,
     Filter,
-    Calendar as CalendarIcon,
     ArrowUpRight,
     Clock,
     CheckCircle2,
     PlayCircle,
-    FileJson,
     Loader2,
     X,
 } from 'lucide-react';
@@ -39,24 +37,37 @@ export default function ActivitySessions() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
+    // Initialize state with URL param, but don't bind state updates directly to searchParams changes
+    // to avoid circular dependency loops.
     const [inputValue, setInputValue] = useState(searchParams.get('q') || '');
     const [debouncedSearch, setDebouncedSearch] = useState(inputValue);
 
     const { ref, inView } = useInView();
 
-    // --- DEBOUNCE & URL SYNC ---
+    // --- 1. OPTIMIZED SEARCH SYNC ---
     useEffect(() => {
         const handler = setTimeout(() => {
-            setDebouncedSearch(inputValue);
-            const params = new URLSearchParams(searchParams.toString());
-            if (inputValue) params.set('q', inputValue);
-            else params.delete('q');
-            router.replace(`?${params.toString()}`, { scroll: false });
-        }, 500);
-        return () => clearTimeout(handler);
-    }, [inputValue, router, searchParams]);
+            // Only update URL if the value actually changed from what's currently in the URL
+            const currentQ = searchParams.get('q') || '';
 
-    // --- INFINITE QUERY WITH BLINK-FIX ---
+            if (inputValue !== currentQ) {
+                setDebouncedSearch(inputValue);
+                const params = new URLSearchParams(searchParams.toString());
+                if (inputValue) params.set('q', inputValue);
+                else params.delete('q');
+
+                router.replace(`?${params.toString()}`, { scroll: false });
+            } else if (inputValue !== debouncedSearch) {
+                // Handle case where user types, then deletes back to original value
+                setDebouncedSearch(inputValue);
+            }
+        }, 500);
+
+        return () => clearTimeout(handler);
+        // Removed searchParams/router from deps to prevent re-firing on URL update
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [inputValue]);
+
     const {
         data,
         fetchNextPage,
@@ -76,7 +87,6 @@ export default function ActivitySessions() {
                 ? pagination.page + 1
                 : undefined;
         },
-        // This is the magic line that stops the blinking:
         placeholderData: keepPreviousData,
     });
 
@@ -91,7 +101,6 @@ export default function ActivitySessions() {
         }
     }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-    // Only show skeleton on the very first load of the app
     if (isLoading && !data) return <SessionsSkeleton />;
 
     return (
@@ -147,41 +156,35 @@ export default function ActivitySessions() {
 
             <div className="flex-1 min-h-0 w-full max-w-[1600px] mx-auto">
                 <Card className="flex flex-col h-full rounded-[32px] border border-slate-200/60 shadow-[0_20px_50px_rgba(0,0,0,0.04)] bg-white overflow-hidden p-2">
-                    <div className="shrink-0 border-b border-slate-100 bg-white z-20">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="hover:bg-transparent border-none">
-                                    <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 py-6 px-10 w-[30%]">
-                                        Learner
-                                    </TableHead>
-                                    <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 w-[15%]">
-                                        Status
-                                    </TableHead>
-                                    <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 w-[20%]">
-                                        Timeline
-                                    </TableHead>
-                                    <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 w-[20%]">
-                                        Accuracy
-                                    </TableHead>
-                                    <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 text-right pr-10 w-[15%]">
-                                        Actions
-                                    </TableHead>
-                                </TableRow>
-                            </TableHeader>
-                        </Table>
-                    </div>
-
+                    {/* 2. SINGLE TABLE ARCHITECTURE 
+              We moved the TableHeader INSIDE the ScrollArea loop.
+              We applied 'sticky top-0' to the header row so it floats.
+          */}
                     <ScrollArea className="flex-1 h-full w-full">
-                        {/* The dimming effect while fetching new search results */}
-                        <div
-                            className={cn(
-                                'transition-opacity duration-300',
-                                isFetching && !isFetchingNextPage
-                                    ? 'opacity-40'
-                                    : 'opacity-100',
-                            )}
-                        >
+                        <div className="min-w-[800px]">
+                            {' '}
+                            {/* Ensures table doesn't collapse on small screens */}
                             <Table>
+                                <TableHeader className="bg-white z-10 sticky top-0 shadow-sm">
+                                    <TableRow className="hover:bg-transparent border-b border-slate-100">
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 py-6 px-10 w-[30%] bg-white">
+                                            Learner
+                                        </TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 w-[15%] bg-white">
+                                            Status
+                                        </TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 w-[20%] bg-white">
+                                            Timeline
+                                        </TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 w-[20%] bg-white">
+                                            Accuracy
+                                        </TableHead>
+                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 text-right pr-10 w-[15%] bg-white">
+                                            Actions
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+
                                 <TableBody>
                                     {allSessions.length > 0
                                         ? allSessions.map((session: any) => (
@@ -268,21 +271,21 @@ export default function ActivitySessions() {
                                           )}
                                 </TableBody>
                             </Table>
-                        </div>
-
-                        <div
-                            ref={ref}
-                            className="py-12 flex justify-center items-center gap-3 w-full border-t border-slate-50"
-                        >
-                            {isFetchingNextPage ? (
-                                <Loader2 className="animate-spin h-5 w-5 text-emerald-500" />
-                            ) : (
-                                <span className="text-[10px] text-slate-300 uppercase font-bold tracking-[0.3em]">
-                                    {hasNextPage
-                                        ? 'Scroll for more'
-                                        : 'End of session history'}
-                                </span>
-                            )}
+                            {/* Loader at bottom */}
+                            <div
+                                ref={ref}
+                                className="py-12 flex justify-center items-center gap-3 w-full border-t border-slate-50"
+                            >
+                                {isFetchingNextPage ? (
+                                    <Loader2 className="animate-spin h-5 w-5 text-emerald-500" />
+                                ) : (
+                                    <span className="text-[10px] text-slate-300 uppercase font-bold tracking-[0.3em]">
+                                        {hasNextPage
+                                            ? 'Loading...'
+                                            : 'End of session history'}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </ScrollArea>
                 </Card>
@@ -291,6 +294,7 @@ export default function ActivitySessions() {
     );
 }
 
+// ... StatusBadge and Skeleton components remain the same ...
 function StatusBadge({ status }: { status: string }) {
     const config = {
         completed: {

@@ -45,7 +45,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getStudent, getStudents } from '@/api/students';
 
 interface SessionPlanningModalProps {
-    onClose: () => void;
+    onClose?: () => void;
     onConfirm: (data: {
         activitSessionItem: ActivityEntry[];
         date: string;
