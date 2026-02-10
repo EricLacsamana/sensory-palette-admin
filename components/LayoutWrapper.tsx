@@ -62,8 +62,6 @@ export default function LayoutWrapper({
             <SessionPlanningModal
                 onConfirm={function (data: {
                     activitSessionItem: ActivityEntry[];
-                    date: string;
-                    start: string;
                 }): void {
                     throw new Error('Function not implemented.');
                 }}

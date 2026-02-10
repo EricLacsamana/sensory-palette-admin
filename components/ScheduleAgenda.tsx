@@ -25,13 +25,13 @@ export function ScheduleAgenda({
     const aggregatedLearnerDays = useMemo(() => {
         const groups: Record<string, any> = {};
         sessions.forEach((session) => {
-            const dateStr = format(parseISO(session.startTime), 'yyyy-MM-dd');
+            const dateStr = format(parseISO(session.startAt), 'yyyy-MM-dd');
             const groupKey = `${session.student?.id}-${dateStr}`;
             if (!groups[groupKey]) {
                 groups[groupKey] = {
                     id: groupKey,
                     student: session.student,
-                    date: parseISO(session.startTime),
+                    date: parseISO(session.startAt),
                     sessions: [],
                 };
             }
@@ -74,17 +74,17 @@ export function ScheduleAgenda({
                                 aggregatedLearnerDays.map((group: any) => {
                                     const sorted = [...group.sessions].sort(
                                         (a, b) =>
-                                            new Date(a.startTime).getTime() -
-                                            new Date(b.startTime).getTime(),
+                                            new Date(a.startAt).getTime() -
+                                            new Date(b.startAt).getTime(),
                                     );
 
                                     const dayStart = format(
-                                        parseISO(sorted[0].startTime),
+                                        parseISO(sorted[0].startAt),
                                         'p',
                                     );
                                     const dayEnd = format(
                                         parseISO(
-                                            sorted[sorted.length - 1].startTime,
+                                            sorted[sorted.length - 1].startAt,
                                         ),
                                         'p',
                                     );

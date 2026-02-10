@@ -1,12 +1,17 @@
+export interface Role {
+    type: string;
+    name: string;
+}
 export interface User {
     id: number;
     username: string;
     email?: string;
-    role?: string;
+    role?: Role;
     firstName?: string;
     fullName?: string;
     lastName?: string;
     createdAt: string;
+    profilePicture: StrapiMedia;
 }
 
 export interface Login {
@@ -27,8 +32,10 @@ export interface UserResponse {
     firstName?: string;
     fullName?: string;
     lastName?: string;
+    profilePicture?: StrapiMedia;
     createdAt: string;
     publishedAt?: string;
+
     role?: {
         id: number;
         name: string;

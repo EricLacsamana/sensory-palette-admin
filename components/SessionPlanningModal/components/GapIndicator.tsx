@@ -4,19 +4,20 @@ import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Clock, PlusCircle, Ban } from 'lucide-react';
 import { Activity } from '@/types/actitivity';
+import { FormatService } from '@/utils/helpers';
 
 interface GapIndicatorProps {
     durationMinutes: number;
-    startTime: string;
-    endTime: string;
+    startAt: string;
+    endAt: string;
     draggedItem: Activity | null;
     onGapDrop: (activity: Activity) => void;
 }
 
 export const GapIndicator = ({
     durationMinutes,
-    startTime,
-    endTime,
+    startAt,
+    endAt,
     draggedItem,
     onGapDrop,
 }: GapIndicatorProps) => {
@@ -125,7 +126,9 @@ export const GapIndicator = ({
                             <span className="text-[10px] font-normal">min</span>
                         </span>
                         <span className="text-[10px] font-bold bg-white/60 px-2 py-1 rounded-md border border-emerald-100 hidden sm:block">
-                            {startTime} - {endTime}
+                            {FormatService.formatTime(startAt, '12h-simple')}
+                            {' - '}
+                            {FormatService.formatTime(endAt, '12h-simple')}
                         </span>
                     </div>
                 </div>

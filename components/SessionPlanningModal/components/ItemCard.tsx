@@ -1,7 +1,13 @@
 'use client';
 
 import React from 'react';
-import { GripVertical, Lock, Unlock } from 'lucide-react';
+import {
+    ClockFadingIcon,
+    CoffeeIcon,
+    GripVertical,
+    Lock,
+    Unlock,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DragControls } from 'framer-motion';
@@ -71,7 +77,7 @@ const ItemCard = ({
                     />
                 ) : (
                     <div className="text-indigo-600 font-bold text-[10px] uppercase">
-                        {title?.charAt(0)}
+                        <ClockFadingIcon />
                     </div>
                 )}
             </div>
@@ -85,7 +91,7 @@ const ItemCard = ({
                 >
                     {title}
                 </p>
-                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+                <p className="text-[11px] font-medium text-slate-400 tracking-wider">
                     {subtitle}
                 </p>
             </div>

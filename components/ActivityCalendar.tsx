@@ -82,7 +82,7 @@ export function ActivityCalendar() {
         const monthStart = startOfMonth(viewDate);
         const monthEnd = endOfMonth(viewDate);
         const start = startOfWeek(monthStart);
-        // Ensure we always render exactly 6 weeks (42 days) to keep grid stable
+
         const end = addDays(start, 41);
 
         return {
@@ -93,7 +93,10 @@ export function ActivityCalendar() {
     }, [viewDate]);
 
     const { data: response, isFetching } = useQuery({
-        queryKey: ['activity-sessions', '', startRange, endRange],
+        queryKey: [
+            'activity-sessions',
+            { startAt: startRange, endDate: endRange },
+        ],
         queryFn: getActivitySessions,
         placeholderData: keepPreviousData,
     });
@@ -106,8 +109,8 @@ export function ActivityCalendar() {
         const groups: Record<string, ActivitySessionResponse[]> = {};
 
         sessions.forEach((session) => {
-            if (!session.startTime) return;
-            const dateKey = format(parseISO(session.startTime), 'yyyy-MM-dd');
+            if (!session.startAt) return;
+            const dateKey = format(parseISO(session.startAt), 'yyyy-MM-dd');
             if (!groups[dateKey]) groups[dateKey] = [];
             groups[dateKey].push(session);
         });
@@ -115,8 +118,8 @@ export function ActivityCalendar() {
         Object.keys(groups).forEach((key) => {
             groups[key].sort(
                 (a, b) =>
-                    parseISO(a.startTime).getTime() -
-                    parseISO(b.startTime).getTime(),
+                    parseISO(a.startAt).getTime() -
+                    parseISO(b.startAt).getTime(),
             );
         });
 
@@ -249,7 +252,7 @@ export function ActivityCalendar() {
                                     {daySessions.map((session) => {
                                         const config =
                                             statusConfig[
-                                                session.activityStatus
+                                                session.activitySessionStatus
                                             ] || statusConfig.started;
                                         const StatusIcon = config.icon;
 
@@ -318,10 +321,10 @@ export function ActivityCalendar() {
                                                                     className="text-indigo-400"
                                                                 />
                                                                 <span>
-                                                                    {session.startTime
+                                                                    {session.startAt
                                                                         ? format(
                                                                               parseISO(
-                                                                                  session.startTime,
+                                                                                  session.startAt,
                                                                               ),
                                                                               'p',
                                                                           )

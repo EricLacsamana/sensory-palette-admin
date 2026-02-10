@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -9,21 +9,73 @@ import { cn } from '@/lib/utils';
 import ItemCard from './ItemCard';
 import { useActivities } from '@/hooks/useActivities';
 import { Activity } from '@/types/actitivity';
-import { getStrapiMedia } from '@/utils/helpers';
+import { FormatService } from '@/utils/helpers';
 
 interface ActivitiesSiderbarProps {
     isOpen: boolean;
+    remainingMinutes: number; // New Prop
     onDragStart: (e: React.DragEvent, item: Activity) => void;
     onDragEnd: () => void;
 }
 
 export const ActivitiesSiderbar = ({
     isOpen,
+    remainingMinutes,
     onDragStart,
     onDragEnd,
 }: ActivitiesSiderbarProps) => {
     const [searchTerm, setSearchTerm] = useState('');
     const { data: activities = [] } = useActivities();
+
+    const renderActivityItem = (act: Activity, isBreak = false) => {
+        const duration = isBreak ? 5 : act.durationMinutes;
+        const isDisabled = duration > remainingMinutes;
+
+        return (
+            <div
+                key={act.documentId || act.activityId}
+                draggable={!isDisabled}
+                onDragStart={(e) => !isDisabled && onDragStart(e, act)}
+                onDragEnd={onDragEnd}
+                className={cn(
+                    'transition-all',
+                    isDisabled
+                        ? 'opacity-40 grayscale cursor-not-allowed pointer-events-none select-none'
+                        : 'cursor-grab active:cursor-grabbing hover:scale-[1.01]',
+                )}
+            >
+                <div className="relative">
+                    <ItemCard
+                        id={act.documentId || String(act.activityId)}
+                        title={act.name}
+                        subtitle={
+                            isBreak
+                                ? '5m'
+                                : `Activity Duration: ${act.durationMinutes} mins`
+                        }
+                        imageSrc={
+                            !isBreak
+                                ? FormatService.formatStrapiMedia(
+                                      act.banner,
+                                      'thumbnail',
+                                  )
+                                : undefined
+                        }
+                        mode="add"
+                        actionIcon={
+                            isDisabled ? (
+                                <Clock size={14} className="text-slate-400" />
+                            ) : (
+                                <Plus size={16} />
+                            )
+                        }
+                        itemValue={act}
+                        onActionClick={() => {}}
+                    />
+                </div>
+            </div>
+        );
+    };
 
     return (
         <aside
@@ -46,42 +98,26 @@ export const ActivitiesSiderbar = ({
             <div className="flex-1 min-h-0 min-w-[380px]">
                 <ScrollArea className="h-full">
                     <div className="p-5 space-y-6 pb-20">
+                        {/* Quick Breaks */}
                         <div className="space-y-3">
                             <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-1">
                                 Quick Breaks
                             </h3>
-                            <div
-                                draggable
-                                onDragStart={(e) => {
-                                    onDragStart(e, {
-                                        id: 'break',
-                                        documentId: 'break',
-                                        name: '5m Rest Break',
-                                        durationMinutes: 5,
-                                        isBreak: true,
-                                    } as unknown as Activity);
-                                }}
-                                onDragEnd={onDragEnd}
-                                className="cursor-grab active:cursor-grabbing"
-                            >
-                                <ItemCard
-                                    id="break"
-                                    title="5m Rest Break"
-                                    subtitle="5m"
-                                    mode="add"
-                                    actionIcon={<Plus size={16} />}
-                                    itemValue={{
-                                        name: '5m Rest Break',
-                                        duration: 5,
-                                        isBreak: true,
-                                    }}
-                                    onActionClick={() => {}}
-                                />
-                            </div>
+                            {renderActivityItem(
+                                {
+                                    id: 'break',
+                                    documentId: 'break',
+                                    name: '5m Rest Break',
+                                    durationMinutes: 5,
+                                    isBreak: true,
+                                } as unknown as Activity,
+                                true,
+                            )}
                         </div>
 
                         <Separator />
 
+                        {/* Learner Activities */}
                         <div className="space-y-3">
                             <h3 className="text-[10px] font-medium text-slate-400 uppercase tracking-widest px-1">
                                 Learner Activities
@@ -93,35 +129,9 @@ export const ActivitiesSiderbar = ({
                                             ?.toLowerCase()
                                             .includes(searchTerm.toLowerCase()),
                                     )
-                                    .map((act: Activity) => {
-                                        return (
-                                            <div
-                                                key={act.documentId}
-                                                draggable
-                                                onDragStart={(e) =>
-                                                    onDragStart(e, act)
-                                                }
-                                                onDragEnd={onDragEnd}
-                                                className="cursor-grab active:cursor-grabbing"
-                                            >
-                                                <ItemCard
-                                                    id={act.documentId}
-                                                    title={act.name}
-                                                    subtitle={`${act.durationMinutes}m`}
-                                                    imageSrc={getStrapiMedia(
-                                                        act.banner,
-                                                        'thumbnail',
-                                                    )}
-                                                    mode="add"
-                                                    actionIcon={
-                                                        <Plus size={16} />
-                                                    }
-                                                    itemValue={act}
-                                                    onActionClick={() => {}}
-                                                />
-                                            </div>
-                                        );
-                                    })}
+                                    .map((act: Activity) =>
+                                        renderActivityItem(act),
+                                    )}
                             </div>
                         </div>
                     </div>

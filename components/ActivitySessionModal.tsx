@@ -48,9 +48,9 @@ export default function ActivitySessionModal({
                                     size={12}
                                     className="text-indigo-500"
                                 />
-                                {existingSession?.startTime
+                                {existingSession?.startAt
                                     ? format(
-                                          parseISO(existingSession.startTime),
+                                          parseISO(existingSession.startAt),
                                           'MMMM do, yyyy',
                                       )
                                     : ''}
@@ -105,7 +105,7 @@ export default function ActivitySessionModal({
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                                         {format(
                                                             parseISO(
-                                                                session.startTime,
+                                                                session.startAt,
                                                             ),
                                                             'p',
                                                         )}

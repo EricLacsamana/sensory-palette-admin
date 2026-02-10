@@ -1,15 +1,14 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { motion, Variants } from 'framer-motion';
 import {
     ArrowLeft,
     MapPin,
     Play,
     Building2,
-    Plus,
     Star,
     LineChart,
     Printer,
@@ -31,45 +30,13 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { getStudent } from '@/api/students';
-import { useActivities } from '@/hooks/useActivities';
-import {
-    createActivitySession,
-    getActivitySessions,
-} from '@/api/acitivity-session';
+import { getActivitySessions } from '@/api/acitivity-session';
 import { cn } from '@/lib/utils';
-import SessionPlanningModal from '@/components/SessionPlanningModal';
+
 import { InitializeSessionButton } from '@/components/SessionPlanningModal/components/InitializeSessionPlanningButton';
+import { TimelineTrackList } from '@/components/TimelineTrackList';
 
-// --- Types ---
-interface ScheduleItem {
-    id: number | string;
-    time: string;
-    activity: string;
-    status: 'completed' | 'live' | 'upcoming';
-}
-
-// --- Animation Variants ---
-const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1,
-            delayChildren: 0.2,
-        },
-    },
-};
-
-const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: {
-        opacity: 1,
-        y: 0,
-        transition: { type: 'spring', stiffness: 300, damping: 24 },
-    },
-};
-
-const pageVariants = {
+const pageVariants: Variants = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { duration: 0.5 } },
 };
@@ -165,167 +132,28 @@ const MetricRow = ({
     </div>
 );
 
-const TimelineItemDisplay = ({ item }: { item: ScheduleItem }) => {
-    const timeParts = item.time.split(' ');
-
-    return (
-        <motion.div
-            variants={itemVariants} // Applied specifically to the item wrapper
-            className={cn(
-                'relative flex gap-12 group',
-                item.status === 'completed' && 'opacity-50',
-            )}
-        >
-            {/* Time Column */}
-            <div className="w-16 pt-1 flex flex-col items-end shrink-0">
-                <span className="text-[11px] font-semibold text-slate-900 tabular-nums">
-                    {timeParts[0]}
-                </span>
-                <span className="text-[9px] font-medium text-slate-500 uppercase tracking-tighter">
-                    {timeParts[1]}
-                </span>
-            </div>
-
-            {/* Timeline Node */}
-            <div
-                className={cn(
-                    'absolute left-[73px] top-2.5 h-3 w-3 rounded-full border-2 bg-white z-20 shadow-sm transition-all duration-300',
-                    item.status === 'live'
-                        ? 'border-indigo-600 scale-125 bg-indigo-600 shadow-indigo-200'
-                        : 'border-slate-300 group-hover:border-indigo-400',
-                )}
-            />
-
-            {/* Card Content */}
-            <div
-                className={cn(
-                    'flex-1 p-3 rounded-[20px] border transition-all duration-300 flex items-center justify-between',
-                    item.status === 'live'
-                        ? 'bg-white border-indigo-500 shadow-md scale-[1.01] z-10'
-                        : 'bg-slate-50/40 border-slate-100 hover:border-slate-200 hover:bg-white',
-                )}
-            >
-                <div className="space-y-1 flex flex-col">
-                    <h5 className="text-[13px] font-semibold text-slate-900 tracking-tight leading-none">
-                        {item.activity}
-                    </h5>
-                    <div className="flex items-center gap-2">
-                        {item.status === 'completed' ? (
-                            <span className="text-[8px] font-semibold text-emerald-600 uppercase tracking-tight flex items-center gap-1">
-                                <ShieldCheck size={10} /> Finished
-                            </span>
-                        ) : item.status === 'live' ? (
-                            <div className="flex items-center gap-1 text-indigo-600 text-[8px] font-semibold uppercase tracking-tight">
-                                <div className="h-1.5 w-1.5 rounded-full bg-indigo-600 animate-pulse" />
-                                In Progress
-                            </div>
-                        ) : (
-                            <span className="text-[8px] font-semibold text-slate-500 uppercase tracking-tight">
-                                Upcoming
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {item.status === 'live' ? (
-                    <Button
-                        size="icon"
-                        className="h-7 w-7 bg-indigo-600 rounded-lg shadow-sm hover:bg-indigo-700"
-                    >
-                        <Play className="h-2.5 w-2.5 fill-current text-white" />
-                    </Button>
-                ) : (
-                    <ChevronRight size={14} className="text-slate-300" />
-                )}
-            </div>
-        </motion.div>
-    );
-};
-
 // --- Main Component ---
 
 export default function StudentDashboard() {
     const params = useParams();
     const id = params.id as string;
     const router = useRouter();
-    const queryClient = useQueryClient();
-    const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // 1. Queries
+    // Fetch Student
     const { data: student, isLoading: isLoadingStudent } = useQuery({
         queryKey: ['student', { id }],
         queryFn: getStudent,
     });
 
-    const { data: activities = [] } = useActivities();
-
-    const { data: sessions, isLoading: isLoadingSessions } = useQuery({
-        queryKey: ['activity-sessions', id],
-        queryFn: () => getActivitySessions({ studentId: id }),
+    // Fetch Sessions (Note the Query Key structure)
+    const { data: activitySessions = [] } = useQuery({
+        queryKey: ['activity-sessions-student', { studentId: id }],
+        queryFn: getActivitySessions,
         enabled: !!id,
     });
 
-    // 2. Mutations
-    const { mutateAsync: savePlanAsync, isPending: isSaving } = useMutation({
-        mutationFn: createActivitySession,
-        onSuccess: () => {
-            setIsModalOpen(false);
-            queryClient.invalidateQueries({ queryKey: ['activity-sessions'] });
-            toast.success('Schedule Synchronized');
-        },
-        onError: (error) => {
-            console.error('Sync Error:', error);
-            toast.error('Failed to sync changes. Please try again.');
-        },
-    });
-
-    const timelineData: ScheduleItem[] = useMemo(() => {
-        if (sessions && sessions.length > 0) {
-            return sessions.map((s: any) => ({
-                id: s.id,
-                time: new Date(s.scheduledAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                }),
-                activity: s.activity?.name || 'Unknown Activity',
-                status: s.status || 'upcoming',
-            }));
-        }
-
-        return [
-            {
-                id: 1,
-                time: '09:00 AM',
-                activity: 'Sensory Sand',
-                status: 'completed',
-            },
-            {
-                id: 2,
-                time: '11:30 AM',
-                activity: 'Digital Art',
-                status: 'live',
-            },
-            {
-                id: 3,
-                time: '02:00 PM',
-                activity: 'Memory Task',
-                status: 'upcoming',
-            },
-        ] as ScheduleItem[];
-    }, [sessions]);
-
-    const handleCreateSession = async (data: any) => {
-        try {
-            await savePlanAsync({
-                studentId: id,
-                ...data,
-            });
-        } catch (e) {
-            // Error handled in mutation
-        }
-    };
-
-    if (isLoadingStudent || isLoadingSessions) {
+    console.log('activity', activitySessions);
+    if (isLoadingStudent) {
         return (
             <div className="min-h-screen bg-slate-50/50 p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
                 <div className="flex items-center gap-4">
@@ -519,43 +347,7 @@ export default function StudentDashboard() {
                         />
                     </div>
 
-                    <Card className="rounded-[32px] border border-slate-200/60 shadow-sm p-6 relative bg-white overflow-hidden min-h-[400px]">
-                        <div className="flex justify-between items-center mb-6 relative z-10">
-                            <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em]">
-                                Session Timeline
-                            </h4>
-                            <Badge className="bg-slate-50 text-slate-500 border border-slate-100 font-semibold px-2 py-0.5 text-[9px]">
-                                {timelineData.length} Items
-                            </Badge>
-                        </div>
-
-                        {/* Vertical timeline line */}
-                        <div className="absolute left-[110px] top-0 bottom-0 w-px bg-slate-100 z-0" />
-
-                        {/* STAGGERED CONTAINER */}
-                        <motion.div
-                            variants={containerVariants}
-                            initial="hidden"
-                            animate="show"
-                            className="space-y-4 relative z-10"
-                        >
-                            {timelineData.length === 0 ? (
-                                <motion.div
-                                    variants={itemVariants}
-                                    className="text-center py-10 text-slate-400 text-sm"
-                                >
-                                    No sessions scheduled for today.
-                                </motion.div>
-                            ) : (
-                                timelineData.map((item) => (
-                                    <TimelineItemDisplay
-                                        key={item.id}
-                                        item={item}
-                                    />
-                                ))
-                            )}
-                        </motion.div>
-                    </Card>
+                    <TimelineTrackList data={activitySessions} />
                 </motion.main>
 
                 {/* Right Column: Metrics */}

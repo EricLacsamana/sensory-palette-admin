@@ -30,6 +30,8 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { InitializeSessionButton } from './SessionPlanningModal/components/InitializeSessionPlanningButton';
+import { FormatService, getStrapiMedia } from '@/utils/helpers';
+import { User } from '@/types';
 
 interface SidebarProps {
     isCollapsed: boolean;
@@ -44,7 +46,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
     const { data: user = {} } = useQuery({
         queryKey: ['me'],
         queryFn: me,
-        initialData: { fullName: '', role: { name: '' } },
+        refetchOnWindowFocus: true,
     });
 
     const handleLogout = () => {
@@ -107,16 +109,30 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                     >
                         <Avatar className="h-9 w-9 shrink-0 rounded-xl bg-white border border-slate-200/60 shadow-sm">
                             <AvatarFallback className="text-indigo-600 bg-white">
-                                <UserCircle size={20} strokeWidth={1.5} />
+                                {user.profilePicture ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={
+                                            FormatService.formatStrapiMedia(
+                                                user.profilePicture,
+                                                'thumbnail',
+                                            ) ?? ''
+                                        }
+                                        className="h-full w-full object-cover pointer-events-none"
+                                        alt="profile-picture"
+                                    />
+                                ) : (
+                                    <UserCircle size={20} strokeWidth={1.5} />
+                                )}
                             </AvatarFallback>
                         </Avatar>
                         {!isCollapsed && (
                             <div className="flex flex-col overflow-hidden animate-in fade-in slide-in-from-left-2 duration-500">
                                 <p className="truncate text-[13px] font-semibold text-slate-900 leading-tight">
-                                    {user.fullName || 'Therapist'}
+                                    {user.fullName}
                                 </p>
                                 <span className="text-[10px] font-medium uppercase text-slate-500 tracking-tight">
-                                    {user?.role?.name || 'Clinical Staff'}
+                                    {user?.role?.name}
                                 </span>
                             </div>
                         )}

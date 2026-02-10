@@ -12,21 +12,22 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ActivitySessionResponse } from '@/types/activitiy-session';
 
 interface ScheduleAgendaProps {
-    sessions: any[];
-    onSessionClick?: (session: any) => void;
+    activitySessions: ActivitySessionResponse[];
+    onSessionClick?: (session: ActivitySessionResponse) => void;
 }
 
 export function ScheduleAgenda({
-    sessions,
+    activitySessions,
     onSessionClick,
 }: ScheduleAgendaProps) {
     const aggregatedLearnerDays = useMemo(() => {
         const groups: Record<string, any> = {};
 
-        sessions.forEach((session) => {
-            const dateStr = format(parseISO(session.startTime), 'yyyy-MM-dd');
+        activitySessions.forEach((session) => {
+            const dateStr = format(parseISO(session.startAt), 'yyyy-MM-dd');
             const studentId = session.student?.id;
             const groupKey = `${studentId}-${dateStr}`;
 
@@ -34,18 +35,18 @@ export function ScheduleAgenda({
                 groups[groupKey] = {
                     id: groupKey,
                     student: session.student,
-                    date: parseISO(session.startTime),
-                    sessions: [],
+                    date: parseISO(session.startAt),
+                    activitySessions: [],
                     rawSession: session,
                 };
             }
-            groups[groupKey].sessions.push(session);
+            groups[groupKey].activitySessions.push(session);
         });
 
         return Object.values(groups).sort(
             (a, b) => b.date.getTime() - a.date.getTime(),
         );
-    }, [sessions]);
+    }, [activitySessions]);
 
     return (
         <div className="flex flex-col h-full bg-white rounded-[40px] border border-slate-200/60 overflow-hidden shadow-2xl shadow-slate-200/40">
@@ -105,20 +106,20 @@ function LearnerSummaryCard({
     group: any;
     onClick: () => void;
 }) {
-    const sortedTimes = group.sessions.sort(
+    const sortedTimes = group.activitySessions.sort(
         (a: any, b: any) =>
-            new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+            new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
     );
 
-    const dayStart = format(parseISO(sortedTimes[0].startTime), 'p');
+    const dayStart = format(parseISO(sortedTimes[0].startAt), 'p');
     const dayEnd = format(
         parseISO(
-            sortedTimes[sortedTimes.length - 1].endTime ||
-                sortedTimes[sortedTimes.length - 1].startTime,
+            sortedTimes[sortedTimes.length - 1].endAt ||
+                sortedTimes[sortedTimes.length - 1].startAt,
         ),
         'p',
     );
-    const totalMinutes = group.sessions.reduce(
+    const totalMinutes = group.activitySessions.reduce(
         (acc: number, s: any) =>
             acc + Math.floor((s.durationSeconds || 0) / 60),
         0,
@@ -153,7 +154,8 @@ function LearnerSummaryCard({
                                 </h4>
                                 <div className="flex items-center gap-2">
                                     <Badge className="bg-indigo-50 text-indigo-600 border-none font-black text-[9px] uppercase tracking-widest px-2.5 py-1">
-                                        {group.sessions.length} Session Blocks
+                                        {group.activitySessions.length} Session
+                                        Blocks
                                     </Badge>
                                 </div>
                             </div>

@@ -1,18 +1,16 @@
 import { ActivitySessionEntry } from '@/types/activitiy-session';
 
 export interface ScheduledItem extends ActivitySessionEntry {
-    startMin: number;
-    endMin: number;
     hasConflict: boolean;
     conflictReason?: string;
 }
 
 export interface ScheduleGap {
-    afterIndex: number; // The index of the item BEFORE this gap
+    afterIndex: number;
     durationMinutes: number;
-    startTime: string;
-    endTime: string;
-    isNegative: boolean; // True if overlap
+    startAt: string; // ISO String - Aligned with component
+    endAt: string; // ISO String - Aligned with component
+    isNegative: boolean;
 }
 
 export interface ScheduleResult {
@@ -20,105 +18,103 @@ export interface ScheduleResult {
     gaps: ScheduleGap[];
 }
 
-// Helper: "09:30" -> 570
-const timeToMin = (time: string | undefined): number => {
-    if (!time || time === '--:--') return 0;
-    const [h, m] = time.split(':').map(Number);
-    return (h || 0) * 60 + (m || 0);
+const toTimestamp = (iso: string | undefined): number => {
+    if (!iso) return 0;
+    return new Date(iso).getTime();
 };
 
-// Helper: 570 -> "09:30"
-const minToTime = (min: number): string => {
-    const safeMin = Math.max(0, min);
-    const h = Math.floor(safeMin / 60);
-    const m = safeMin % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+const addMinutes = (iso: string, minutes: number): string => {
+    const date = new Date(iso);
+    date.setMinutes(date.getMinutes() + minutes);
+    return date.toISOString();
+};
+
+const diffInMin = (startIso: string, endIso: string): number => {
+    const start = new Date(startIso).getTime();
+    const end = new Date(endIso).getTime();
+    return Math.floor((end - start) / (1000 * 60));
 };
 
 export const calculateSchedule = (
     entries: ActivitySessionEntry[],
-    globalStartTime: string,
+    globalStartDateTime: string,
 ): ScheduleResult => {
     const items: ScheduledItem[] = [];
     const gaps: ScheduleGap[] = [];
 
-    // 1. Convert start time to minutes
-    let currentCursor = timeToMin(globalStartTime);
+    let currentCursor = globalStartDateTime;
 
-    // 2. Identify Locked Items (Anchors) ahead of time for lookups
     const lockedItems = entries
         .map((item, idx) => ({ ...item, originalIndex: idx }))
-        .filter((i) => i.isLocked && i.startTime && i.startTime !== '--:--')
-        .map((i) => ({
-            ...i,
-            startMin: timeToMin(i.startTime),
-            endMin: timeToMin(i.endTime),
-        }))
-        .sort((a, b) => a.startMin - b.startMin);
+        .filter((i) => i.isLocked && i.startAt)
+        .sort((a, b) => toTimestamp(a.startAt) - toTimestamp(b.startAt));
 
-    // 3. Main Loop
     entries.forEach((entry, index) => {
         const duration = entry.durationMinutes || 30;
         let start = currentCursor;
-        let end = start + duration;
+        let end = addMinutes(start, duration);
         let hasConflict = false;
         let conflictReason = '';
 
         // --- A. LOCKED ITEM LOGIC ---
-        if (entry.isLocked && entry.startTime && entry.startTime !== '--:--') {
-            const lockedStart = timeToMin(entry.startTime);
-            const lockedEnd = timeToMin(entry.endTime);
+        if (entry.isLocked && entry.startAt && entry.endAt) {
+            const lockedStart = entry.startAt;
+            const lockedEnd = entry.endAt;
 
-            // Check for Gaps (Space available before this locked item)
-            if (currentCursor < lockedStart) {
+            // Gap Check: If cursor is behind the locked start, we found a gap
+            if (toTimestamp(currentCursor) < toTimestamp(lockedStart)) {
                 gaps.push({
-                    afterIndex: index - 1, // Correctly identifies position
-                    durationMinutes: lockedStart - currentCursor,
-                    startTime: minToTime(currentCursor),
-                    endTime: minToTime(lockedStart),
+                    afterIndex: index - 1,
+                    durationMinutes: diffInMin(currentCursor, lockedStart),
+                    startAt: currentCursor,
+                    endAt: lockedStart,
                     isNegative: false,
                 });
             }
 
-            // Check for Overlap (Previous items pushed past this start time)
-            if (currentCursor > lockedStart) {
+            // Conflict Check: If cursor pushed past the locked start
+            if (toTimestamp(currentCursor) > toTimestamp(lockedStart)) {
                 hasConflict = true;
-                conflictReason = `Overlaps with previous items by ${currentCursor - lockedStart}m`;
+                const overlap = diffInMin(lockedStart, currentCursor);
+                conflictReason = `Overlaps with previous items by ${overlap}m`;
             }
 
             start = lockedStart;
             end = lockedEnd;
-            currentCursor = lockedEnd; // Jump cursor to end of locked item
+            currentCursor = lockedEnd;
         }
 
         // --- B. UNLOCKED ITEM LOGIC ---
         else {
-            // Check Collision with FUTURE locked items
-            // Find the earliest locked item that starts AFTER our current cursor
             const nextLocked = lockedItems.find(
-                (l) => l.startMin < end && l.originalIndex > index,
+                (l) =>
+                    toTimestamp(l.startAt) < toTimestamp(end) &&
+                    l.originalIndex > index,
             );
 
-            if (nextLocked) {
-                // Determine if we fit
-                if (end > nextLocked.startMin) {
+            if (nextLocked && nextLocked.startAt) {
+                if (toTimestamp(end) > toTimestamp(nextLocked.startAt)) {
                     hasConflict = true;
-                    conflictReason = `Extends into locked item starting at ${nextLocked.startTime}`;
+                    const timeStr = new Date(
+                        nextLocked.startAt,
+                    ).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                    });
+                    conflictReason = `Extends into locked item starting at ${timeStr}`;
                 }
             }
 
             start = currentCursor;
-            end = start + duration;
+            end = addMinutes(start, duration);
             currentCursor = end;
         }
 
         items.push({
             ...entry,
-            startMin: start,
-            endMin: end,
-            startTime: minToTime(start),
-            endTime: minToTime(end),
-            hasConflict: hasConflict || !!entry.hasConlflict,
+            startAt: start,
+            endAt: end,
+            hasConflict: hasConflict || !!entry.hasConflict,
             conflictReason,
         });
     });

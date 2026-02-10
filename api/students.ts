@@ -1,6 +1,6 @@
 import api from './index';
 import { ENDPOINTS } from '../constants/api';
-import { User } from '@/types';
+import { User, UserResponse } from '@/types';
 
 export interface StudentInput extends Partial<User> {
     password?: string;
@@ -33,10 +33,10 @@ export const getStudents = async (ctx: any): Promise<User[]> => {
     return response.data;
 };
 
-export const getStudent = async (ctx: any): Promise<User> => {
+export const getStudent = async (ctx: any): Promise<UserResponse> => {
     const [, { id }] = ctx.queryKey;
 
-    const response = await api.get<User>(
+    const response = await api.get<UserResponse>(
         `${ENDPOINTS.USERS}/${id}?populate=role`,
     );
 

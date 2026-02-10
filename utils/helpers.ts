@@ -1,43 +1,132 @@
-/**
- * Extracts a specific image format URL from a Strapi media object.
- */
+import { format, parseISO, isDate } from 'date-fns';
 import { StrapiMedia, StrapiResponse } from '@/types';
 
-type MediaFormat = 'thumbnail' | 'small' | 'medium' | 'large';
+/* -------------------- */
+/* Date/Time Types */
+/* -------------------- */
 
-export function getStrapiMedia(
-    media: StrapiResponse<StrapiMedia> | StrapiMedia | null | undefined,
-    format: MediaFormat = 'thumbnail',
-): string | null {
-    if (!media) return null;
+export type DateInput = Date | string;
 
-    // 1. Extract the raw media object (Handling Strapi v4/v5 nesting)
-    let resource: StrapiMedia;
+export type TimeFormatType =
+    | '24h'
+    | '12h'
+    | '12h-uppercase'
+    | 'hours-minutes'
+    | 'hours-minutes-ampm'
+    | '12h-simple'; // <- New format
 
-    if ('data' in media && media.data) {
-        // If it has a .data property, it's a StrapiResponse
-        resource =
-            'attributes' in media.data
-                ? (media.data.attributes as StrapiMedia)
-                : (media.data as StrapiMedia);
-    } else {
-        // Otherwise, assume it's the direct StrapiMedia object
-        resource = media as StrapiMedia;
+export type DateFormatType = 'iso' | 'short' | 'long';
+
+export type DateTimeFormatType = 'iso' | 'readable';
+
+/* -------------------- */
+/* Strapi Media Types */
+/* -------------------- */
+
+export type MediaFormat = 'thumbnail' | 'small' | 'medium' | 'large';
+
+/* -------------------- */
+/* Helpers */
+/* -------------------- */
+function normalizeDate(input: DateInput | null | undefined): Date | null {
+    if (!input) return null; // cannot parse
+
+    if (isDate(input)) return input;
+
+    if (typeof input === 'string') {
+        const parsed = parseISO(input);
+        return isNaN(parsed.getTime()) ? null : parsed;
     }
 
-    // 2. Safety check for the URL
-    if (!resource || !resource.url) return null;
+    return null; // fallback
+}
 
-    // 3. Determine which URL to use
-    const formatUrl = resource.formats?.[format]?.url;
-    const path = formatUrl || resource.url;
+/* -------------------- */
+/* Format Service */
+/* -------------------- */
 
-    // 4. Handle relative vs absolute paths
-    if (path.startsWith('/')) {
-        const baseUrl =
-            process.env.NEXT_PUBLIC_STRAPI_API_URL || 'http://127.0.0.1:1337';
-        return `${baseUrl}${path}`;
+export class FormatService {
+    /* ---------- TIME ---------- */
+    static formatTime(
+        input: DateInput,
+        formatType: TimeFormatType = '24h',
+    ): string {
+        const date = normalizeDate(input);
+
+        const formats: Record<TimeFormatType, string> = {
+            '24h': 'HH:mm:ss',
+            '12h': 'hh:mm:ss a',
+            '12h-uppercase': 'hh:mm:ss aaa',
+            'hours-minutes': 'HH:mm',
+            'hours-minutes-ampm': 'hh:mm a',
+            '12h-simple': 'h:mm a', // <- new format (no leading zero, no seconds)
+        };
+
+        return format(date, formats[formatType]);
     }
 
-    return path;
+    /* ---------- DATE ---------- */
+    static formatDate(
+        input: DateInput,
+        formatType: DateFormatType = 'iso',
+    ): string {
+        const date = normalizeDate(input);
+
+        const formats: Record<DateFormatType, string> = {
+            iso: 'yyyy-MM-dd',
+            short: 'dd MMM yyyy',
+            long: 'EEEE, dd MMMM yyyy',
+        };
+
+        return format(date, formats[formatType]);
+    }
+
+    /* ---------- DATETIME ---------- */
+    static formatDateTime(
+        input: DateInput,
+        formatType: DateTimeFormatType = 'iso',
+    ): string {
+        const date = normalizeDate(input);
+
+        const formats: Record<DateTimeFormatType, string> = {
+            iso: 'yyyy-MM-dd HH:mm:ss',
+            readable: 'dd MMM yyyy, hh:mm a',
+        };
+
+        return format(date, formats[formatType]);
+    }
+
+    /* ---------- STRAPI MEDIA ---------- */
+    static formatStrapiMedia(
+        media: StrapiResponse<StrapiMedia> | StrapiMedia | null | undefined,
+        format: MediaFormat = 'thumbnail',
+        fallbackUrl?: string,
+    ): string {
+        if (!media) return fallbackUrl || '';
+
+        let resource: StrapiMedia;
+
+        if ('data' in media && media.data) {
+            resource =
+                'attributes' in media.data
+                    ? (media.data.attributes as StrapiMedia)
+                    : (media.data as StrapiMedia);
+        } else {
+            resource = media as StrapiMedia;
+        }
+
+        if (!resource || !resource.url) return fallbackUrl || '';
+
+        const formatUrl = resource.formats?.[format]?.url;
+        const path = formatUrl || resource.url;
+
+        if (path.startsWith('/')) {
+            const baseUrl =
+                process.env.NEXT_PUBLIC_STRAPI_API_URL ||
+                'http://127.0.0.1:1337';
+            return `${baseUrl}${path}`;
+        }
+
+        return path;
+    }
 }

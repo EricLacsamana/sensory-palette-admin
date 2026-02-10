@@ -236,7 +236,7 @@ export default function ActivitySessions() {
                                                   <TableCell className="w-[20%] text-[11px] font-semibold text-slate-500">
                                                       {format(
                                                           parseISO(
-                                                              session.startTime,
+                                                              session.startAt,
                                                           ),
                                                           'MMM d, hh:mm a',
                                                       )}

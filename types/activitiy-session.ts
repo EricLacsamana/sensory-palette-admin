@@ -2,10 +2,13 @@ import { User } from '.';
 import { Activity } from './actitivity';
 
 export enum ActivitySessionStatus {
-    Pending = 'Pending',
-    InProgress = 'InProgress',
-    Completed = 'Completed',
-    Cancelled = 'Cancelled',
+    Pending = 'pending',
+    InProgress = 'in-progress',
+    Completed = 'completed',
+    Cancelled = 'cancelled',
+    Interrupted = 'interrupted',
+    Abandoned = 'abandoned',
+    Reschedule = 'reschedule',
 }
 
 export enum PromptLevel {
@@ -20,10 +23,10 @@ export interface ActivitySessionResponse {
     student: User;
     activity: Activity;
     therapist: User;
-    startTime: string; // ISO String
-    endTime: string; // ISO String
+    startAt: string;
+    endAt: string; // ISO String
     durationMinutes: number;
-    activityStatus: ActivitySessionStatus;
+    activitySessionStatus: ActivitySessionStatus;
     promptLevel: PromptLevel;
     teacherNotes?: string;
     actualScore?: number;
@@ -38,16 +41,19 @@ export type ActivitySessionEntry = Omit<
     instanceId: string;
     id?: number | string;
     isLocked: boolean;
-    isBreak: boolean;
-    hasConflict: boolean;
+    startAt: string;
+    endAt: string;
+    isBreak?: boolean;
+    hasConflict?: boolean;
+    conflictReason?: string;
 };
 
 export type ActivitySessionPayload = Omit<
     Partial<ActivitySessionResponse>,
     'id'
 > & {
-    startTime: string;
-    endTime: string;
+    startAt: string;
+    endAt: string;
     teacherNotes?: string;
     promptLevel?: PromptLevel;
     student: keyof User;

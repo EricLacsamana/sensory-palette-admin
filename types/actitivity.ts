@@ -1,3 +1,5 @@
+import { StrapiMedia } from '.';
+
 export interface Activity {
     documentId: string;
     activityId: string;
@@ -10,19 +12,7 @@ export interface Activity {
     createdAt: string;
     updatedAt: string;
     publishedAt?: string;
-    banner?: {
-        data: {
-            id: number;
-            attributes: {
-                url: string;
-                name: string;
-                alternativeText?: string;
-                formats?: {
-                    thumbnail?: { url: string };
-                };
-            };
-        } | null;
-    };
+    banner?: StrapiMedia;
 }
 
 // // Helper to represent just the attributes for Partial usage

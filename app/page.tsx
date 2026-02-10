@@ -18,6 +18,7 @@ import {
     CalendarDays,
     Target,
     SmilePlus,
+    UserCircle,
 } from 'lucide-react';
 
 import {
@@ -40,6 +41,9 @@ import { ScheduleAgenda } from '@/components/ScheduleAgenda';
 import ActivitySessionModal from '@/components/ActivitySessionModal';
 import { ActivityCalendar } from '@/components/ActivityCalendar';
 import { ActivitySessionLogsTable } from '@/components/ActivitySessionLogs';
+import { ActivitySessionResponse } from '@/types/activitiy-session';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { FormatService } from '@/utils/helpers';
 
 export default function Dashboard() {
     const router = useRouter();
@@ -47,22 +51,25 @@ export default function Dashboard() {
     const [activeSection, setActiveSection] = useState(0);
 
     const [selectedSessionData, setSelectedSessionData] = useState<{
-        primary: any;
-        allDay: any[];
+        primary: ActivitySessionResponse;
+        allDay: ActivitySessionResponse[];
     } | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
 
     const { data: user } = useQuery({ queryKey: ['me'], queryFn: me });
 
-    // FIX: Pass an empty object to satisfy the new API parameter signature
-    const { data: sessionsResponse, isLoading } = useQuery({
-        queryKey: ['activity-sessions'],
-        queryFn: () => getActivitySessions({}),
+    const { data: activitySessions, isFetching } = useQuery({
+        queryKey: [
+            'activity-sessions',
+            {
+                // For DateTime: "2026-02-10T11:50:31.000Z"
+                // For Date only: "2026-02-10"
+                startAt: new Date().toISOString().split('T')[0],
+            },
+        ],
+        queryFn: getActivitySessions,
     });
-
-    // Strapi returns { data, meta }. We extract the data array for local mapping.
-    const sessions = sessionsResponse?.data || [];
 
     // --- NAVIGATION LOGIC ---
     const scrollToSection = (index: number) => {
@@ -84,19 +91,22 @@ export default function Dashboard() {
         if (index !== activeSection) setActiveSection(index);
     };
 
-    const handleViewSession = (session: any, dayActivities: any[]) => {
+    const handleViewSession = (
+        session: ActivitySessionResponse,
+        dayActivities: ActivitySessionResponse[],
+    ) => {
         setSelectedSessionData({ primary: session, allDay: dayActivities });
         setIsModalOpen(true);
     };
 
-    const handleLaunchGame = (session: any) => {
+    const handleLaunchGame = (session: ActivitySessionResponse) => {
         setIsSheetOpen(false);
         setIsModalOpen(false);
         const documentId = session.documentId || session.id;
         if (documentId) router.push(`/activity-session/${documentId}`);
     };
 
-    if (isLoading) return <DashboardSkeleton />;
+    if (isFetching) return <DashboardSkeleton />;
 
     return (
         <div className="relative h-[calc(100vh-4rem)] overflow-hidden bg-[#FDFDFF]">
@@ -178,7 +188,7 @@ export default function Dashboard() {
                                     </SheetHeader>
                                     <div className="h-full flex flex-col p-4">
                                         <ScheduleAgenda
-                                            sessions={sessions}
+                                            sessions={activitySessions}
                                             onSessionClick={handleViewSession}
                                         />
                                     </div>
@@ -191,7 +201,7 @@ export default function Dashboard() {
                         <div className="col-span-8 grid grid-cols-2 gap-6 content-start">
                             <StatCard
                                 title="Active Sessions"
-                                value={sessions.length}
+                                value={activitySessions.length}
                                 trend="+12%"
                                 icon={<Presentation />}
                                 color="text-indigo-600 bg-indigo-50/50"
@@ -228,27 +238,48 @@ export default function Dashboard() {
                                     <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                                 </div>
                                 <div className="p-6 space-y-6 overflow-y-auto no-scrollbar">
-                                    {sessions
+                                    {activitySessions
                                         .slice(0, 4)
-                                        .map((session: any, i: number) => (
-                                            <div
-                                                key={session.id}
-                                                className="flex gap-4 group"
-                                            >
-                                                <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 shrink-0 flex items-center justify-center text-indigo-500 font-semibold text-xs">
-                                                    {session.student
-                                                        ?.firstName?.[0] || 'U'}
+                                        .map(
+                                            (
+                                                session: ActivitySessionResponse,
+                                                i: number,
+                                            ) => (
+                                                <div
+                                                    key={session.documentId}
+                                                    className="flex gap-4 group"
+                                                >
+                                                    <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 shrink-0 flex items-center justify-center text-indigo-500 font-semibold text-xs">
+                                                        {
+                                                            // eslint-disable-next-line @next/next/no-img-element
+                                                            <img
+                                                                src={FormatService.formatStrapiMedia(
+                                                                    session
+                                                                        .activity
+                                                                        .banner,
+                                                                    'thumbnail',
+                                                                )}
+                                                                className="h-full w-full object-cover pointer-events-none"
+                                                                alt="profile-picture"
+                                                            />
+                                                        }
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm font-medium text-slate-900 leading-tight">
+                                                            Session log
+                                                            generated
+                                                        </p>
+                                                        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-tight opacity-70">
+                                                            Recently •{' '}
+                                                            {
+                                                                session.activity
+                                                                    .name
+                                                            }
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-1">
-                                                    <p className="text-sm font-medium text-slate-900 leading-tight">
-                                                        Session log generated
-                                                    </p>
-                                                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-tight opacity-70">
-                                                        Recently • Unit B
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            ),
+                                        )}
                                 </div>
                                 <div className="p-4 mt-auto border-t border-slate-50 bg-slate-50/50">
                                     <Button
@@ -286,7 +317,7 @@ export default function Dashboard() {
                         </Button>
                     </div>
                     <div className="flex-1 min-h-0 w-full overflow-hidden">
-                        <ActivityCalendar sessions={sessions} />
+                        <ActivityCalendar />
                     </div>
                 </section>
 
@@ -318,7 +349,7 @@ export default function Dashboard() {
                         </div>
 
                         <Card className="flex-1 min-h-0 rounded-[32px] border border-slate-200/60 bg-white overflow-hidden p-2 flex flex-col shadow-sm">
-                            <ActivitySessionLogsTable sessions={sessions} />
+                            <ActivitySessionLogsTable data={activitySessions} />
                         </Card>
                     </div>
                 </section>
