@@ -1,106 +1,87 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Trash2, Play, Flag } from 'lucide-react';
+import { Trash2, Plus, ArrowDown, GripVertical } from 'lucide-react';
 import { Reorder, useDragControls } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import ItemCard from './ItemCard';
+import { FormatService } from '@/utils/helpers';
 import { ActivitySessionEntry } from '@/types/activitiy-session';
 import { Activity } from '@/types/actitivity';
-import { FormatService } from '@/utils/helpers';
+import ItemCard from './ItemCard';
 
-export interface TimelineGapEntry {
-    instanceId: string;
-    type: 'activity' | 'gap';
-    durationMinutes: number;
-    startAt: string;
-    endAt: string;
-}
-
-type TimelineItemProps = {
-    isDraggingAny?: boolean;
-    isReordering?: boolean;
+// --- Types ---
+interface TimelineItemProps {
     variant: 'activity' | 'gap';
-    data: (ActivitySessionEntry & { type: 'activity' }) | TimelineGapEntry;
+    data: ActivitySessionEntry;
+    isDraggingAny?: boolean;
     onRemove?: () => void;
     onToggleLock?: () => void;
     onDragStart?: () => void;
     onDragEnd?: () => void;
-    onGapDrop?: (targetStartTime: string) => void;
-    domRef?: (node: HTMLLIElement | null) => void;
-};
+    onGapDrop?: (activity: Activity) => void;
+}
 
-// --- Sub-Component: Start/End Markers ---
-interface TimelineEndpointProps {
+// --- Components ---
+
+export const TimelineEndpoint = ({
+    type,
+    time,
+}: {
     type: 'start' | 'end';
     time: string;
-}
-export const TimelineEndpoint = ({ type, time }: TimelineEndpointProps) => {
-    const isStart = type === 'start';
+}) => {
     return (
-        <div className="flex flex-row items-stretch w-full select-none isolate">
-            <div className="w-16 flex flex-col items-end shrink-0">
-                <span className="text-[11px] font-bold text-slate-400 tabular-nums uppercase py-1.5">
+        <div className="flex flex-row items-center w-full select-none relative h-12 group">
+            {/* Time Column */}
+            <div className="w-[60px] text-right pr-4 shrink-0">
+                <span className="text-[10px] font-bold text-slate-400 tabular-nums uppercase tracking-wider">
                     {time}
                 </span>
             </div>
-            <div className="w-6 relative shrink-0">
+            {/* Spine & Dot */}
+            <div className="w-5 relative flex justify-center shrink-0 h-full">
+                {/* Continuous Line */}
                 <div
                     className={cn(
-                        'absolute left-1/2 -translate-x-1/2 w-0.5 bg-slate-100',
-                        isStart ? 'top-3 bottom-0' : 'top-0 h-3',
+                        'w-px bg-slate-200 absolute left-1/2 -translate-x-1/2',
+                        type === 'start'
+                            ? 'bottom-0 top-1/2'
+                            : 'top-0 bottom-1/2',
                     )}
                 />
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-                    <div
-                        className={cn(
-                            'flex items-center justify-center w-5 h-5 rounded-full border-2 bg-white',
-                            isStart
-                                ? 'border-emerald-500 text-emerald-600'
-                                : 'border-slate-300 text-slate-400',
-                        )}
-                    >
-                        {isStart ? (
-                            <Play size={8} fill="currentColor" />
-                        ) : (
-                            <Flag size={8} fill="currentColor" />
-                        )}
-                    </div>
-                </div>
+                <div className="w-3 h-3 rounded-full border-[3px] border-slate-50 bg-slate-800 z-10 absolute top-1/2 -translate-y-1/2 shadow-sm ring-1 ring-slate-200" />
             </div>
-            <div className="flex-1 pl-3 py-0.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    {isStart ? 'Session Start' : 'Session End'}
-                </span>
+            {/* Label */}
+            <div className="flex-1 pl-4">
+                <div className="h-px w-full bg-slate-100" />
             </div>
         </div>
     );
 };
 
-// --- Main Component: TimelineItem ---
 export const TimelineItem = ({
     variant,
     data,
     isDraggingAny,
-    isReordering,
     onRemove,
     onToggleLock,
     onDragStart,
     onDragEnd,
     onGapDrop,
-    domRef,
 }: TimelineItemProps) => {
     const dragControls = useDragControls();
     const [isGapHovered, setIsGapHovered] = useState(false);
+
     const isActivity = variant === 'activity';
-    const activityData = isActivity ? (data as ActivitySessionEntry) : null;
-    const gapData = !isActivity ? (data as TimelineGapEntry) : null;
-    const isLocked = activityData?.isLocked ?? false;
-    const hasConflict = activityData?.hasConflict ?? false;
+    const isLocked = data?.isLocked ?? false;
+    const hasConflict = data?.hasConflict ?? false;
+
+    // Time Formatting
+    const startTimeStr = FormatService.formatTime(data.startAt, '12h-simple');
+    const endTimeStr = FormatService.formatTime(data.endAt, '12h-simple');
 
     return (
         <Reorder.Item
-            as="li"
             value={data}
             id={data.instanceId}
             dragListener={false}
@@ -108,114 +89,164 @@ export const TimelineItem = ({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             className={cn(
-                'relative flex flex-row items-stretch touch-none select-none isolate w-full pb-4',
+                'relative flex flex-row items-stretch w-full group isolate mb-1',
                 isActivity ? 'z-20' : 'z-10',
             )}
-            ref={domRef}
         >
-            {/* COLUMN 1: Time */}
-            <div className="w-16 flex mt-2.5 flex-col items-end shrink-0 pt-6">
+            {/* 1. Time Column */}
+            <div className="w-[60px] flex flex-col items-end shrink-0 pt-[18px] pr-4 relative z-20">
                 <span
                     className={cn(
-                        'text-[11px] font-bold tabular-nums tracking-tighter uppercase leading-none transition-colors',
-                        isLocked ? 'text-indigo-600' : 'text-slate-900',
-                        hasConflict && 'text-rose-600',
-                        !isActivity &&
-                            'text-slate-400 opacity-50 -translate-y-4',
-                        isActivity && '-translate-y-1/2',
+                        'text-[11px] font-semibold tabular-nums tracking-tight transition-colors',
+                        hasConflict ? 'text-rose-600' : 'text-slate-600',
+                        !isActivity && 'opacity-0', // Hide time for gaps unless actively interacting
                     )}
                 >
-                    {FormatService.formatTime(data.startAt, '12h-simple')}
+                    {startTimeStr}
                 </span>
             </div>
 
-            {/* COLUMN 2: Track */}
-            <div className="w-6 relative shrink-0">
+            {/* 2. Timeline Spine (The Backbone) */}
+            <div className="w-5 relative shrink-0 flex justify-center -ml-[1px]">
+                {/* Continuous Vertical Line */}
                 <div
                     className={cn(
-                        'absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-0.5 z-0',
-                        isActivity
-                            ? 'bg-slate-200'
-                            : 'border-l-2 border-dashed border-slate-200 bg-transparent w-0',
+                        'absolute top-[-10px] bottom-[-10px] w-px transition-colors duration-300',
+                        hasConflict ? 'bg-rose-300 w-[2px]' : 'bg-slate-200',
+                        // If it's a gap, keep it subtle
+                        !isActivity &&
+                            'bg-slate-200 border-l border-slate-200 border-dashed w-0',
                     )}
                 />
-                <div
-                    className={cn(
-                        'absolute left-1/2 -translate-x-1/2 z-20 transition-all duration-300 top-6',
-                        isActivity
-                            ? cn(
-                                  'h-3.5 w-3.5 rounded-full border-[3px] bg-white',
-                                  hasConflict
-                                      ? 'border-rose-500'
-                                      : isLocked
-                                        ? 'border-indigo-600 bg-indigo-50'
-                                        : 'border-slate-300',
-                              )
-                            : 'h-1.5 w-1.5 rounded-full bg-slate-300 -translate-y-1',
-                    )}
-                />
+
+                {/* Horizontal Connector (Only for Activity) */}
+                {isActivity && (
+                    <div
+                        className={cn(
+                            'absolute top-[26px] left-1/2 w-3.5 h-px',
+                            hasConflict ? 'bg-rose-300' : 'bg-slate-300',
+                        )}
+                    />
+                )}
+
+                {/* Node Dot */}
+                {isActivity ? (
+                    <div
+                        className={cn(
+                            'absolute top-[22px] w-2.5 h-2.5 rounded-full border-[2px] z-30 transition-all bg-white shadow-sm',
+                            hasConflict
+                                ? 'border-rose-500 bg-rose-50 scale-110'
+                                : isLocked
+                                  ? 'border-slate-400 bg-slate-100'
+                                  : 'border-indigo-500 bg-indigo-50',
+                        )}
+                    />
+                ) : (
+                    // Gap Dot (Small ghost dot)
+                    <div className="absolute top-[22px] w-1.5 h-1.5 rounded-full bg-slate-200 z-10" />
+                )}
             </div>
 
-            {/* COLUMN 3: Content */}
-            <div className="flex-1 min-w-0 pl-3 pr-1 pt-1">
-                {isActivity && activityData && (
+            {/* 3. Main Content (Card or Dropzone) */}
+            <div className="flex-1 pl-3 min-w-0 py-2">
+                {isActivity ? (
                     <div
                         onPointerDown={(e) =>
                             !isLocked && dragControls.start(e)
                         }
                         className={cn(
-                            'transition-transform active:scale-[0.99]',
-                            !isLocked && 'cursor-grab',
+                            'relative transition-all duration-200',
+                            !isLocked &&
+                                'cursor-grab active:cursor-grabbing hover:-translate-y-0.5',
+                            isLocked && 'opacity-90',
                         )}
                     >
                         <ItemCard
-                            id={activityData.instanceId}
-                            title={activityData.activity?.name ?? 'Unknown'}
-                            subtitle={
-                                isLocked
-                                    ? `Fixed • Ends At ${FormatService.formatTime(activityData.endAt, '12h-simple')}`
-                                    : `${activityData.activity?.durationMinutes}m`
-                            }
+                            id={data.instanceId}
+                            title={data.activity?.name}
+                            subtitle={`${data.durationMinutes} min activity`}
+                            startTime={startTimeStr}
+                            endTime={endTimeStr}
                             imageSrc={FormatService.formatStrapiMedia(
-                                activityData?.activity?.banner,
+                                data?.activity?.banner,
                                 'thumbnail',
                             )}
                             isLocked={isLocked}
-                            actionIcon={<Trash2 size={16} />}
+                            error={hasConflict}
+                            conflictReason={data.conflictReason}
+                            actionIcon={<Trash2 size={14} />}
                             onActionClick={onRemove!}
                             onToggleLock={onToggleLock}
                             mode={'delete'}
+                            dragControls={dragControls}
                         />
                     </div>
-                )}
-                {!isActivity && gapData && (
-                    <div
-                        onPointerUp={() =>
-                            isDraggingAny && onGapDrop?.(gapData.startAt)
-                        }
-                        onPointerEnter={() =>
-                            isDraggingAny && setIsGapHovered(true)
-                        }
-                        onPointerLeave={() => setIsGapHovered(false)}
-                        className={cn(
-                            'relative w-full rounded-xl transition-all border-2 border-dashed flex items-center pl-3',
-                            !isGapHovered
-                                ? 'h-10 border-emerald-200 bg-emerald-50/30'
-                                : 'h-24 border-indigo-400 bg-indigo-50/50 justify-center pl-0 scale-[1.02]',
-                        )}
-                    >
-                        {isGapHovered ? (
-                            <div className="text-xs font-semibold uppercase tracking-wider text-indigo-600 flex flex-col items-center gap-1">
-                                <span>Drop to Move Here</span>
-                                <span className="text-[10px] opacity-70">
-                                    ({gapData.durationMinutes}m available)
-                                </span>
-                            </div>
-                        ) : (
-                            <span className="text-[10px] font-medium text-slate-400 italic">
-                                {gapData.durationMinutes}m free time
-                            </span>
-                        )}
+                ) : (
+                    // --- GAP COMPONENT ---
+                    <div className="relative group/gap flex items-center">
+                        {/* Drag Handle for Gap (Visible on Hover) */}
+                        <div
+                            onPointerDown={(e) => dragControls.start(e)}
+                            className="absolute -left-8 p-1.5 cursor-grab active:cursor-grabbing text-slate-300 hover:text-indigo-400 hover:bg-slate-100 rounded opacity-0 group-hover/gap:opacity-100 transition-all z-30"
+                            title="Drag to move empty space"
+                        >
+                            <GripVertical size={16} />
+                        </div>
+
+                        {/* Drop Zone */}
+                        <div
+                            onDragOver={(e) => {
+                                e.preventDefault();
+                                setIsGapHovered(true);
+                            }}
+                            onDragLeave={() => setIsGapHovered(false)}
+                            onDrop={(e) => {
+                                e.preventDefault(); // Stop browser default
+                                setIsGapHovered(false);
+                                const raw =
+                                    e.dataTransfer.getData('newActivity');
+                                if (raw) onGapDrop?.(JSON.parse(raw));
+                            }}
+                            className={cn(
+                                'relative w-full rounded-lg border border-dashed transition-all duration-300 flex items-center px-4 overflow-hidden',
+                                // Mode 1: Drop Target (Hovering with external file)
+                                isGapHovered
+                                    ? 'h-[72px] border-emerald-400 bg-emerald-50/40 ring-4 ring-emerald-50'
+                                    : // Mode 2: Helper State (Dragging another item)
+                                      isDraggingAny
+                                      ? 'h-10 border-indigo-200 bg-indigo-50/20'
+                                      : // Mode 3: Default (Compact representation of time)
+                                        'h-8 border-slate-200 bg-slate-50/50 hover:border-indigo-300 hover:bg-white',
+                            )}
+                        >
+                            {isGapHovered ? (
+                                <div className="flex items-center gap-3 text-emerald-600 w-full justify-center animate-in fade-in zoom-in-95">
+                                    <Plus size={16} />
+                                    <span className="text-xs font-semibold uppercase tracking-wide">
+                                        Insert here ({data.durationMinutes}m)
+                                    </span>
+                                </div>
+                            ) : isDraggingAny ? (
+                                <div className="flex items-center gap-3 text-indigo-400 w-full justify-center opacity-70">
+                                    <ArrowDown size={14} />
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide">
+                                        {data.durationMinutes}m Gap
+                                    </span>
+                                </div>
+                            ) : (
+                                // Default State: Shows time duration, now draggable
+                                <div className="flex items-center gap-3 text-slate-400 w-full">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-mono font-medium bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                                            {data.durationMinutes}m
+                                        </span>
+                                        <span className="text-[10px] font-medium uppercase tracking-wider opacity-50">
+                                            Free Time
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

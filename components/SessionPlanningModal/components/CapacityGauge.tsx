@@ -1,81 +1,43 @@
-'use client';
-
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { Progress } from '@/components/ui/progress';
-import { Zap, AlertCircle } from 'lucide-react';
 
-interface CapacityGaugeProps {
+const CapacityGauge = ({
+    percent,
+    className,
+}: {
     percent: number;
-}
-
-const CapacityGauge = ({ percent }: CapacityGaugeProps) => {
-    // Dynamic color logic based on usage
-    const isOverCapacity = percent > 100;
-    const isWarning = percent > 85 && percent <= 100;
-
-    const statusColor = isOverCapacity
-        ? 'text-rose-600'
-        : isWarning
-          ? 'text-amber-600'
-          : 'text-emerald-600';
-
-    const indicatorColor = isOverCapacity
-        ? 'bg-rose-500'
-        : isWarning
-          ? 'bg-amber-500'
-          : 'bg-emerald-500';
+    className?: string;
+}) => {
+    // Color logic
+    const getColor = () => {
+        if (percent > 100) return 'bg-rose-500';
+        if (percent > 90) return 'bg-amber-500';
+        return 'bg-emerald-500';
+    };
 
     return (
-        <div className=" space-y-3 rounded-2xl p-4">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div
-                        className={cn(
-                            'p-1.5 rounded-lg bg-slate-50',
-                            statusColor,
-                        )}
-                    >
-                        {isOverCapacity ? (
-                            <AlertCircle size={14} className="animate-pulse" />
-                        ) : (
-                            <Zap size={14} className="fill-current" />
-                        )}
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        Session Load
-                    </span>
-                </div>
-                <div className="text-right">
-                    <b
-                        className={cn(
-                            'text-lg font-black tracking-tight',
-                            statusColor,
-                        )}
-                    >
-                        {Math.floor(percent)}%
-                    </b>
-                </div>
-            </div>
-
-            <div className="relative">
-                {/* Standardized Shadcn Progress Component */}
-                <Progress
-                    value={Math.min(percent, 100)}
-                    className="h-2 bg-slate-100"
-                    indicatorClassName={cn(
-                        'transition-all duration-500',
-                        indicatorColor,
+        <div className={cn('flex flex-col gap-1.5', className)}>
+            <div className="flex justify-between items-end">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Session Capacity
+                </span>
+                <span
+                    className={cn(
+                        'text-xs font-mono font-bold',
+                        percent > 100 ? 'text-rose-600' : 'text-slate-700',
                     )}
+                >
+                    {Math.round(percent)}%
+                </span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div
+                    className={cn(
+                        'h-full transition-all duration-500 rounded-full',
+                        getColor(),
+                    )}
+                    style={{ width: `${Math.min(percent, 100)}%` }}
                 />
-
-                {/* Over-capacity overflow indicator */}
-                {isOverCapacity && (
-                    <div className="mt-1.5 flex items-center gap-1 text-[9px] font-semibold uppercase text-rose-500 animate-in fade-in slide-in-from-top-1">
-                        <AlertCircle size={10} />
-                        Time Limit Exceeded
-                    </div>
-                )}
             </div>
         </div>
     );

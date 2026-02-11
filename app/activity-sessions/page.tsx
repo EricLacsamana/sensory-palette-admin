@@ -17,7 +17,10 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-import { getActivitySessions } from '@/api/acitivity-session';
+import {
+    getActivitySessions,
+    getActivitySessionsNew,
+} from '@/api/acitivity-session';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -76,9 +79,8 @@ export default function ActivitySessions() {
         isFetching,
         isLoading,
     } = useInfiniteQuery({
-        queryKey: ['activity-sessions-infinite', debouncedSearch],
-        queryFn: ({ pageParam }) =>
-            getActivitySessions({ pageParam, searchTerm: debouncedSearch }),
+        queryKey: ['activity-sessions-infinite', { _q: debouncedSearch }],
+        queryFn: getActivitySessionsNew,
         initialPageParam: 1,
         getNextPageParam: (lastPage) => {
             const pagination = lastPage?.meta?.pagination;

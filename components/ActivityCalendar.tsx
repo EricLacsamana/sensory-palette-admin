@@ -1,33 +1,31 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
     format,
     startOfMonth,
-    endOfMonth,
     startOfWeek,
-    endOfWeek,
     eachDayOfInterval,
     isSameMonth,
     isSameDay,
     parseISO,
     addMonths,
     subMonths,
-    isWeekend,
     addDays,
 } from 'date-fns';
 import {
     ChevronLeft,
     ChevronRight,
     Calendar as CalendarIcon,
+    Loader2,
+    CheckCircle2,
+    PlayCircle,
+    PauseCircle,
+    XCircle,
+    Filter,
     Clock,
     Activity,
-    Loader2,
-    Check,
-    Play,
-    Pause,
-    X as CloseIcon,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -38,158 +36,257 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getActivitySessions } from '@/api/acitivity-session';
+import { Badge } from '@/components/ui/badge';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { ActivitySessionResponse } from '@/types/activitiy-session';
+import { FormatService } from '@/utils/helpers';
 
-// --- Types ---
-
-// --- Configuration ---
+// --- CONFIG ---
 const statusConfig: Record<
     string,
-    { color: string; badge: string; icon: any }
+    {
+        bg: string;
+        border: string;
+        text: string;
+        dot: string; // Added for solid dot color
+        icon: any;
+        label: string;
+    }
 > = {
     completed: {
-        color: 'bg-emerald-500 text-white shadow-emerald-100',
-        badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
-        icon: Check,
+        bg: 'bg-emerald-50',
+        border: 'border-emerald-200',
+        text: 'text-emerald-700',
+        dot: 'bg-emerald-500',
+        icon: CheckCircle2,
+        label: 'Done',
     },
-    live: {
-        color: 'bg-emerald-500 text-white shadow-emerald-200 animate-pulse ring-2 ring-emerald-500/20',
-        badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
-        icon: Play,
-    },
-    started: {
-        color: 'bg-indigo-500 text-white shadow-indigo-100',
-        badge: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/20',
-        icon: Play,
+    'in-progress': {
+        bg: 'bg-indigo-50',
+        border: 'border-indigo-200',
+        text: 'text-indigo-700',
+        dot: 'bg-indigo-500',
+        icon: PlayCircle,
+        label: 'Live',
     },
     interrupted: {
-        color: 'bg-amber-500 text-white shadow-amber-100',
-        badge: 'bg-amber-500/20 text-amber-400 border-amber-500/20',
-        icon: Pause,
+        bg: 'bg-amber-50',
+        border: 'border-amber-200',
+        text: 'text-amber-700',
+        dot: 'bg-amber-500',
+        icon: PauseCircle,
+        label: 'Paused',
+    },
+    upcoming: {
+        bg: 'bg-slate-50',
+        border: 'border-slate-200',
+        text: 'text-slate-600',
+        dot: 'bg-slate-400',
+        icon: Clock,
+        label: 'Scheduled',
     },
     abandoned: {
-        color: 'bg-slate-500 text-white shadow-slate-100',
-        badge: 'bg-slate-400/10 text-slate-400 border-slate-400/20',
-        icon: CloseIcon,
+        bg: 'bg-rose-50',
+        border: 'border-rose-200',
+        text: 'text-rose-700',
+        dot: 'bg-rose-500',
+        icon: XCircle,
+        label: 'Dropped',
     },
 };
 
-export function ActivityCalendar() {
+export function ActivityCalendar({ className }: { className?: string }) {
     const [viewDate, setViewDate] = useState(new Date());
+    const [filterStatus, setFilterStatus] = useState<string | 'all'>('all');
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
+    // --- DATE LOGIC ---
     const { startRange, endRange, days } = useMemo(() => {
         const monthStart = startOfMonth(viewDate);
-        const monthEnd = endOfMonth(viewDate);
         const start = startOfWeek(monthStart);
-
-        const end = addDays(start, 41);
+        const end = addDays(start, 41); // Fixed 6-week grid
 
         return {
             startRange: start.toISOString(),
-            endRange: endOfWeek(monthEnd).toISOString(),
+            endRange: end.toISOString(),
             days: eachDayOfInterval({ start, end }),
         };
     }, [viewDate]);
 
-    const { data: response, isFetching } = useQuery({
-        queryKey: [
-            'activity-sessions',
-            { startAt: startRange, endDate: endRange },
-        ],
-        queryFn: getActivitySessions,
-        placeholderData: keepPreviousData,
+    // --- DATA ---
+    const { data: sessions = [], isFetching } = useQuery({
+        queryKey: ['activity-sessions', { populate: '*' }],
+        queryFn: getActivitySessionsNew,
     });
 
-    const sessions: ActivitySessionResponse[] = useMemo(() => {
-        return response?.data || [];
-    }, [response]);
+    // --- PROCESSING ---
+    const filteredSessions = useMemo(() => {
+        if (!Array.isArray(sessions)) return [];
+        if (filterStatus === 'all') return sessions;
+        if (filterStatus === 'completed')
+            return sessions.filter(
+                (s: any) => s.activitySessionStatus === 'completed',
+            );
+        if (filterStatus === 'pending')
+            return sessions.filter(
+                (s: any) => s.activitySessionStatus !== 'completed',
+            );
+        return sessions;
+    }, [sessions, filterStatus]);
 
     const sessionsByDate = useMemo(() => {
         const groups: Record<string, ActivitySessionResponse[]> = {};
-
-        sessions.forEach((session) => {
+        filteredSessions.forEach((session: ActivitySessionResponse) => {
             if (!session.startAt) return;
             const dateKey = format(parseISO(session.startAt), 'yyyy-MM-dd');
             if (!groups[dateKey]) groups[dateKey] = [];
             groups[dateKey].push(session);
         });
-
-        Object.keys(groups).forEach((key) => {
-            groups[key].sort(
-                (a, b) =>
-                    parseISO(a.startAt).getTime() -
-                    parseISO(b.startAt).getTime(),
-            );
-        });
-
         return groups;
-    }, [sessions]);
+    }, [filteredSessions]);
+
+    const currentMonthStats = useMemo(() => {
+        if (!Array.isArray(sessions)) return { total: 0, rate: 0 };
+        const currentMonthSessions = sessions.filter((s: any) =>
+            isSameMonth(parseISO(s.startAt), viewDate),
+        );
+        const completed = currentMonthSessions.filter(
+            (s: any) => s.activitySessionStatus === 'completed',
+        ).length;
+        const completionRate =
+            currentMonthSessions.length > 0
+                ? Math.round((completed / currentMonthSessions.length) * 100)
+                : 0;
+        return { total: currentMonthSessions.length, rate: completionRate };
+    }, [sessions, viewDate]);
 
     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     return (
         <TooltipProvider delayDuration={100}>
-            {/* FIX 1: Removed `min-h-[500px]` and replaced with `min-h-0`. 
-               This ensures the container allows itself to shrink if the parent is small.
-               Ensure the parent of this component has a defined height (e.g., h-screen or h-[500px]).
-            */}
-            <div className="w-full h-full min-h-0 bg-white rounded-[40px] border border-slate-400/50 overflow-hidden flex flex-col transition-all duration-500 shadow-sm">
-                {/* --- HEADER --- */}
-                <div className="flex items-center justify-between px-6 md:px-10 py-5 bg-white/50 backdrop-blur-xl border-b border-slate-300 shrink-0">
+            <div
+                className={cn(
+                    'flex flex-col h-full w-full bg-white',
+                    className,
+                )}
+            >
+                {/* Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-3 border-b border-slate-100 bg-white gap-4 shrink-0">
                     <div className="flex items-center gap-4">
-                        <div className="h-11 w-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg">
+                        <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-200">
                             {isFetching ? (
                                 <Loader2 size={18} className="animate-spin" />
                             ) : (
-                                <CalendarIcon size={20} strokeWidth={1.5} />
+                                <CalendarIcon size={18} />
                             )}
                         </div>
                         <div>
-                            <h2 className="text-xl font-semibold text-slate-900 tracking-tight leading-none">
-                                {format(viewDate, 'MMMM')}
-                                <span className="text-slate-400 font-light ml-2">
-                                    {format(viewDate, 'yyyy')}
-                                </span>
+                            <h2 className="text-base font-bold text-slate-900 leading-none">
+                                {format(viewDate, 'MMMM yyyy')}
                             </h2>
-                            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mt-1.5">
-                                {sessions.length} Sessions Loaded
-                            </p>
+                            <div className="flex items-center gap-3 mt-1.5">
+                                <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
+                                    {currentMonthStats.total} Events
+                                </span>
+                                <span className="h-1 w-1 rounded-full bg-slate-300" />
+                                <span className="text-[10px] font-medium text-emerald-600 uppercase tracking-wide">
+                                    {currentMonthStats.rate}% Completion
+                                </span>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex bg-slate-100/50 p-1 rounded-2xl border border-slate-200/60">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-xl h-8 w-8 hover:bg-indigo-300 transition-all active:scale-90"
-                            onClick={() => setViewDate(subMonths(viewDate, 1))}
-                        >
-                            <ChevronLeft size={16} className="text-slate-600" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-xl h-8 w-8 hover:bg-indigo-300 transition-all active:scale-90"
-                            onClick={() => setViewDate(addMonths(viewDate, 1))}
-                        >
-                            <ChevronRight
-                                size={16}
-                                className="text-slate-600"
-                            />
-                        </Button>
+                    <div className="flex items-center gap-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-2 text-xs font-medium border-slate-200 text-slate-600"
+                                >
+                                    <Filter size={12} />
+                                    {filterStatus === 'all'
+                                        ? 'All View'
+                                        : filterStatus === 'completed'
+                                          ? 'Done'
+                                          : 'Pending'}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem
+                                    onClick={() => setFilterStatus('all')}
+                                >
+                                    All Events
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => setFilterStatus('pending')}
+                                >
+                                    Pending
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => setFilterStatus('completed')}
+                                >
+                                    Completed
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <div className="flex items-center bg-slate-50 p-0.5 rounded-lg border border-slate-200/60">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-md hover:bg-white"
+                                onClick={() =>
+                                    setViewDate(subMonths(viewDate, 1))
+                                }
+                            >
+                                <ChevronLeft
+                                    size={14}
+                                    className="text-slate-500"
+                                />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-3 rounded-md hover:bg-white text-[10px] font-bold uppercase text-slate-600"
+                                onClick={() => setViewDate(new Date())}
+                            >
+                                Today
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-md hover:bg-white"
+                                onClick={() =>
+                                    setViewDate(addMonths(viewDate, 1))
+                                }
+                            >
+                                <ChevronRight
+                                    size={14}
+                                    className="text-slate-500"
+                                />
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
-                {/* --- DAY LABELS --- */}
-                <div className="grid grid-cols-7 border-b border-slate-300 bg-slate-50/30 shrink-0">
+                {/* Days Header */}
+                <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/50 shrink-0">
                     {weekDays.map((day, idx) => (
                         <div
                             key={day}
                             className={cn(
-                                'py-3 text-center text-[10px] font-semibold uppercase tracking-[0.2em]',
+                                'py-2.5 text-center text-[9px] font-bold uppercase tracking-[0.2em]',
                                 idx === 0 || idx === 6
-                                    ? 'text-rose-400'
+                                    ? 'text-indigo-400'
                                     : 'text-slate-400',
                             )}
                         >
@@ -198,138 +295,159 @@ export function ActivityCalendar() {
                     ))}
                 </div>
 
-                {/* FIX 2: Grid Layout
-                    - Changed `grid-rows-6` to `grid-rows-[repeat(6,minmax(0,1fr))]`
-                    - This forces strictly equal rows that fit in the container, preventing overflow.
-                    - `minmax(0, 1fr)` is crucial here; it allows the row to shrink below its content size if needed.
-                */}
-                <div className="grid grid-cols-7 grid-rows-[repeat(6,minmax(0,1fr))] flex-1 overflow-hidden">
-                    {days.map((day, idx) => {
+                {/* Grid */}
+                <div className="grid grid-cols-7 grid-rows-6 flex-1 min-h-0 bg-slate-100 gap-px border-b border-slate-100">
+                    {days.map((day) => {
                         const dateKey = format(day, 'yyyy-MM-dd');
                         const daySessions = sessionsByDate[dateKey] || [];
                         const isCurrentMonth = isSameMonth(day, viewDate);
                         const isToday = isSameDay(day, new Date());
-                        const isWeekendDay = isWeekend(day);
+                        const isSelected =
+                            selectedDate && isSameDay(day, selectedDate);
 
                         return (
                             <div
                                 key={dateKey}
+                                onClick={() => setSelectedDate(day)}
                                 className={cn(
-                                    'p-1 border-r border-b border-slate-100 transition-all duration-300 relative group flex flex-col min-w-0 min-h-0', // Added min-h-0 here as well
-                                    !isCurrentMonth
-                                        ? 'bg-slate-50/20 opacity-40'
-                                        : 'bg-white',
-                                    isWeekendDay &&
-                                        isCurrentMonth &&
-                                        'bg-rose-50/30',
-                                    idx % 7 === 6 && 'border-r-0',
+                                    'relative flex flex-col min-w-0 transition-all duration-200 group cursor-default',
+                                    'bg-white hover:bg-slate-50',
+                                    !isCurrentMonth &&
+                                        'bg-slate-50/30 text-slate-300',
+                                    isSelected &&
+                                        'ring-2 ring-inset ring-indigo-500 z-10',
                                 )}
                             >
-                                <div className="flex justify-between items-center mb-1 shrink-0">
+                                {/* Date Number Row */}
+                                <div className="p-2 flex justify-between items-start shrink-0">
                                     <span
                                         className={cn(
-                                            'text-[11px] font-semibold h-5 w-5 flex items-center justify-center rounded-lg transition-all',
+                                            'text-[10px] font-medium h-6 w-6 flex items-center justify-center rounded-lg tabular-nums transition-all',
                                             isToday
-                                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                                                : 'text-slate-400 group-hover:text-indigo-600',
+                                                ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-200'
+                                                : isSelected
+                                                  ? 'bg-indigo-50 text-indigo-700 font-bold'
+                                                  : !isCurrentMonth
+                                                    ? 'text-slate-300'
+                                                    : 'text-slate-500 group-hover:text-slate-900',
                                         )}
                                     >
                                         {format(day, 'd')}
                                     </span>
                                 </div>
 
-                                {/* FIX 3: Content Overflow
-                                    - Changed `overflow-hidden` to `overflow-y-auto` (or scroll).
-                                    - This ensures that if there are too many sessions, we scroll INSIDE the cell 
-                                      instead of expanding the cell height and breaking the grid.
-                                */}
-                                <div
-                                    className={cn(
-                                        'flex flex-wrap content-start gap-1 p-0.5 overflow-y-auto flex-1 scrollbar-hide', // Added scrollbar-hide if you have the plugin, otherwise just remove it
-                                        isFetching && 'opacity-50',
-                                    )}
-                                >
+                                {/* Dots Container */}
+                                <div className="flex-1 px-2 pb-2 flex flex-wrap content-start gap-1.5 overflow-y-auto scrollbar-none">
                                     {daySessions.map((session) => {
+                                        const status =
+                                            session.activitySessionStatus ||
+                                            'upcoming';
                                         const config =
-                                            statusConfig[
-                                                session.activitySessionStatus
-                                            ] || statusConfig.started;
-                                        const StatusIcon = config.icon;
+                                            statusConfig[status] ||
+                                            statusConfig.upcoming;
 
                                         return (
-                                            <Tooltip key={session.documentId}>
+                                            <Tooltip
+                                                key={
+                                                    session.documentId ||
+                                                    session.id
+                                                }
+                                            >
                                                 <TooltipTrigger asChild>
                                                     <div
                                                         className={cn(
-                                                            'h-3.5 w-3.5 rounded-full cursor-pointer transition-all hover:scale-125 hover:z-10 flex items-center justify-center shrink-0',
-                                                            config.color,
+                                                            'h-2 w-2 rounded-full transition-all duration-200 cursor-pointer hover:scale-125 hover:ring-2 ring-offset-1 ring-slate-100',
+                                                            config.dot,
                                                         )}
-                                                    >
-                                                        <StatusIcon
-                                                            size={8}
-                                                            strokeWidth={3}
-                                                        />
-                                                    </div>
+                                                    />
                                                 </TooltipTrigger>
                                                 <TooltipContent
                                                     side="right"
-                                                    sideOffset={5}
-                                                    className="bg-slate-900 text-white p-4 rounded-2xl border-none shadow-xl z-[100]"
+                                                    className="p-0 border-slate-200 shadow-xl bg-white rounded-xl overflow-hidden min-w-[240px] z-50"
+                                                    sideOffset={10}
                                                 >
-                                                    <div className="space-y-2 min-w-[180px]">
-                                                        <div className="flex justify-between items-start border-b border-white/10 pb-2 mb-1">
-                                                            <div>
-                                                                <p className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">
-                                                                    Student
+                                                    <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="bg-white text-slate-500 text-[9px] font-mono h-5"
+                                                        >
+                                                            {session.startAt
+                                                                ? format(
+                                                                      parseISO(
+                                                                          session.startAt,
+                                                                      ),
+                                                                      'h:mm a',
+                                                                  )
+                                                                : 'TBD'}
+                                                        </Badge>
+                                                        <div
+                                                            className={cn(
+                                                                'flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider',
+                                                                config.text,
+                                                            )}
+                                                        >
+                                                            <config.icon
+                                                                size={12}
+                                                                strokeWidth={
+                                                                    2.5
+                                                                }
+                                                            />
+                                                            {config.label}
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-4 space-y-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar className="h-9 w-9 rounded-lg border border-slate-100 shadow-sm">
+                                                                <AvatarImage
+                                                                    src={FormatService.formatStrapiMedia(
+                                                                        session
+                                                                            .student
+                                                                            ?.profilePicture,
+                                                                        'thumbnail',
+                                                                    )}
+                                                                />
+                                                                <AvatarFallback className="bg-indigo-50 text-indigo-600 text-xs font-bold rounded-lg">
+                                                                    {session.student?.firstName?.charAt(
+                                                                        0,
+                                                                    )}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="min-w-0">
+                                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-tight">
+                                                                    Learner
                                                                 </p>
-                                                                <p className="text-[13px] font-bold text-white">
+                                                                <p className="text-sm font-bold text-slate-900 truncate">
                                                                     {
                                                                         session
                                                                             .student
-                                                                            .firstName
+                                                                            ?.firstName
+                                                                    }{' '}
+                                                                    {
+                                                                        session
+                                                                            .student
+                                                                            ?.lastName
                                                                     }
                                                                 </p>
                                                             </div>
-                                                            <div
-                                                                className={cn(
-                                                                    'flex items-center gap-1 px-2 py-0.5 rounded-full border text-[7px] font-black uppercase',
-                                                                    config.badge,
-                                                                )}
-                                                            >
-                                                                {
-                                                                    session.activityStatus
-                                                                }
-                                                            </div>
                                                         </div>
-
-                                                        <div className="space-y-1.5">
-                                                            <div className="flex items-center gap-2 text-xs font-medium text-slate-100">
+                                                        <div className="flex items-start gap-3">
+                                                            <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
                                                                 <Activity
-                                                                    size={12}
-                                                                    className="text-indigo-400"
+                                                                    size={14}
+                                                                    className="text-slate-500"
                                                                 />
-                                                                <span className="truncate max-w-[150px]">
-                                                                    {session
-                                                                        .activity
-                                                                        ?.name ||
-                                                                        'Game Instance'}
-                                                                </span>
                                                             </div>
-                                                            <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
-                                                                <Clock
-                                                                    size={12}
-                                                                    className="text-indigo-400"
-                                                                />
-                                                                <span>
-                                                                    {session.startAt
-                                                                        ? format(
-                                                                              parseISO(
-                                                                                  session.startAt,
-                                                                              ),
-                                                                              'p',
-                                                                          )
-                                                                        : 'No Time'}
-                                                                </span>
+                                                            <div className="min-w-0">
+                                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-tight">
+                                                                    Activity
+                                                                </p>
+                                                                <p className="text-xs font-semibold text-slate-800 truncate mb-1">
+                                                                    {
+                                                                        session
+                                                                            .activity
+                                                                            ?.name
+                                                                    }
+                                                                </p>
                                                             </div>
                                                         </div>
                                                     </div>

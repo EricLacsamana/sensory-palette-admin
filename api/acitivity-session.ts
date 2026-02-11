@@ -1,7 +1,7 @@
-import { ActivityEntry } from '@/types/actitivity';
 import api from '.';
 import { ENDPOINTS } from '../constants/api';
 import qs from 'qs';
+import { ActivitySessionPayload } from '@/types/activitiy-session';
 
 export const getActivitySessionsNew = async (ctx: any = {}) => {
     const [, query] = ctx.queryKey;
@@ -102,8 +102,10 @@ export const getActivitySession = async (id: string) => {
         .then(({ data }) => data?.data);
 };
 
-export const createActivitySession = async (payload: any) => {
-    console.log('payload', payload);
+export const createActivitySession = async (
+    payload: ActivitySessionPayload,
+) => {
+    console.log('create payload', payload);
     const { data } = await api.post(ENDPOINTS.ACTIVITY_SESSIONS, {
         data: payload,
     });
@@ -112,8 +114,9 @@ export const createActivitySession = async (payload: any) => {
 
 export const updateActivitySession = async (
     id: string,
-    payload: ActivityEntry,
+    payload: ActivitySessionPayload,
 ) => {
+    console.log('update payload', payload);
     const { data } = await api.put(`${ENDPOINTS.ACTIVITY_SESSIONS}/${id}`, {
         data: payload,
     });
@@ -121,5 +124,5 @@ export const updateActivitySession = async (
 };
 
 export const deleteActivitySession = async (id: string) => {
-    return api.delete(`/activity-sessions/${id}`);
+    return api.delete(`${ENDPOINTS.ACTIVITY_SESSIONS}/${id}`);
 };

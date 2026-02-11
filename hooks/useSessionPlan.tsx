@@ -5,238 +5,273 @@ import { useQuery } from '@tanstack/react-query';
 import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { ActivitySessionEntry } from '@/types/activitiy-session';
 import { Activity } from '@/types/actitivity';
-import {
-    calculateSchedule,
-    ScheduledItem,
-    ScheduleGap,
-} from '@/components/SessionPlanningModal/utils/scheduler';
+import { calculateSchedule } from '@/components/SessionPlanningModal/utils/scheduler';
 
 interface SessionPlanProps {
-    startAt: string; // ISO String
-    endAt: string; // ISO String
-    studentId?: number;
+    startAt: string;
+    endAt: string;
+    studentId?: number | null;
 }
-
-export type TimelineItemUnion =
-    | (ScheduledItem & { type: 'activity' })
-    | (ScheduleGap & { type: 'gap'; instanceId: string });
 
 export const useSessionPlan = ({
     startAt,
     endAt,
     studentId,
 }: SessionPlanProps) => {
-    const [localOverride, setLocalOverride] = useState<
-        ActivitySessionEntry[] | null
-    >(null);
-    const [lastAddedId, setLastAddedId] = useState<string | null>(null);
-    const [activeContext, setActiveContext] = useState(
-        `${studentId}-${startAt}`,
+    const [localDraft, setLocalDraft] = useState<ActivitySessionEntry[] | null>(
+        null,
     );
+    const [deletedDocumentIds, setDeletedDocumentIds] = useState<string[]>([]);
 
-    const currentContext = `${studentId}-${startAt}`;
+    const startOfDay = new Date(startAt);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(startAt);
+    endOfDay.setHours(23, 59, 59, 999);
 
-    if (activeContext !== currentContext) {
-        setLocalOverride(null);
-        setActiveContext(currentContext);
-    }
-
-    const {
-        data: activitySessions,
-        isLoading,
-        isError,
-    } = useQuery({
+    const { data: activitySessions, isLoading: isQueryLoading } = useQuery({
         queryKey: [
             'activity-sessions',
             {
                 populate: { activity: { populate: '*' } },
-                filters: { student: { id: { $eq: studentId } } },
-                pagination: { limit: -1 },
+                filters: {
+                    student: { id: { $eq: studentId } },
+                    startAt: {
+                        $gte: startOfDay.toISOString(),
+                        $lte: endOfDay.toISOString(),
+                    },
+                },
             },
         ],
         queryFn: getActivitySessionsNew,
         enabled: !!startAt && !!studentId,
+        staleTime: Infinity,
     });
 
-    const serverData = useMemo(() => {
+    // 3. Sync base entries
+    const currentBaseEntries = useMemo((): ActivitySessionEntry[] => {
+        if (localDraft !== null) return localDraft;
         const rawData = Array.isArray(activitySessions)
             ? activitySessions
             : activitySessions?.data || [];
-        return rawData.map((s: ActivitySessionEntry) => ({
-            ...s,
-            documentId: s.documentId ?? null,
-            activity: s.activity,
-            isLocked: true,
-            durationMinutes: s.durationMinutes || 30,
-            startAt: s.startAt,
-            endAt: s.endAt,
-            instanceId: s.instanceId || s.documentId || crypto.randomUUID(),
-        })) as ActivitySessionEntry[];
-    }, [activitySessions]);
 
-    const activeEntries = localOverride ?? serverData;
+        return [...rawData]
+            .sort(
+                (a, b) =>
+                    new Date(a.startAt).getTime() -
+                    new Date(b.startAt).getTime(),
+            )
+            .map((s: any) => ({
+                ...s,
+                isLocked: true,
+                type: 'activity',
+                instanceId:
+                    s.documentId || s.id?.toString() || crypto.randomUUID(),
+            }));
+    }, [localDraft, activitySessions]);
 
-    const { timelineItems, capacityMetrics } = useMemo(() => {
-        const { items, gaps } = calculateSchedule(activeEntries, startAt);
-        const flatList: TimelineItemUnion[] = [];
-
-        const startGap = gaps.find((g) => g.afterIndex === -1);
-        if (startGap) {
-            flatList.push({
-                ...startGap,
-                type: 'gap',
-                instanceId: `gap-start-${startGap.startAt}`,
-            });
-        }
-
-        items.forEach((item, index) => {
-            flatList.push({ ...item, type: 'activity' });
-            const gap = gaps.find((g) => g.afterIndex === index);
-            if (gap) {
-                flatList.push({
-                    ...gap,
-                    type: 'gap',
-                    instanceId: `gap-${index}-${gap.startAt}`,
-                });
-            }
-        });
-
-        const totalDuration = items.reduce(
-            (acc, curr) => acc + (curr.durationMinutes || 0),
-            0,
+    // 4. Calculate Visual Timeline
+    const { timelineItems, draftWithTimes, capacityMetrics } = useMemo(() => {
+        const { items, totalDuration } = calculateSchedule(
+            currentBaseEntries,
+            startAt,
         );
-        const startTs = new Date(startAt).getTime();
-        const endTs = new Date(endAt).getTime();
-        const totalAvailableMinutes =
-            isNaN(startTs) || isNaN(endTs)
-                ? 0
-                : Math.max(0, (endTs - startTs) / 60000);
+        const activitiesOnly = items.filter((i) => i.type === 'activity');
+        const totalAvailable = Math.max(
+            0,
+            (new Date(endAt).getTime() - new Date(startAt).getTime()) / 60000,
+        );
 
         return {
-            timelineItems: flatList,
+            timelineItems: items,
+            draftWithTimes: activitiesOnly,
             capacityMetrics: {
                 percentUsed:
-                    totalAvailableMinutes > 0
-                        ? Math.min(
-                              (totalDuration / totalAvailableMinutes) * 100,
-                              100,
-                          )
+                    totalAvailable > 0
+                        ? Math.min((totalDuration / totalAvailable) * 100, 100)
                         : 0,
                 totalDuration,
-                remainingMinutes: totalAvailableMinutes - totalDuration,
-                count: items.length,
+                remainingMinutes: totalAvailable - totalDuration,
+                count: activitiesOnly.length,
             },
         };
-    }, [activeEntries, startAt, endAt]);
+    }, [currentBaseEntries, startAt, endAt]);
+
+    // 5. Action: REORDER (Conflict Nuke)
+    const reorderActivities = useCallback(
+        (newOrder: ActivitySessionEntry[]) => {
+            // Filter out gaps to focus on real activities
+            const activitiesOnly = newOrder.filter(
+                (i) => i.type === 'activity',
+            );
+
+            // Set of IDs that must be unlocked
+            const toUnlock = new Set<string>();
+            const globalStartTime = new Date(startAt).getTime();
+
+            // --- 1. Forward Scan (Past Collision) ---
+            // If an item is locked to 9:00, but sits AFTER an item that ends at 10:00.
+            let lastValidEndTime = globalStartTime;
+
+            activitiesOnly.forEach((item) => {
+                if (item.isLocked && item.startAt) {
+                    const currentStart = new Date(item.startAt).getTime();
+                    // Allow 1 min buffer
+                    if (currentStart < lastValidEndTime - 60000) {
+                        toUnlock.add(item.instanceId);
+                        // Since we are unlocking it, it will technically flow immediately after previous
+                        lastValidEndTime +=
+                            (item.durationMinutes || 30) * 60000;
+                    } else {
+                        // It is valid, so it sets the new floor
+                        const duration = (item.durationMinutes || 30) * 60000;
+                        const currentEnd = item.endAt
+                            ? new Date(item.endAt).getTime()
+                            : currentStart + duration;
+                        lastValidEndTime = Math.max(
+                            lastValidEndTime,
+                            currentEnd,
+                        );
+                    }
+                } else {
+                    // Unlocked items just push the cursor forward
+                    lastValidEndTime += (item.durationMinutes || 30) * 60000;
+                }
+            });
+
+            // --- 2. Backward Scan (Future Collision) ---
+            // If an item is locked to 11:00, but sits BEFORE an item locked to 10:00.
+            let nextLockedStartTime = Number.MAX_SAFE_INTEGER;
+
+            for (let i = activitiesOnly.length - 1; i >= 0; i--) {
+                const item = activitiesOnly[i];
+                if (item.isLocked && item.startAt) {
+                    const currentStart = new Date(item.startAt).getTime();
+                    if (currentStart > nextLockedStartTime) {
+                        toUnlock.add(item.instanceId);
+                    } else {
+                        nextLockedStartTime = currentStart;
+                    }
+                }
+            }
+
+            // --- Apply Changes ---
+            const finalDraft = activitiesOnly.map((item) => {
+                if (toUnlock.has(item.instanceId)) {
+                    return {
+                        ...item,
+                        isLocked: false,
+                        // CRITICAL FIX: Wipe the old times.
+                        // If we leave "09:00" here, the scheduler calculates a conflict
+                        // before it realizes it should float.
+                        startAt: '',
+                        endAt: '',
+                    };
+                }
+                return item;
+            });
+
+            setLocalDraft(finalDraft);
+        },
+        [startAt],
+    );
 
     const addActivity = useCallback(
-        (activity: Activity, insertIndex?: number) => {
-            const newId = crypto.randomUUID();
-            setLocalOverride((prev) => {
-                const current = prev ?? [...serverData];
+        (activity: Activity) => {
+            const entry: ActivitySessionEntry = {
+                instanceId: crypto.randomUUID(),
+                activity,
+                durationMinutes: activity.durationMinutes || 30,
+                isLocked: false,
+                type: 'activity',
+                startAt: '',
+                endAt: '',
+                documentId: '',
+            };
+            setLocalDraft((prev) => [...(prev ?? currentBaseEntries), entry]);
+        },
+        [currentBaseEntries],
+    );
+
+    const insertAtGap = useCallback(
+        (gapInstanceId: string, activity: Activity) => {
+            const targetId = gapInstanceId.replace('gap-before-', '');
+            setLocalDraft((prev) => {
+                const base = prev ?? currentBaseEntries;
+                const idx = base.findIndex((i) => i.instanceId === targetId);
                 const entry: ActivitySessionEntry = {
-                    instanceId: newId,
+                    instanceId: crypto.randomUUID(),
                     activity,
-                    durationMinutes: activity.durationMinutes || 30,
+                    durationMinutes: activity.durationMinutes || 0,
                     isLocked: false,
-                    isBreak: false,
+                    type: 'activity',
                     startAt: '',
                     endAt: '',
                     documentId: '',
-                    hasConflict: false,
                 };
-                const newArr = [...current];
-                if (insertIndex !== undefined)
-                    newArr.splice(insertIndex, 0, entry);
-                else newArr.push(entry);
-                return newArr;
+                const copy = [...base];
+                if (idx !== -1) copy.splice(idx, 0, entry);
+                else copy.push(entry);
+                return copy;
             });
-            setLastAddedId(newId);
-            return { success: true };
         },
-        [serverData],
+        [currentBaseEntries],
     );
 
     const removeActivity = useCallback(
         (id: string) => {
-            setLocalOverride((prev) =>
-                (prev ?? [...serverData]).filter((i) => i.instanceId !== id),
-            );
+            setLocalDraft((prev) => {
+                const base = prev ?? currentBaseEntries;
+                const item = base.find((i) => i.instanceId === id);
+                if (item?.isLocked) return base;
+                if (item?.documentId)
+                    setDeletedDocumentIds((d) => [...d, item.documentId!]);
+                return base.filter((i) => i.instanceId !== id);
+            });
         },
-        [serverData],
+        [currentBaseEntries],
     );
 
     const toggleLock = useCallback(
-        (id: string, s: string, e: string) => {
-            setLocalOverride((prev) =>
-                (prev ?? [...serverData]).map((item) =>
-                    item.instanceId === id
-                        ? {
-                              ...item,
-                              isLocked: !item.isLocked,
-                              startAt: s,
-                              endAt: e,
-                          }
-                        : item,
-                ),
-            );
-        },
-        [serverData],
-    );
-
-    // NEW: Function to handle dragging an activity into a specific gap
-    const moveActivityToGap = useCallback(
-        (instanceId: string, targetStartAt: string) => {
-            setLocalOverride((prev) => {
-                const current = prev ?? [...serverData];
-                return current.map((item) => {
-                    if (item.instanceId === instanceId) {
-                        const duration = item.durationMinutes || 30;
-                        const endAt = new Date(
-                            new Date(targetStartAt).getTime() +
-                                duration * 60000,
-                        ).toISOString();
-                        return {
-                            ...item,
-                            isLocked: true, // Must lock it to keep it in the gap
-                            startAt: targetStartAt,
-                            endAt,
-                        };
-                    }
-                    return item;
+        (id: string) => {
+            setLocalDraft((prev) => {
+                const base = prev ?? currentBaseEntries;
+                return base.map((item) => {
+                    if (item.instanceId !== id) return item;
+                    const rendered = timelineItems.find(
+                        (t) => t.instanceId === id,
+                    );
+                    return {
+                        ...item,
+                        isLocked: !item.isLocked,
+                        // If locking, snap to current calculated time. If unlocking, wipe time.
+                        startAt: !item.isLocked
+                            ? rendered?.startAt || item.startAt
+                            : '',
+                        endAt: !item.isLocked
+                            ? rendered?.endAt || item.endAt
+                            : '',
+                    };
                 });
             });
         },
-        [serverData],
+        [currentBaseEntries, timelineItems],
     );
-
-    const reorderActivities = useCallback((newOrder: TimelineItemUnion[]) => {
-        const clean = newOrder
-            .filter(
-                (i): i is ScheduledItem & { type: 'activity' } =>
-                    i.type === 'activity',
-            )
-            .map(
-                ({ type, hasConflict, conflictReason, ...rest }: any) =>
-                    rest as ActivitySessionEntry,
-            );
-        setLocalOverride(clean);
-    }, []);
 
     return {
         timelineItems,
+        draft: draftWithTimes,
         capacityMetrics,
-        isLoading,
-        isError,
+        isDirty: localDraft !== null,
         addActivity,
+        insertAtGap,
         removeActivity,
         toggleLock,
         reorderActivities,
-        moveActivityToGap,
-        clearPlan: useCallback(() => setLocalOverride([]), []),
-        rawActivitySessions: activeEntries,
-        lastAddedId,
-        startAt,
-        endAt,
+        reset: () => {
+            setLocalDraft(null);
+            setDeletedDocumentIds([]);
+        },
+        deletedDocumentIds: deletedDocumentIds || [],
+        isLoading: isQueryLoading,
     };
 };

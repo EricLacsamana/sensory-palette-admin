@@ -10,7 +10,7 @@ export const createStudent = async (data: StudentInput): Promise<User> => {
     const response = await api.post<User>(ENDPOINTS.USERS, data);
     return response.data;
 };
-export const getStudents = async (ctx: any): Promise<User[]> => {
+export const getStudents = async (ctx: any): Promise<UserResponse[]> => {
     const [, { searchQuery }] = ctx.queryKey;
 
     const params = new URLSearchParams();

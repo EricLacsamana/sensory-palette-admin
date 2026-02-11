@@ -1,16 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query'; // Import keepPreviousData
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import {
     Plus,
     Search,
-    GraduationCap,
     LayoutGrid,
     List,
     Users,
     FilterX,
     Loader2,
+    Database,
+    School,
+    UserCheck,
+    MoreHorizontal,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -25,6 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Toaster } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 import { getStudents } from '@/api/students';
 import StudentsTable from '@/components/StudentsTable';
@@ -32,8 +36,7 @@ import { StudentCard } from '@/components/StudentCard';
 import EnrollStudentForm from '@/components/EnrollStudentForm';
 import type { User } from '@/types/index';
 
-// --- 1. Add a Debounce Hook helper ---
-// This prevents the search from firing on every single keystroke
+// --- Debounce Hook ---
 function useDebounce<T>(value: T, delay: number): T {
     const [debouncedValue, setDebouncedValue] = useState(value);
 
@@ -47,12 +50,30 @@ function useDebounce<T>(value: T, delay: number): T {
     return debouncedValue;
 }
 
+// --- SUB-COMPONENT: Stat Badge ---
+const StatBadge = ({ icon: Icon, label, value, colorClass }: any) => (
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-100 bg-white shadow-sm">
+        <div className={cn('p-1 rounded-md', colorClass)}>
+            <Icon size={12} />
+        </div>
+        <div className="flex flex-col">
+            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
+                {label}
+            </span>
+            <span className="text-xs font-bold text-slate-900 leading-none tabular-nums">
+                {value}
+            </span>
+        </div>
+    </div>
+);
+
+import { cn } from '@/lib/utils'; // Ensure utility is imported
+
 export default function StudentsDirectory() {
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-    // Use the hook to wait 500ms after typing stops
     const debouncedSearch = useDebounce(searchTerm, 500);
 
     const {
@@ -60,152 +81,181 @@ export default function StudentsDirectory() {
         isLoading,
         isFetching,
     } = useQuery<User[]>({
-        queryKey: [
-            'students',
-            {
-                searchQuery: debouncedSearch,
-            },
-        ],
+        queryKey: ['students', { searchQuery: debouncedSearch }],
         queryFn: getStudents,
-
         placeholderData: keepPreviousData,
     });
 
-    // --- 3. Fix Loading Logic ---
-    // Only show full screen loader on the INITIAL load, not during search
     const isInitialLoading = isLoading && students.length === 0;
 
     if (isInitialLoading)
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50/50">
+            <div className="min-h-screen flex items-center justify-center bg-white">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="h-10 w-10 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                    <p className="font-medium text-slate-400 uppercase tracking-[0.2em] text-[10px]">
-                        Syncing Directory
+                    <div className="h-12 w-12 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    <p className="font-mono text-slate-400 text-xs uppercase tracking-widest">
+                        Initializing Registry...
                     </p>
                 </div>
             </div>
         );
 
     return (
-        <div className="p-6 lg:p-10 bg-slate-50/30 min-h-screen space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-700">
+        <div className="p-6 lg:p-8 min-h-screen max-w-[1600px] mx-auto animate-in fade-in duration-500 font-sans">
             <Toaster position="top-right" richColors closeButton />
 
-            {/* --- HEADER --- */}
-            <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div className="flex items-center gap-5">
-                    <div className="h-12 w-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-100/50">
-                        <GraduationCap size={24} strokeWidth={1.5} />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-semibold text-slate-900 tracking-tight leading-none">
-                            Learner Directory
-                        </h1>
-                        <div className="flex items-center gap-3 mt-2.5">
-                            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">
-                                {students?.length} Learners Found
-                            </span>
-                            <div className="h-1 w-1 rounded-full bg-slate-300" />
-                            <span className="text-[10px] text-indigo-600 font-semibold uppercase tracking-widest">
-                                Quezon City Hub
-                            </span>
+            {/* --- TECHNICAL HEADER --- */}
+            <header className="flex flex-col gap-6 mb-8">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5">
+                            <Database size={12} /> Learner Database
                         </div>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                            Master Roster
+                        </h1>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        {/* KPI Stats in Header */}
+                        <div className="hidden md:flex gap-3 mr-4">
+                            <StatBadge
+                                icon={Users}
+                                label="Total"
+                                value={students.length}
+                                colorClass="bg-indigo-50 text-indigo-600"
+                            />
+                            <StatBadge
+                                icon={UserCheck}
+                                label="Active"
+                                value={
+                                    students.filter((s) => !s.blocked).length
+                                }
+                                colorClass="bg-emerald-50 text-emerald-600"
+                            />
+                            <StatBadge
+                                icon={School}
+                                label="Campus"
+                                value="QC-01"
+                                colorClass="bg-amber-50 text-amber-600"
+                            />
+                        </div>
+
+                        <Separator
+                            orientation="vertical"
+                            className="h-8 hidden md:block"
+                        />
+
+                        <Dialog
+                            open={isDialogOpen}
+                            onOpenChange={setIsDialogOpen}
+                        >
+                            <DialogTrigger asChild>
+                                <Button className="h-10 pl-3 pr-5 rounded-lg bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-100 font-semibold text-xs uppercase tracking-wide transition-all active:scale-95">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Enroll Learner
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl p-0 border-none bg-transparent shadow-none">
+                                <DialogHeader className="sr-only">
+                                    <DialogTitle>
+                                        Enroll New Learner
+                                    </DialogTitle>
+                                </DialogHeader>
+                                <EnrollStudentForm
+                                    onClose={() => setIsDialogOpen(false)}
+                                />
+                            </DialogContent>
+                        </Dialog>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    <div className="relative group flex-1 md:flex-none">
-                        {/* Show Spinner if fetching, otherwise show Search Icon */}
-                        {isFetching && debouncedSearch ? (
-                            <Loader2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-600 animate-spin" />
-                        ) : (
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors stroke-[1.5px]" />
-                        )}
-
+                {/* --- TOOLBAR --- */}
+                <div className="flex flex-col md:flex-row gap-4 items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-30 py-2 -mx-2 px-2 rounded-xl">
+                    {/* Search Field */}
+                    <div className="relative w-full md:w-[400px] group">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            {isFetching && debouncedSearch ? (
+                                <Loader2 className="h-4 w-4 text-indigo-600 animate-spin" />
+                            ) : (
+                                <Search className="h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                            )}
+                        </div>
                         <Input
-                            className="pl-11 w-full md:w-72 bg-white border-slate-200/60 rounded-xl h-11 shadow-sm focus-visible:ring-indigo-50 transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-normal"
-                            placeholder="Search directory..."
+                            className="pl-10 bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50/50 transition-all rounded-xl h-10 text-sm font-medium placeholder:text-slate-400"
+                            placeholder="Search by name, ID, or keyword..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
+                        {searchTerm && (
+                            <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
+                                <Badge
+                                    variant="secondary"
+                                    className="h-6 bg-white border border-slate-100 text-[10px] text-slate-500 font-mono"
+                                >
+                                    /
+                                </Badge>
+                            </div>
+                        )}
                     </div>
 
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 font-semibold text-sm transition-all active:scale-95 shrink-0">
-                                <Plus className="mr-2 h-4 w-4 stroke-[2px]" />
-                                Enroll Learner
+                    {/* View Toggles */}
+                    <div className="flex items-center gap-2 self-end md:self-auto">
+                        {searchTerm && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSearchTerm('')}
+                                className="text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-9 mr-2"
+                            >
+                                <FilterX size={14} className="mr-1.5" /> Clear
+                                Filters
                             </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl p-0 border-none bg-transparent shadow-none">
-                            <DialogHeader className="sr-only">
-                                <DialogTitle>Enroll New Learner</DialogTitle>
-                            </DialogHeader>
-                            <EnrollStudentForm
-                                onClose={() => setIsDialogOpen(false)}
-                            />
-                        </DialogContent>
-                    </Dialog>
+                        )}
+                        <Tabs
+                            value={viewMode}
+                            onValueChange={(v: any) => setViewMode(v)}
+                            className="h-10"
+                        >
+                            <TabsList className="h-10 bg-slate-100/80 p-1 rounded-lg border border-slate-200/50">
+                                <TabsTrigger
+                                    value="grid"
+                                    className="h-8 rounded-md px-3 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm transition-all"
+                                >
+                                    <LayoutGrid size={14} />
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="table"
+                                    className="h-8 rounded-md px-3 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm transition-all"
+                                >
+                                    <List size={14} />
+                                </TabsTrigger>
+                            </TabsList>
+                        </Tabs>
+
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-10 w-10 rounded-lg border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200"
+                        >
+                            <MoreHorizontal size={16} />
+                        </Button>
+                    </div>
                 </div>
             </header>
 
-            {/* --- CONTROLS BAR --- */}
-            <div className="flex items-center justify-between bg-white border border-slate-200/60 p-1.5 rounded-2xl shadow-sm">
-                <div className="flex items-center gap-3 px-4">
-                    <Users
-                        size={16}
-                        className="text-slate-400 stroke-[1.5px]"
-                    />
-                    <h2 className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-                        Roster Management
-                    </h2>
-                    {searchTerm && (
-                        <Badge
-                            variant="secondary"
-                            className="bg-indigo-50 text-indigo-600 border-none text-[9px] font-semibold uppercase px-2 py-0.5 ml-2"
-                        >
-                            Filtered
-                        </Badge>
-                    )}
-                </div>
-                <Tabs
-                    value={viewMode}
-                    onValueChange={(v: any) => setViewMode(v)}
-                >
-                    <TabsList className="bg-slate-100/50 rounded-xl p-1">
-                        <TabsTrigger
-                            value="grid"
-                            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm px-5 py-2 transition-all"
-                        >
-                            <LayoutGrid
-                                size={14}
-                                className="mr-2 stroke-[1.5px]"
-                            />
-                            <span className="text-[11px] font-semibold uppercase tracking-tight">
-                                Grid
-                            </span>
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="table"
-                            className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm px-5 py-2 transition-all"
-                        >
-                            <List size={14} className="mr-2 stroke-[1.5px]" />
-                            <span className="text-[11px] font-semibold uppercase tracking-tight">
-                                List
-                            </span>
-                        </TabsTrigger>
-                    </TabsList>
-                </Tabs>
-            </div>
-
             {/* --- CONTENT AREA --- */}
-            {/* Added opacity transition to show background loading state */}
             <div
-                className={`min-h-[50vh] relative transition-opacity duration-300 ${isFetching && debouncedSearch ? 'opacity-50' : 'opacity-100'}`}
+                className={cn(
+                    'min-h-[60vh] transition-opacity duration-300',
+                    isFetching && debouncedSearch
+                        ? 'opacity-50'
+                        : 'opacity-100',
+                )}
             >
                 {students.length > 0 ? (
                     viewMode === 'grid' ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
                             {students.map((student) => (
                                 <StudentCard
                                     key={student.id}
@@ -214,31 +264,29 @@ export default function StudentsDirectory() {
                             ))}
                         </div>
                     ) : (
-                        <div className="bg-white rounded-[32px] border border-slate-200/60 shadow-sm overflow-hidden p-2 animate-in fade-in duration-500">
+                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-500">
                             <StudentsTable students={students} />
                         </div>
                     )
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-40 text-center animate-in zoom-in-95 duration-500">
-                        <div className="h-20 w-20 bg-slate-50 rounded-[40px] flex items-center justify-center mb-6 border border-slate-100 shadow-sm">
-                            <FilterX
-                                size={32}
-                                className="text-slate-300 stroke-[1.5px]"
-                            />
+                    /* --- EMPTY STATE --- */
+                    <div className="flex flex-col items-center justify-center py-32 text-center animate-in zoom-in-95 duration-500 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/30">
+                        <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
+                            <Search size={24} className="text-slate-300" />
                         </div>
-                        <h3 className="text-xl font-semibold text-slate-900 tracking-tight">
-                            No learners matched
+                        <h3 className="text-lg font-bold text-slate-900">
+                            No learners found
                         </h3>
-                        <p className="text-sm font-medium text-slate-400 mt-2 max-w-[280px] leading-relaxed">
-                            Try adjusting your search terms or verify the
-                            Learner ID.
+                        <p className="text-sm font-medium text-slate-400 mt-1 max-w-[280px]">
+                            We couldn't find any learners matching "{searchTerm}
+                            "
                         </p>
                         <Button
                             variant="outline"
                             onClick={() => setSearchTerm('')}
-                            className="mt-8 h-10 px-6 rounded-xl border-slate-200 text-slate-600 font-semibold text-xs transition-all hover:bg-slate-50"
+                            className="mt-6 h-9 px-5 rounded-lg border-slate-200 text-slate-600 font-semibold text-xs transition-all hover:bg-white hover:text-indigo-600 hover:border-indigo-200"
                         >
-                            Clear Search Filters
+                            Reset Search
                         </Button>
                     </div>
                 )}

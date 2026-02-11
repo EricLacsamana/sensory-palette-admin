@@ -46,15 +46,25 @@ export type ActivitySessionEntry = Omit<
     isBreak?: boolean;
     hasConflict?: boolean;
     conflictReason?: string;
+    student?: User;
+    activity: Activity;
+    type: 'activity' | 'gap';
 };
 
-export type ActivitySessionPayload = Omit<
-    Partial<ActivitySessionResponse>,
-    'id'
-> & {
+export type CreateActivitySessionPayload = {
     startAt: string;
     endAt: string;
     teacherNotes?: string;
+    durationMinutes?: number;
     promptLevel?: PromptLevel;
-    student: keyof User;
+    student: number;
+    activity: string;
+};
+
+export type UpdatectivitySessionPayload = {
+    startAt: string;
+    endAt: string;
+    teacherNotes?: string;
+    durationMinutes?: number;
+    promptLevel?: PromptLevel;
 };

@@ -1,13 +1,35 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux'; // Add this
+import React, {
+    useState,
+    useEffect,
+    useSyncExternalStore,
+    Suspense,
+} from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSelector } from 'react-redux';
 import Sidebar from '@/components/Sidebar';
 import { cn } from '@/lib/utils';
-import { RootState } from '@/redux/store'; // Adjust path to your store
+import { RootState } from '@/redux/store';
 import SessionPlanningModal from './SessionPlanningModal';
-import { ActivityEntry } from '@/types/actitivity';
+
+/**
+ * We move the searchParams logic into a wrapper with a KEY.
+ * This ensures React re-renders this specific component when the URL changes.
+ */
+function ModalManager() {
+    const searchParams = useSearchParams();
+    const isOpen = searchParams.get('isActivitySessionPlanningOpen') === 'true';
+
+    if (!isOpen) return null;
+
+    return <SessionPlanningModal />;
+}
+
+// Subscription helpers for useSyncExternalStore
+const subscribe = () => () => {};
+const getSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 export default function LayoutWrapper({
     children,
@@ -18,32 +40,41 @@ export default function LayoutWrapper({
     const pathname = usePathname();
     const router = useRouter();
 
-    // 1. Get auth state from Redux
+    // We need searchParams here ONLY to provide a key to the Suspense/ModalManager
+    const searchParams = useSearchParams();
+    const modalKey = searchParams.toString();
+
+    const isMounted = useSyncExternalStore(
+        subscribe,
+        getSnapshot,
+        getServerSnapshot,
+    );
+
     const { isAuthenticated, isLoading } = useSelector(
         (state: RootState) => state.auth,
     );
 
-    // 2. Identify Auth Pages
     const isAuthPage =
         pathname.startsWith('/auth') ||
         pathname === '/login' ||
         pathname === '/register';
 
-    // 3. Optional: Redirect to login if not authenticated and not on an auth page
     useEffect(() => {
-        if (!isLoading && !isAuthenticated && !isAuthPage) {
+        if (isMounted && !isLoading && !isAuthenticated && !isAuthPage) {
             router.push('/auth/login');
         }
-    }, [isAuthenticated, isLoading, isAuthPage, router]);
+    }, [isMounted, isLoading, isAuthenticated, isAuthPage, router]);
 
-    // If it's an auth page or user isn't authenticated yet, don't show Sidebar
+    if (!isMounted || (isLoading && !isAuthPage)) {
+        return <div className="min-h-screen bg-white" />;
+    }
+
     if (isAuthPage || !isAuthenticated) {
         return <main className="min-h-screen bg-white">{children}</main>;
     }
 
     return (
-        <div className="flex min-h-screen bg-[#F8FAFC] selection:bg-indigo-100">
-            {/* Sidebar only renders if isAuthenticated is true */}
+        <div className="flex min-h-screen bg-[#F8FAFC]">
             <Sidebar
                 isCollapsed={isCollapsed}
                 setIsCollapsed={setIsCollapsed}
@@ -51,21 +82,21 @@ export default function LayoutWrapper({
 
             <main
                 className={cn(
-                    'flex-1 transition-all duration-300 ease-in-out',
-                    isCollapsed ? 'ml-[80px]' : 'ml-[280px]',
+                    'flex-1 transition-all duration-300',
+                    isCollapsed ? 'md:ml-[80px]' : 'md:ml-[280px]',
                 )}
             >
                 <div className="p-6 lg:p-10 max-w-[1600px] mx-auto w-full">
                     {children}
                 </div>
             </main>
-            <SessionPlanningModal
-                onConfirm={function (data: {
-                    activitSessionItem: ActivityEntry[];
-                }): void {
-                    throw new Error('Function not implemented.');
-                }}
-            />
+
+            {/* 1. Added key={modalKey}: Forces a refresh when any param changes.
+                2. Put Suspense here to satisfy Next.js requirements.
+            */}
+            <Suspense fallback={null} key={modalKey}>
+                <ModalManager />
+            </Suspense>
         </div>
     );
 }

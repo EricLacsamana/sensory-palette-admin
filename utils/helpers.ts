@@ -1,8 +1,8 @@
-import { format, parseISO, isDate } from 'date-fns';
+import { format, parseISO, isDate, startOfDay, endOfDay } from 'date-fns';
 import { StrapiMedia, StrapiResponse } from '@/types';
 
 /* -------------------- */
-/* Date/Time Types */
+/* Date/Time Types      */
 /* -------------------- */
 
 export type DateInput = Date | string;
@@ -13,23 +13,24 @@ export type TimeFormatType =
     | '12h-uppercase'
     | 'hours-minutes'
     | 'hours-minutes-ampm'
-    | '12h-simple'; // <- New format
+    | '12h-simple';
 
 export type DateFormatType = 'iso' | 'short' | 'long';
 
 export type DateTimeFormatType = 'iso' | 'readable';
 
 /* -------------------- */
-/* Strapi Media Types */
+/* Strapi Media Types   */
 /* -------------------- */
 
 export type MediaFormat = 'thumbnail' | 'small' | 'medium' | 'large';
 
 /* -------------------- */
-/* Helpers */
+/* Helpers              */
 /* -------------------- */
+
 function normalizeDate(input: DateInput | null | undefined): Date | null {
-    if (!input) return null; // cannot parse
+    if (!input) return null;
 
     if (isDate(input)) return input;
 
@@ -38,11 +39,11 @@ function normalizeDate(input: DateInput | null | undefined): Date | null {
         return isNaN(parsed.getTime()) ? null : parsed;
     }
 
-    return null; // fallback
+    return null;
 }
 
 /* -------------------- */
-/* Format Service */
+/* Format Service       */
 /* -------------------- */
 
 export class FormatService {
@@ -52,6 +53,7 @@ export class FormatService {
         formatType: TimeFormatType = '24h',
     ): string {
         const date = normalizeDate(input);
+        if (!date) return '';
 
         const formats: Record<TimeFormatType, string> = {
             '24h': 'HH:mm:ss',
@@ -59,7 +61,7 @@ export class FormatService {
             '12h-uppercase': 'hh:mm:ss aaa',
             'hours-minutes': 'HH:mm',
             'hours-minutes-ampm': 'hh:mm a',
-            '12h-simple': 'h:mm a', // <- new format (no leading zero, no seconds)
+            '12h-simple': 'h:mm a',
         };
 
         return format(date, formats[formatType]);
@@ -71,6 +73,7 @@ export class FormatService {
         formatType: DateFormatType = 'iso',
     ): string {
         const date = normalizeDate(input);
+        if (!date) return '';
 
         const formats: Record<DateFormatType, string> = {
             iso: 'yyyy-MM-dd',
@@ -87,6 +90,7 @@ export class FormatService {
         formatType: DateTimeFormatType = 'iso',
     ): string {
         const date = normalizeDate(input);
+        if (!date) return '';
 
         const formats: Record<DateTimeFormatType, string> = {
             iso: 'yyyy-MM-dd HH:mm:ss',
@@ -94,6 +98,26 @@ export class FormatService {
         };
 
         return format(date, formats[formatType]);
+    }
+
+    /**
+     * Returns ISO string for the start of the day (00:00:00.000)
+     * Ideal for Strapi DateTime filtering
+     */
+    static formatStartOfDay(input: DateInput): string {
+        const date = normalizeDate(input);
+        if (!date) return '';
+        return startOfDay(date).toISOString();
+    }
+
+    /**
+     * Returns ISO string for the end of the day (23:59:59.999)
+     * Ideal for Strapi DateTime filtering
+     */
+    static formatEndOfDay(input: DateInput): string {
+        const date = normalizeDate(input);
+        if (!date) return '';
+        return endOfDay(date).toISOString();
     }
 
     /* ---------- STRAPI MEDIA ---------- */
@@ -128,5 +152,28 @@ export class FormatService {
         }
 
         return path;
+    }
+
+    /* ---------- STRAPI FILTER HELPERS ---------- */
+
+    /**
+     * Creates a UTC start of day without local timezone shifting.
+     * Input: "2026-01-27" -> Output: "2026-01-27T00:00:00.000Z"
+     */
+    static formatStartOfDayUTC(dateString: string): string {
+        if (!dateString) return '';
+        // We split to ensure we only take the YYYY-MM-DD part if a full string is passed
+        const dateOnly = dateString.split('T')[0];
+        return `${dateOnly}T00:00:00.000Z`;
+    }
+
+    /**
+     * Creates a UTC end of day without local timezone shifting.
+     * Input: "2026-01-27" -> Output: "2026-01-27T23:59:59.999Z"
+     */
+    static formatEndOfDayUTC(dateString: string): string {
+        if (!dateString) return '';
+        const dateOnly = dateString.split('T')[0];
+        return `${dateOnly}T23:59:59.999Z`;
     }
 }
