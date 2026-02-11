@@ -57,7 +57,7 @@ const TimelineTrackItem = ({
     const status = item.activitySessionStatus || 'upcoming';
     const isCompleted = status === 'completed';
     const isInProgress = status === 'in-progress';
-    const isUpcoming = status === 'upcoming' || status === 'pending';
+    const isUpcoming = status === 'pending';
 
     return (
         <motion.div

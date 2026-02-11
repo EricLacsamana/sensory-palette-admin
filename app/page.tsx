@@ -264,7 +264,7 @@ export default function Dashboard() {
                             </SheetTrigger>
                             <SheetContent
                                 side="right"
-                                className="w-full sm:min-w-[550px] p-0 border-l border-slate-100 shadow-2xl flex flex-col h-full bg-slate-50/50"
+                                className="w-full sm:min-w-[320px] p-0 border-l border-slate-100 shadow-2xl flex flex-col h-full bg-slate-50/50"
                             >
                                 <SheetHeader className="sr-only">
                                     <SheetTitle>Daily Agenda</SheetTitle>
