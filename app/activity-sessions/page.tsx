@@ -2,7 +2,11 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useInfiniteQuery, keepPreviousData } from '@tanstack/react-query';
+import {
+    useInfiniteQuery,
+    keepPreviousData,
+    useQuery,
+} from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
 import {
     Activity,
@@ -71,39 +75,18 @@ export default function ActivitySessions() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [inputValue]);
 
-    const {
-        data,
-        fetchNextPage,
-        hasNextPage,
-        isFetchingNextPage,
-        isFetching,
-        isLoading,
-    } = useInfiniteQuery({
-        queryKey: ['activity-sessions-infinite', { _q: debouncedSearch }],
+    const { data: activitySessions = [], isFetching } = useQuery({
+        queryKey: ['activity-sessions', { populate: '*' }],
         queryFn: getActivitySessionsNew,
-        initialPageParam: 1,
-        getNextPageParam: (lastPage) => {
-            const pagination = lastPage?.meta?.pagination;
-            if (!pagination) return undefined;
-            return pagination.page < pagination.pageCount
-                ? pagination.page + 1
-                : undefined;
-        },
-        placeholderData: keepPreviousData,
     });
 
-    const allSessions = useMemo(
-        () => data?.pages.flatMap((page) => page.data) || [],
-        [data],
-    );
+    // useEffect(() => {
+    //     if (inView && hasNextPage && !isFetchingNextPage) {
+    //         fetchNextPage();
+    //     }
+    // }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-    useEffect(() => {
-        if (inView && hasNextPage && !isFetchingNextPage) {
-            fetchNextPage();
-        }
-    }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-    if (isLoading && !data) return <SessionsSkeleton />;
+    if (isFetching) return <SessionsSkeleton />;
 
     return (
         <div className="flex flex-col h-screen max-h-screen overflow-hidden bg-[#FDFDFF] p-6 lg:p-10 space-y-6">
@@ -188,76 +171,78 @@ export default function ActivitySessions() {
                                 </TableHeader>
 
                                 <TableBody>
-                                    {allSessions.length > 0
-                                        ? allSessions.map((session: any) => (
-                                              <TableRow
-                                                  key={session.id}
-                                                  className="group border-slate-50 transition-colors hover:bg-slate-50/50 cursor-pointer"
-                                                  onClick={() =>
-                                                      router.push(
-                                                          `/activity-session/${session.documentId}`,
-                                                      )
-                                                  }
-                                              >
-                                                  <TableCell className="px-10 py-5 w-[30%]">
-                                                      <div className="flex items-center gap-4">
-                                                          <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                                                              <Activity
-                                                                  size={18}
-                                                              />
+                                    {activitySessions.length > 0
+                                        ? activitySessions.map(
+                                              (session: any) => (
+                                                  <TableRow
+                                                      key={session.id}
+                                                      className="group border-slate-50 transition-colors hover:bg-slate-50/50 cursor-pointer"
+                                                      onClick={() =>
+                                                          router.push(
+                                                              `/activity-session/${session.documentId}`,
+                                                          )
+                                                      }
+                                                  >
+                                                      <TableCell className="px-10 py-5 w-[30%]">
+                                                          <div className="flex items-center gap-4">
+                                                              <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                                                                  <Activity
+                                                                      size={18}
+                                                                  />
+                                                              </div>
+                                                              <div className="space-y-0.5">
+                                                                  <p className="text-sm font-semibold text-slate-900 leading-tight">
+                                                                      {
+                                                                          session
+                                                                              .student
+                                                                              ?.firstName
+                                                                      }{' '}
+                                                                      {
+                                                                          session
+                                                                              .student
+                                                                              ?.lastName
+                                                                      }
+                                                                  </p>
+                                                                  <p className="text-[10px] text-slate-400 uppercase font-medium">
+                                                                      {session
+                                                                          .activity
+                                                                          ?.name ||
+                                                                          'Session'}
+                                                                  </p>
+                                                              </div>
                                                           </div>
-                                                          <div className="space-y-0.5">
-                                                              <p className="text-sm font-semibold text-slate-900 leading-tight">
-                                                                  {
-                                                                      session
-                                                                          .student
-                                                                          ?.firstName
-                                                                  }{' '}
-                                                                  {
-                                                                      session
-                                                                          .student
-                                                                          ?.lastName
-                                                                  }
-                                                              </p>
-                                                              <p className="text-[10px] text-slate-400 uppercase font-medium">
-                                                                  {session
-                                                                      .activity
-                                                                      ?.name ||
-                                                                      'Session'}
-                                                              </p>
-                                                          </div>
-                                                      </div>
-                                                  </TableCell>
-                                                  <TableCell className="w-[15%]">
-                                                      <StatusBadge
-                                                          status={
-                                                              session.activityStatus
-                                                          }
-                                                      />
-                                                  </TableCell>
-                                                  <TableCell className="w-[20%] text-[11px] font-semibold text-slate-500">
-                                                      {format(
-                                                          parseISO(
-                                                              session.startAt,
-                                                          ),
-                                                          'MMM d, hh:mm a',
-                                                      )}
-                                                  </TableCell>
-                                                  <TableCell className="w-[20%] font-bold text-slate-900">
-                                                      {(
-                                                          session.successRate *
-                                                          100
-                                                      ).toFixed(0)}
-                                                      %
-                                                  </TableCell>
-                                                  <TableCell className="text-right pr-10 w-[15%]">
-                                                      <ArrowUpRight
-                                                          size={16}
-                                                          className="ml-auto text-slate-200 group-hover:text-indigo-600 transition-colors"
-                                                      />
-                                                  </TableCell>
-                                              </TableRow>
-                                          ))
+                                                      </TableCell>
+                                                      <TableCell className="w-[15%]">
+                                                          <StatusBadge
+                                                              status={
+                                                                  session.activityStatus
+                                                              }
+                                                          />
+                                                      </TableCell>
+                                                      <TableCell className="w-[20%] text-[11px] font-semibold text-slate-500">
+                                                          {format(
+                                                              parseISO(
+                                                                  session.startAt,
+                                                              ),
+                                                              'MMM d, hh:mm a',
+                                                          )}
+                                                      </TableCell>
+                                                      <TableCell className="w-[20%] font-bold text-slate-900">
+                                                          {(
+                                                              session.successRate *
+                                                              100
+                                                          ).toFixed(0)}
+                                                          %
+                                                      </TableCell>
+                                                      <TableCell className="text-right pr-10 w-[15%]">
+                                                          <ArrowUpRight
+                                                              size={16}
+                                                              className="ml-auto text-slate-200 group-hover:text-indigo-600 transition-colors"
+                                                          />
+                                                      </TableCell>
+                                                  </TableRow>
+                                              ),
+                                          )
                                         : !isFetching && (
                                               <TableRow>
                                                   <TableCell
@@ -274,7 +259,7 @@ export default function ActivitySessions() {
                                 </TableBody>
                             </Table>
                             {/* Loader at bottom */}
-                            <div
+                            {/* <div
                                 ref={ref}
                                 className="py-12 flex justify-center items-center gap-3 w-full border-t border-slate-50"
                             >
@@ -287,7 +272,7 @@ export default function ActivitySessions() {
                                             : 'End of session history'}
                                     </span>
                                 )}
-                            </div>
+                            </div> */}
                         </div>
                     </ScrollArea>
                 </Card>

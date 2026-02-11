@@ -80,7 +80,7 @@ export default function StudentsDirectory() {
         data: students = [],
         isLoading,
         isFetching,
-    } = useQuery<User[]>({
+    } = useQuery({
         queryKey: ['students', { searchQuery: debouncedSearch }],
         queryFn: getStudents,
         placeholderData: keepPreviousData,
