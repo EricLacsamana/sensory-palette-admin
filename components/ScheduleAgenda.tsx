@@ -12,10 +12,15 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ActivitySessionResponse } from '@/types/activitiy-session';
+import { Activity } from '@/types/actitivity';
 
 interface ScheduleAgendaProps {
-    sessions: any[];
-    onSessionClick: (s: any, activities: any[]) => void;
+    sessions: ActivitySessionResponse[];
+    onSessionClick: (
+        s: ActivitySessionResponse,
+        activities: Activity[],
+    ) => void;
 }
 
 export function ScheduleAgenda({
@@ -26,7 +31,10 @@ export function ScheduleAgenda({
         const groups: Record<string, any> = {};
         sessions.forEach((session) => {
             const dateStr = format(parseISO(session.startAt), 'yyyy-MM-dd');
-            const groupKey = `${session.student?.id}-${dateStr}`;
+            // Safely handle missing student IDs if necessary
+            const studentId = session.student?.id || 'unknown';
+            const groupKey = `${studentId}-${dateStr}`;
+
             if (!groups[groupKey]) {
                 groups[groupKey] = {
                     id: groupKey,
@@ -62,7 +70,6 @@ export function ScheduleAgenda({
             </div>
 
             {/* --- SCROLLABLE TIMELINE --- */}
-            {/* FIX: added flex-1 and min-h-0 to allow this container to scroll within the parent flexbox */}
             <div className="flex-1 min-h-0 relative bg-slate-50/30">
                 <ScrollArea className="h-full w-full">
                     <div className="p-6 relative">
@@ -88,12 +95,13 @@ export function ScheduleAgenda({
                                         ),
                                         'p',
                                     );
+
+                                    // FIX: Added initial value '0' to reduce
                                     const totalMin = group.sessions.reduce(
-                                        (acc: number, s: any) =>
-                                            acc +
-                                            Math.floor(
-                                                (s.durationSeconds || 0) / 60,
-                                            ),
+                                        (
+                                            acc: number,
+                                            s: ActivitySessionResponse,
+                                        ) => acc + (s.durationMinutes || 0),
                                         0,
                                     );
 

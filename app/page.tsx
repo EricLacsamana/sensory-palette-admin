@@ -193,10 +193,23 @@ export default function Dashboard() {
     // Queries
     const { data: user } = useQuery({ queryKey: ['me'], queryFn: me });
     const { data: activitySessions = [], isFetching } = useQuery({
-        queryKey: ['activity-sessions', { populate: '*' }],
+        queryKey: [
+            'activity-sessions',
+            {
+                populate: {
+                    student: {
+                        populate: '*',
+                    },
+                    activity: {
+                        populate: '*',
+                    },
+                },
+            },
+        ],
         queryFn: getActivitySessionsNew,
     });
 
+    console.log('act', activitySessions);
     // Handlers
     const handleViewSession = (
         session: ActivitySessionResponse,
