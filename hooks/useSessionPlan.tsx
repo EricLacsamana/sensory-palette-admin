@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { ActivitySessionEntry } from '@/types/activitiy-session';
 import { Activity } from '@/types/actitivity';
-import { calculateSchedule } from '@/components/SessionPlanningModal_new/utils/scheduler';
+import { calculateSchedule } from '@/components/SessionPlanningModal/utils/scheduler';
 import { toast } from 'sonner';
 
 interface SessionPlanProps {
