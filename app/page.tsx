@@ -44,7 +44,7 @@ import { ScheduleAgenda } from '@/components/ScheduleAgenda';
 import ActivitySessionModal from '@/components/ActivitySessionModal';
 import { ActivityCalendar } from '@/components/ActivityCalendar';
 import { ActivitySessionLogsTable } from '@/components/ActivitySessionLogs';
-import { InitializeSessionButton } from '@/components/SessionPlanningModal_new/components/InitializeSessionPlanningButton';
+import { InitializeSessionButton } from '@/components/SessionPlanningModal/components/InitializeSessionPlanningButton';
 
 // --- SUB-COMPONENT: Stat Card ---
 const DashboardStatCard = ({
