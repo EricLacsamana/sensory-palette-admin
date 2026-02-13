@@ -176,4 +176,19 @@ export class FormatService {
         const dateOnly = dateString.split('T')[0];
         return `${dateOnly}T23:59:59.999Z`;
     }
+
+    static formatDuration(totalMinutes: number): string {
+        if (!totalMinutes || totalMinutes <= 0) return '0 min';
+
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+
+        const hLabel = hours === 1 ? 'hr' : 'hrs'; // Optional: handle plural
+        const mLabel = 'min';
+
+        if (hours > 0) {
+            return `${hours} ${hLabel}${minutes > 0 ? ` ${minutes} ${mLabel}` : ''}`;
+        }
+        return `${minutes} ${mLabel}`;
+    }
 }

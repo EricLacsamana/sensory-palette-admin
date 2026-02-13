@@ -27,9 +27,7 @@ export const getStudents = async (ctx: any): Promise<UserResponse[]> => {
     }
 
     // 3. Make the request
-    const response = await api.get<User[]>(
-        `${ENDPOINTS.USERS}?${params.toString()}`,
-    );
+    const response = await api.get(`${ENDPOINTS.USERS}?${params.toString()}`);
     return response.data;
 };
 

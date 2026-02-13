@@ -46,7 +46,7 @@ export type ActivitySessionEntry = Omit<
     isBreak?: boolean;
     hasConflict?: boolean;
     conflictReason?: string;
-    student?: User;
+    student?: User | number;
     activity: Activity;
     type: 'activity' | 'gap';
 };

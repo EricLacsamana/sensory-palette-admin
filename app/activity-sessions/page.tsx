@@ -76,7 +76,7 @@ export default function ActivitySessions() {
     }, [inputValue]);
 
     const { data: activitySessions = [], isFetching } = useQuery({
-        queryKey: ['activity-sessions', { populate: '*' }],
+        queryKey: ['activity-sessions', { populate: '*', limit: -1 }],
         queryFn: getActivitySessionsNew,
     });
 

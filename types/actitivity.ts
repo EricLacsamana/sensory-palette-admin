@@ -7,7 +7,7 @@ export interface Activity {
     description?: string;
     masteryThreshold: number;
     padConfiguration?: Record<string, unknown>;
-    activityStatus: 'active' | 'disabled' | 'coming-soon';
+    activityStatus: 'active' | 'disabled' | 'coming_soon';
     durationMinutes: number;
     createdAt: string;
     updatedAt: string;

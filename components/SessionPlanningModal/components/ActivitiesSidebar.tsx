@@ -16,6 +16,7 @@ import ItemCard from './ItemCard';
 import { useActivities } from '@/hooks/useActivities';
 import { Activity } from '@/types/actitivity';
 import { FormatService } from '@/utils/helpers';
+import ActivityCard from './ActivityCard';
 
 interface ActivitiesSidebarProps {
     isOpen: boolean;
@@ -66,8 +67,8 @@ export const ActivitiesSiderbar = ({
                     </div>
                 )}
 
-                <ItemCard
-                    id={act.documentId || String(act.id)}
+                <ActivityCard
+                    id={act.documentId}
                     title={act.name}
                     subtitle={
                         isBreak ? 'Quick Break' : `${duration} min duration`
@@ -80,16 +81,15 @@ export const ActivitiesSiderbar = ({
                               )
                             : undefined
                     }
-                    actionIcon={
-                        isDisabled ? (
-                            <Clock size={14} className="text-slate-300" />
-                        ) : (
-                            <Plus size={16} />
-                        )
-                    }
-                    isLocked={false}
-                    mode="add"
-                    onActionClick={() => {}}
+                    // actionIcon={
+                    //     isDisabled ? (
+                    //         <Clock size={14} className="text-slate-300" />
+                    //     ) : (
+                    //         <Plus size={16} />
+                    //     )
+                    // }
+                    disabled={false}
+                    // onActionClick={() => {}}
                 />
             </div>
         );

@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { ActivitySessionEntry } from '@/types/activitiy-session';
 import { Activity } from '@/types/actitivity';
-import { calculateSchedule } from '@/components/SessionPlanningModal_new/utils/scheduler';
+import { calculateSchedule } from '@/components/SessionPlanningModal/utils/scheduler';
 import { toast } from 'sonner';
 
 interface SessionPlanProps {
@@ -13,7 +13,7 @@ interface SessionPlanProps {
     endAt: string;
 }
 
-export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
+export const useScheduleBuilder = ({ startAt, endAt }: SessionPlanProps) => {
     // --- STATE ---
     const [localDraft, setLocalDraft] = useState<ActivitySessionEntry[] | null>(
         null,
@@ -115,7 +115,7 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
     }, [future, currentBaseEntries]);
 
     // 2. Scheduler & Validation
-    const { timelineItems, draftWithTimes, capacityMetrics } = useMemo(() => {
+    const { items, draftWithTimes, capacityMetrics } = useMemo(() => {
         const { items, totalDuration } = calculateSchedule(
             currentBaseEntries,
             startAt,
@@ -167,7 +167,7 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
         );
 
         return {
-            timelineItems: validatedItems,
+            items: validatedItems,
             draftWithTimes: validatedDraft,
             capacityMetrics: {
                 percentUsed:
@@ -181,8 +181,6 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
         };
     }, [currentBaseEntries, startAt, endAt]);
 
-    // --- ACTIONS ---
-
     const toggleLock = useCallback(
         (id: string) => {
             const itemIndex = currentBaseEntries.findIndex(
@@ -191,11 +189,10 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
             const item = currentBaseEntries[itemIndex];
             if (!item) return;
 
-            // Prevent Unlocking if it causes overlap
             if (item.isLocked) {
                 const prevItemEntry = currentBaseEntries[itemIndex - 1];
                 const prevItemRendered = prevItemEntry
-                    ? timelineItems.find(
+                    ? items.find(
                           (t) => t.instanceId === prevItemEntry.instanceId,
                       )
                     : null;
@@ -235,9 +232,7 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
                 let newEnd = currItem.endAt;
 
                 if (willBeLocked) {
-                    const renderedItem = timelineItems.find(
-                        (t) => t.instanceId === id,
-                    );
+                    const renderedItem = items.find((t) => t.instanceId === id);
                     if (renderedItem) {
                         newStart = renderedItem.startAt;
                         newEnd = renderedItem.endAt;
@@ -253,10 +248,10 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
             });
             commitChange(newDraft);
         },
-        [currentBaseEntries, timelineItems, startAt, commitChange],
+        [currentBaseEntries, items, startAt, commitChange],
     );
 
-    const updateActivityStartTime = useCallback(
+    const updateStartTime = useCallback(
         (id: string, timeStr: string) => {
             const base = currentBaseEntries;
             const [hours, minutes] = timeStr.split(':').map(Number);
@@ -282,7 +277,7 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
         [currentBaseEntries, startAt, commitChange],
     );
 
-    const reorderActivities = useCallback(
+    const handleReorder = useCallback(
         (newOrder: ActivitySessionEntry[]) => {
             const activitiesOnly = newOrder.filter(
                 (i) => i.type === 'activity',
@@ -334,7 +329,7 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
         [startAt, commitChange],
     );
 
-    const addActivity = useCallback(
+    const insertItem = useCallback(
         (activity: Activity) => {
             const entry: ActivitySessionEntry = {
                 instanceId: crypto.randomUUID(),
@@ -365,7 +360,6 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
                 type: 'activity',
                 startAt: '',
                 endAt: '',
-                documentId: '',
             };
             const copy = [...currentBaseEntries];
             if (idx !== -1) copy.splice(idx, 0, entry);
@@ -375,7 +369,7 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
         [currentBaseEntries, commitChange],
     );
 
-    const removeActivity = useCallback(
+    const removeItem = useCallback(
         (id: string) => {
             const item = currentBaseEntries.find((i) => i.instanceId === id);
             if (item?.documentId)
@@ -386,16 +380,16 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
     );
 
     return {
-        timelineItems,
+        items,
         draft: draftWithTimes,
         capacityMetrics,
         isDirty: localDraft !== null || deletedDocumentIds.length > 0,
-        addActivity,
+        insertItem,
         insertAtGap,
-        removeActivity,
+        removeItem,
         toggleLock,
-        reorderActivities,
-        updateActivityStartTime,
+        handleReorder,
+        updateStartTime,
         reset: () => {
             setLocalDraft(null);
             setDeletedDocumentIds([]);

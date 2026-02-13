@@ -35,7 +35,7 @@ import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { cn } from '@/lib/utils';
 
 // Ensure these paths match your project structure
-import { InitializeSessionButton } from '@/components/SessionPlanningModal/components/InitializeSessionPlanningButton';
+import { InitializeSessionButton } from '@/components/SessionPlanningModal_new/components/InitializeSessionPlanningButton';
 import { TimelineTrackList } from '@/components/TimelineTrackList';
 
 const pageVariants: Variants = {

@@ -1,7 +1,10 @@
+import {
+    CreateActivitySessionPayload,
+    UpdatectivitySessionPayload,
+} from '@/types/activitiy-session';
 import api from '.';
 import { ENDPOINTS } from '../constants/api';
 import qs from 'qs';
-import { ActivitySessionPayload } from '@/types/activitiy-session';
 
 export const getActivitySessionsNew = async (ctx: any = {}) => {
     const [, query] = ctx.queryKey;
@@ -103,7 +106,7 @@ export const getActivitySession = async (id: string) => {
 };
 
 export const createActivitySession = async (
-    payload: ActivitySessionPayload,
+    payload: CreateActivitySessionPayload,
 ) => {
     console.log('create payload', payload);
     const { data } = await api.post(ENDPOINTS.ACTIVITY_SESSIONS, {
@@ -114,7 +117,7 @@ export const createActivitySession = async (
 
 export const updateActivitySession = async (
     id: string,
-    payload: ActivitySessionPayload,
+    payload: UpdatectivitySessionPayload,
 ) => {
     console.log('update payload', payload);
     const { data } = await api.put(`${ENDPOINTS.ACTIVITY_SESSIONS}/${id}`, {
@@ -125,4 +128,13 @@ export const updateActivitySession = async (
 
 export const deleteActivitySession = async (id: string) => {
     return api.delete(`${ENDPOINTS.ACTIVITY_SESSIONS}/${id}`);
+};
+
+export const triggerActivitySessionRecommendation = async (id: string) => {
+    // We use POST as defined in our Strapi custom route
+    const url = `${ENDPOINTS.ACTIVITY_SESSIONS}/${id}/recommend`;
+
+    // In Strapi v5 custom routes, the response is usually flattened
+    const { data } = await api.post(url);
+    return data;
 };

@@ -31,7 +31,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { InitializeSessionButton } from './SessionPlanningModal/components/InitializeSessionPlanningButton';
+import { InitializeSessionButton } from './SessionPlanningModal_new/components/InitializeSessionPlanningButton';
 import { FormatService } from '@/utils/helpers';
 
 interface SidebarProps {
