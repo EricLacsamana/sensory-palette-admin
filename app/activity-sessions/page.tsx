@@ -4,33 +4,18 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
-import {
-    Activity,
-    Search,
-    Filter,
-    ArrowUpRight,
-    Clock,
-    CheckCircle2,
-    PlayCircle,
-    X,
-} from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Activity, Search, Filter, X } from 'lucide-react';
 
 import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+
+// Adjust this import path based on where you saved the table component
+import { ActivitySessionLogsTable } from '@/components/ActivitySessionLogs';
 
 export default function ActivitySessions() {
     const router = useRouter();
@@ -62,14 +47,16 @@ export default function ActivitySessions() {
     }, [inputValue]);
 
     const { data: activitySessions = [], isFetching } = useQuery({
-        queryKey: ['activity-sessions', { populate: '*', limit: -1 }],
+        queryKey: [
+            'activity-sessions',
+            { populate: '*', limit: -1, sort: ['updatedAt:desc'] },
+        ],
         queryFn: getActivitySessionsNew,
     });
 
     if (isFetching) return <SessionsSkeleton />;
 
     return (
-        // 1. PERFECT FIT: h-full and overflow-hidden ensures it strictly fits the layout wrapper
         <div className="flex flex-col h-full w-full overflow-hidden bg-[#FDFDFF] p-4 md:p-6 lg:p-10 box-border">
             <header className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-4 xl:gap-6 shrink-0 w-full max-w-[1600px] mx-auto mb-4 md:mb-6">
                 <div className="flex items-center gap-4 md:gap-5">
@@ -123,155 +110,24 @@ export default function ActivitySessions() {
             <div className="flex-1 min-h-0 h-full w-full max-w-[1600px] mx-auto overflow-hidden">
                 <Card className="flex flex-col h-full w-full rounded-[24px] md:rounded-[32px] border border-slate-200/60 shadow-[0_20px_50px_rgba(0,0,0,0.04)] bg-white overflow-hidden p-1 md:p-2">
                     <ScrollArea className="flex-1 h-full w-full rounded-[20px] md:rounded-[28px]">
-                        {/* 2. MATCHING PADDING: pb-12 here mirrors the layout padding so the UX is consistent */}
                         <div className="min-w-[800px] w-full pb-12">
-                            <Table>
-                                <TableHeader className="bg-white z-10 sticky top-0 shadow-sm">
-                                    <TableRow className="hover:bg-transparent border-b border-slate-100">
-                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 py-4 md:py-6 px-4 md:px-10 w-[30%] bg-white">
-                                            Learner
-                                        </TableHead>
-                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 w-[15%] bg-white">
-                                            Status
-                                        </TableHead>
-                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 w-[20%] bg-white">
-                                            Timeline
-                                        </TableHead>
-                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 w-[20%] bg-white">
-                                            Accuracy
-                                        </TableHead>
-                                        <TableHead className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 text-right pr-4 md:pr-10 w-[15%] bg-white">
-                                            Actions
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-
-                                <TableBody>
-                                    {activitySessions.length > 0
-                                        ? activitySessions.map(
-                                              (session: any) => (
-                                                  <TableRow
-                                                      key={session.id}
-                                                      className="group border-slate-50 transition-colors hover:bg-slate-50/50 cursor-pointer"
-                                                      onClick={() =>
-                                                          router.push(
-                                                              `/activity-session/${session.documentId}`,
-                                                          )
-                                                      }
-                                                  >
-                                                      <TableCell className="px-4 md:px-10 py-4 md:py-5 w-[30%]">
-                                                          <div className="flex items-center gap-4">
-                                                              <div className="h-10 w-10 shrink-0 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                                                                  <Activity
-                                                                      size={18}
-                                                                  />
-                                                              </div>
-                                                              <div className="space-y-0.5 truncate max-w-[150px] sm:max-w-xs">
-                                                                  <p className="text-sm font-semibold text-slate-900 leading-tight truncate">
-                                                                      {
-                                                                          session
-                                                                              .student
-                                                                              ?.firstName
-                                                                      }{' '}
-                                                                      {
-                                                                          session
-                                                                              .student
-                                                                              ?.lastName
-                                                                      }
-                                                                  </p>
-                                                                  <p className="text-[10px] text-slate-400 uppercase font-medium truncate">
-                                                                      {session
-                                                                          .activity
-                                                                          ?.name ||
-                                                                          'Session'}
-                                                                  </p>
-                                                              </div>
-                                                          </div>
-                                                      </TableCell>
-                                                      <TableCell className="w-[15%]">
-                                                          <StatusBadge
-                                                              status={
-                                                                  session.activityStatus
-                                                              }
-                                                          />
-                                                      </TableCell>
-                                                      <TableCell className="w-[20%] text-[11px] font-semibold text-slate-500">
-                                                          {format(
-                                                              parseISO(
-                                                                  session.startAt,
-                                                              ),
-                                                              'MMM d, hh:mm a',
-                                                          )}
-                                                      </TableCell>
-                                                      <TableCell className="w-[20%] font-bold text-slate-900">
-                                                          {(
-                                                              session.successRate *
-                                                              100
-                                                          ).toFixed(0)}
-                                                          %
-                                                      </TableCell>
-                                                      <TableCell className="text-right pr-4 md:pr-10 w-[15%]">
-                                                          <ArrowUpRight
-                                                              size={16}
-                                                              className="ml-auto text-slate-200 group-hover:text-indigo-600 transition-colors"
-                                                          />
-                                                      </TableCell>
-                                                  </TableRow>
-                                              ),
-                                          )
-                                        : !isFetching && (
-                                              <TableRow>
-                                                  <TableCell
-                                                      colSpan={5}
-                                                      className="h-64 text-center"
-                                                  >
-                                                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                                                          No matching sessions
-                                                          found
-                                                      </p>
-                                                  </TableCell>
-                                              </TableRow>
-                                          )}
-                                </TableBody>
-                            </Table>
+                            {activitySessions.length > 0 ? (
+                                <ActivitySessionLogsTable
+                                    data={activitySessions}
+                                />
+                            ) : (
+                                !isFetching && (
+                                    <div className="flex h-64 items-center justify-center">
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                            No matching sessions found
+                                        </p>
+                                    </div>
+                                )
+                            )}
                         </div>
                     </ScrollArea>
                 </Card>
             </div>
-        </div>
-    );
-}
-
-function StatusBadge({ status }: { status: string }) {
-    const config = {
-        completed: {
-            label: 'Done',
-            icon: CheckCircle2,
-            className: 'bg-emerald-50 text-emerald-600 border-emerald-100/50',
-        },
-        live: {
-            label: 'Live',
-            icon: PlayCircle,
-            className:
-                'bg-indigo-50 text-indigo-600 border-indigo-100/50 animate-pulse',
-        },
-        pending: {
-            label: 'Wait',
-            icon: Clock,
-            className: 'bg-amber-50 text-amber-600 border-amber-100/50',
-        },
-    } as any;
-
-    const { label, icon: Icon, className } = config[status] || config.pending;
-
-    return (
-        <div
-            className={cn(
-                'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border transition-all shrink-0',
-                className,
-            )}
-        >
-            <Icon size={11} strokeWidth={2} /> {label}
         </div>
     );
 }

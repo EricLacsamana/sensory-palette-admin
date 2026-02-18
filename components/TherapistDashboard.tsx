@@ -194,6 +194,7 @@ export default function Dashboard() {
                     student: { populate: '*' },
                     activity: { populate: '*' },
                 },
+                sort: ['updatedAt:desc'],
             },
         ],
         queryFn: getActivitySessionsNew,
