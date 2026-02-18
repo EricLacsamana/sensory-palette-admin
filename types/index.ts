@@ -27,7 +27,7 @@ export interface LoginResponse {
 
 export interface UserResponse {
     id: number;
-    documentId?: string;
+    documentId: string;
     username: string;
     email: string;
     firstName?: string;

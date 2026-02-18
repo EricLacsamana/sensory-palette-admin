@@ -1,4 +1,4 @@
-import { User } from '.';
+import { User, UserResponse } from '.';
 import { Activity } from './actitivity';
 
 export enum ActivitySessionStatus {
@@ -14,7 +14,7 @@ export enum ActivitySessionStatus {
 export interface ActivitySessionResponse {
     id: number | string;
     documentId: string;
-    student: User;
+    student: UserResponse;
     activity: Activity;
     therapist: User;
     startAt: string;
@@ -40,8 +40,9 @@ export type ActivitySessionEntry = Omit<
     isBreak?: boolean;
     hasConflict?: boolean;
     conflictReason?: string;
-    student?: User | number;
+    student?: UserResponse;
     durationMinutes?: number;
+    documentId?: string;
     activity: Activity;
     type: 'activity' | 'gap';
 };
