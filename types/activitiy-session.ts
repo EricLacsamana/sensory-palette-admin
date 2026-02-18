@@ -11,12 +11,6 @@ export enum ActivitySessionStatus {
     Reschedule = 'reschedule',
 }
 
-export enum PromptLevel {
-    Low = 'Low',
-    Medium = 'Medium',
-    High = 'High',
-}
-
 export interface ActivitySessionResponse {
     id: number | string;
     documentId: string;
@@ -25,11 +19,11 @@ export interface ActivitySessionResponse {
     therapist: User;
     startAt: string;
     endAt: string; // ISO String
-    durationMinutes: number;
+    actualStartAt: string; // ISO String
+    actualEndAt: string; // ISO String
     activitySessionStatus: ActivitySessionStatus;
-    promptLevel: PromptLevel;
     teacherNotes?: string;
-    actualScore?: number;
+    score?: number;
     createdAt: string; // ISO String
     updatedAt: string; // ISO String
 }
@@ -47,6 +41,7 @@ export type ActivitySessionEntry = Omit<
     hasConflict?: boolean;
     conflictReason?: string;
     student?: User | number;
+    durationMinutes?: number;
     activity: Activity;
     type: 'activity' | 'gap';
 };
@@ -56,7 +51,6 @@ export type CreateActivitySessionPayload = {
     endAt: string;
     teacherNotes?: string;
     durationMinutes?: number;
-    promptLevel?: PromptLevel;
     student: number;
     activity: string;
 };
@@ -66,5 +60,5 @@ export type UpdatectivitySessionPayload = {
     endAt: string;
     teacherNotes?: string;
     durationMinutes?: number;
-    promptLevel?: PromptLevel;
+    activitiySessionStatus?: ActivitySessionStatus;
 };

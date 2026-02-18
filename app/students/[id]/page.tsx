@@ -7,68 +7,41 @@ import { motion, Variants } from 'framer-motion';
 import {
     ArrowLeft,
     Building2,
-    Star,
-    LineChart,
-    Printer,
     ShieldCheck,
     MessageSquareText,
-    TrendingUp,
     Zap,
     Calendar,
-    MoreHorizontal,
     Activity,
-    Clock,
     Target,
+    Printer,
+    Loader2,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
 
 import { getStudent } from '@/api/students';
 import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { cn } from '@/lib/utils';
-
-// Ensure these paths match your project structure
-import { InitializeSessionButton } from '@/components/SessionPlanningModal/components/InitializeSessionPlanningButton';
 import { TimelineTrackList } from '@/components/TimelineTrackList';
 
+// --- ANIMATION VARIANTS ---
 const pageVariants: Variants = {
     hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1,
-            duration: 0.4,
-        },
-    },
+    show: { opacity: 1, transition: { staggerChildren: 0.05, duration: 0.4 } },
 };
 
 const itemVariants: Variants = {
-    hidden: { y: 10, opacity: 0 },
-    show: { y: 0, opacity: 1, transition: { duration: 0.3 } },
+    hidden: { y: 15, opacity: 0 },
+    show: { y: 0, opacity: 1, transition: { duration: 0.3, ease: 'easeOut' } },
 };
 
-// --- Sub-Components ---
-
-const TechnicalLabel = ({
-    children,
-    className,
-}: {
-    children: React.ReactNode;
-    className?: string;
-}) => (
-    <span
-        className={cn(
-            'text-[9px] font-bold text-slate-400 uppercase tracking-widest select-none',
-            className,
-        )}
-    >
+// --- SUB-COMPONENTS ---
+const TechnicalLabel = ({ children }: { children: React.ReactNode }) => (
+    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest select-none">
         {children}
     </span>
 );
@@ -82,14 +55,14 @@ const IdentityRow = ({
     label: string;
     value: string;
 }) => (
-    <div className="flex items-center justify-between group">
+    <div className="flex items-center justify-between group py-1">
         <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-md bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-indigo-500 group-hover:border-indigo-100 transition-colors">
+            <div className="h-9 w-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:border-indigo-100 transition-colors">
                 {icon}
             </div>
             <div className="flex flex-col">
                 <TechnicalLabel>{label}</TechnicalLabel>
-                <span className="text-xs font-semibold text-slate-700 truncate max-w-[140px] font-mono">
+                <span className="text-xs font-bold text-slate-700 font-mono">
                     {value}
                 </span>
             </div>
@@ -97,419 +70,282 @@ const IdentityRow = ({
     </div>
 );
 
-const StatCard = ({
-    label,
-    value,
-    trend,
-    icon,
-    colorClass = 'text-indigo-600',
-}: {
-    label: string;
-    value: string;
-    trend?: string;
-    icon: React.ReactNode;
-    colorClass?: string;
-}) => (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col justify-between hover:shadow-md transition-all duration-300 relative overflow-hidden group h-full">
-        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-            {icon}
-        </div>
-        <div className="flex items-center gap-2 mb-3">
-            <div
-                className={cn(
-                    'p-1.5 rounded-md bg-slate-50',
-                    colorClass.replace('text-', 'bg-').replace('600', '100'),
-                )}
-            >
-                {React.cloneElement(icon as React.ReactElement, {
-                    size: 14,
-                    className: colorClass,
-                })}
-            </div>
-            <TechnicalLabel>{label}</TechnicalLabel>
-        </div>
-        <div>
-            <div className="text-2xl font-bold text-slate-900 tracking-tight tabular-nums">
-                {value}
-            </div>
-            {trend && (
-                <div className="text-[10px] font-medium text-emerald-600 mt-1 flex items-center gap-1">
-                    <TrendingUp size={10} />
-                    {trend}
-                </div>
-            )}
-        </div>
-    </div>
-);
-
-const MetricBar = ({
-    label,
-    value,
-    percent,
-    color,
-}: {
-    label: string;
-    value: string;
-    percent: number;
-    color: string;
-}) => (
-    <div className="space-y-1.5 group">
-        <div className="flex justify-between items-end">
-            <span className="text-[10px] font-medium text-slate-500">
-                {label}
-            </span>
-            <span className="text-[10px] font-bold text-slate-700 font-mono">
-                {value}
-            </span>
-        </div>
-        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-            <div
-                className={cn(
-                    'h-full rounded-full transition-all duration-500 ease-out group-hover:opacity-80',
-                    color,
-                )}
-                style={{ width: `${percent}%` }}
-            />
-        </div>
-    </div>
-);
-
-// --- Main Page Component ---
-
+// --- MAIN COMPONENT ---
 export default function StudentDashboard() {
     const params = useParams();
     const id = params.id as string;
     const router = useRouter();
 
-    // Data Fetching
+    // 1. Fetch Student Profile
     const { data: student, isLoading: isLoadingStudent } = useQuery({
         queryKey: ['student', { id }],
         queryFn: getStudent,
     });
 
-    const { data: activitySessions = [] } = useQuery({
+    // 2. Fetch Activity Sessions (Robust Population & Null Filtering)
+    const {
+        data: activitySessions = [],
+        isFetching,
+        isSuccess,
+    } = useQuery({
         queryKey: [
-            'activity-sessions',
+            'activity-sessions-student',
             {
-                populate: { activity: { populate: '*' } },
-                filters: { student: { id: { $eq: id } } },
+                filters: {
+                    student: { id: { $eq: student?.id } },
+                    actualStartAt: { $notNull: true },
+                },
+                populate: {
+                    activity: { populate: '*' },
+                    student: { populate: '*' },
+                },
             },
         ],
         queryFn: getActivitySessionsNew,
         enabled: !!id,
+        staleTime: 1000 * 30, // 30 seconds to prevent rapid flashing
     });
 
+    console.log('test', activitySessions);
     if (isLoadingStudent) {
         return (
-            <div className="min-h-screen bg-slate-50 p-8 space-y-8 max-w-[1600px] mx-auto">
-                <div className="flex justify-between items-center">
-                    <div className="flex gap-4">
-                        <Skeleton className="h-16 w-16 rounded-2xl" />
-                        <div className="space-y-2">
-                            <Skeleton className="h-8 w-64" />
-                            <Skeleton className="h-4 w-32" />
-                        </div>
-                    </div>
-                </div>
-                <div className="grid grid-cols-12 gap-8">
-                    <Skeleton className="col-span-3 h-[400px] rounded-3xl" />
-                    <Skeleton className="col-span-6 h-[600px] rounded-3xl" />
-                    <Skeleton className="col-span-3 h-[400px] rounded-3xl" />
+            <div className="h-screen w-full flex items-center justify-center bg-[#F8FAFC]">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2
+                        className="animate-spin text-indigo-600"
+                        size={32}
+                    />
+                    <span className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-400">
+                        Loading Learner Data...
+                    </span>
                 </div>
             </div>
         );
     }
 
     return (
-        <motion.div
-            initial="hidden"
-            animate="show"
-            variants={pageVariants}
-            className="min-h-screen bg-[#F8FAFC] p-6 lg:p-8 max-w-[1600px] mx-auto font-sans text-slate-900"
-        >
+        <div className="h-screen w-full bg-[#F8FAFC] overflow-hidden flex flex-col font-sans text-slate-900">
             <Toaster position="top-right" richColors />
 
-            {/* --- HEADER --- */}
-            <motion.header
-                variants={itemVariants}
-                className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8"
+            {/* Background Grid */}
+            <div
+                className="fixed inset-0 pointer-events-none opacity-[0.4]"
+                style={{
+                    backgroundImage:
+                        'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)',
+                    backgroundSize: '40px 40px',
+                    maskImage:
+                        'linear-gradient(to bottom, black 40%, transparent 100%)',
+                }}
+            />
+
+            <motion.div
+                initial="hidden"
+                animate="show"
+                variants={pageVariants}
+                className="max-w-[1600px] w-full mx-auto p-6 lg:p-8 relative z-10 flex flex-col h-full overflow-hidden gap-6"
             >
-                <div className="flex items-center gap-5">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => router.back()}
-                        className="rounded-xl h-12 w-12 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-all"
-                    >
-                        <ArrowLeft size={20} />
-                    </Button>
-
-                    <div className="flex items-center gap-5">
-                        <div className="relative">
-                            <Avatar className="h-16 w-16 rounded-2xl border-4 border-white shadow-sm ring-1 ring-slate-100">
-                                <AvatarFallback className="bg-slate-900 text-white font-bold text-xl">
-                                    {student?.fullName?.charAt(0)}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-[3px] border-white" />
-                        </div>
-
-                        <div>
-                            <div className="flex items-center gap-3 mb-1">
-                                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-                                    {student?.fullName}
-                                </h1>
-                                <Badge
-                                    variant="secondary"
-                                    className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-100 rounded-md px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider"
-                                >
-                                    Student
-                                </Badge>
-                            </div>
-                            <div className="flex items-center gap-4 text-slate-500">
-                                <span className="text-xs font-medium flex items-center gap-1.5">
-                                    <Building2 size={12} />
-                                    Quezon City Hub
-                                </span>
-                                <span className="w-1 h-1 rounded-full bg-slate-300" />
-                                <span className="text-xs font-medium flex items-center gap-1.5 font-mono">
-                                    ID: #{new Date().getFullYear()}-
-                                    {id.toString().padStart(3, '0')}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    <Button
-                        variant="outline"
-                        className="h-11 px-5 rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium text-xs uppercase tracking-wide"
-                    >
-                        <Printer size={16} className="mr-2" />
-                        Report
-                    </Button>
-                    {/* The Modal Trigger Button */}
-                    <InitializeSessionButton />
-                </div>
-            </motion.header>
-
-            {/* --- MAIN GRID --- */}
-            <div className="grid grid-cols-12 gap-6 items-start">
-                {/* --- LEFT COLUMN: IDENTITY & CONTEXT --- */}
-                <motion.aside
+                {/* --- HEADER --- */}
+                <motion.header
                     variants={itemVariants}
-                    className="col-span-12 lg:col-span-3 space-y-6"
+                    className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shrink-0"
                 >
-                    {/* Identity Card */}
-                    <Card className="rounded-[24px] border border-slate-200 shadow-sm overflow-hidden bg-white">
-                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4 pt-5 px-5">
-                            <div className="flex justify-between items-center">
-                                <TechnicalLabel>Student File</TechnicalLabel>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-slate-400 hover:text-indigo-600"
-                                >
-                                    <MoreHorizontal size={14} />
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-5 space-y-5">
-                            <IdentityRow
-                                icon={<Target size={14} />}
-                                label="Current Goal"
-                                value="Sensory Regulation"
-                            />
-                            <IdentityRow
-                                icon={<ShieldCheck size={14} />}
-                                label="Status"
-                                value="Active / Verified"
-                            />
-                            <IdentityRow
-                                icon={<Calendar size={14} />}
-                                label="Enrolled"
-                                value="Aug 24, 2024"
-                            />
-                        </CardContent>
-                        <div className="bg-slate-50 p-4 border-t border-slate-100">
-                            <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                                <span>Profile Completion</span>
-                                <span className="font-mono text-slate-900">
-                                    92%
-                                </span>
-                            </div>
-                            <Progress
-                                value={92}
-                                className="h-1.5 mt-2 bg-slate-200"
-                                indicatorClassName="bg-slate-800"
-                            />
-                        </div>
-                    </Card>
-
-                    {/* AI Insight Card */}
-                    <div className="rounded-[24px] bg-gradient-to-br from-indigo-600 to-violet-700 text-white p-6 shadow-lg shadow-indigo-200 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
-
-                        <div className="flex items-center gap-2 mb-3 relative z-10">
-                            <div className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm">
-                                <Zap
-                                    size={14}
-                                    fill="currentColor"
-                                    className="text-yellow-300"
-                                />
-                            </div>
-                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-90">
-                                AI Suggestion
-                            </span>
-                        </div>
-
-                        <p className="text-sm font-medium leading-relaxed opacity-95 relative z-10">
-                            &quot;Engagement drops after 45 mins. Try scheduling{' '}
-                            <span className="font-bold underline decoration-indigo-300 underline-offset-2">
-                                tactile breaks
-                            </span>{' '}
-                            between cognitive tasks.&quot;
-                        </p>
-
+                    <div className="flex items-center gap-6">
                         <Button
-                            size="sm"
-                            variant="secondary"
-                            className="mt-4 w-full bg-white/10 hover:bg-white/20 text-white border-0 text-xs h-8"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => router.back()}
+                            className="rounded-2xl h-12 w-12 border-slate-200 bg-white text-slate-400 hover:text-indigo-600 shadow-sm transition-all"
                         >
-                            Apply Suggestion
+                            <ArrowLeft size={20} />
                         </Button>
-                    </div>
-                </motion.aside>
-
-                {/* --- CENTER COLUMN: TIMELINE & ACTIVITY --- */}
-                <motion.main
-                    variants={itemVariants}
-                    className="col-span-12 lg:col-span-6 space-y-6 flex flex-col"
-                >
-                    {/* Stats Row */}
-                    <div className="grid grid-cols-3 gap-4 shrink-0">
-                        <StatCard
-                            label="Session Score"
-                            value="94"
-                            trend="+2.5%"
-                            icon={<Star />}
-                            colorClass="text-amber-500"
-                        />
-                        <StatCard
-                            label="Hours Logged"
-                            value="12.5h"
-                            icon={<Clock />}
-                            colorClass="text-blue-500"
-                        />
-                        <StatCard
-                            label="Avg Focus"
-                            value="88%"
-                            icon={<Activity />}
-                            colorClass="text-emerald-500"
-                        />
-                    </div>
-
-                    {/* Timeline Component - Fully Integrated */}
-                    {/* We pass the styling here to ensure it fills the space properly */}
-                    <TimelineTrackList
-                        data={activitySessions}
-                        className="shadow-sm min-h-[500px] flex-1"
-                    />
-                </motion.main>
-
-                {/* --- RIGHT COLUMN: METRICS & NOTES --- */}
-                <motion.section
-                    variants={itemVariants}
-                    className="col-span-12 lg:col-span-3 space-y-6"
-                >
-                    {/* Performance Card */}
-                    <Card className="rounded-[24px] border border-slate-200 shadow-sm bg-white">
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <TechnicalLabel>
-                                    Performance Metrics
-                                </TechnicalLabel>
-                                <LineChart
-                                    size={16}
-                                    className="text-slate-300"
-                                />
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-6 pt-4">
-                            <MetricBar
-                                label="Task Completion"
-                                value="85%"
-                                percent={85}
-                                color="bg-emerald-500"
-                            />
-                            <MetricBar
-                                label="Behavioral Reg"
-                                value="72%"
-                                percent={72}
-                                color="bg-indigo-500"
-                            />
-                            <MetricBar
-                                label="Social Interaction"
-                                value="64%"
-                                percent={64}
-                                color="bg-amber-500"
-                            />
-
-                            <Separator />
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <div className="text-[10px] text-slate-400 font-medium uppercase">
-                                        Total XP
-                                    </div>
-                                    <div className="text-xl font-bold text-slate-800 tabular-nums">
-                                        1,240
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-[10px] text-slate-400 font-medium uppercase">
-                                        Streak
-                                    </div>
-                                    <div className="text-xl font-bold text-slate-800 tabular-nums flex items-center gap-1">
-                                        5{' '}
-                                        <span className="text-xs font-normal text-slate-400">
-                                            days
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Handover Note */}
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-1 relative overflow-hidden">
-                        <div className="bg-amber-50/50 rounded-[20px] p-5 border border-amber-100/50 h-full">
-                            <div className="flex items-center gap-2 mb-3 text-amber-700/60">
-                                <MessageSquareText size={14} />
-                                <span className="text-[9px] font-bold uppercase tracking-widest">
-                                    Handover Note
-                                </span>
-                            </div>
-                            <p className="text-xs font-medium text-slate-700 italic leading-relaxed">
-                                &quot;Hand-eye coordination showed significant
-                                improvement during the Art module. Recommended
-                                starting with clay work tomorrow.&quot;
-                            </p>
-                            <div className="mt-4 flex items-center gap-2">
-                                <Avatar className="h-6 w-6">
-                                    <AvatarFallback className="text-[9px] bg-amber-200 text-amber-800">
-                                        TC
+                        <div className="flex items-center gap-5">
+                            <div className="relative">
+                                <Avatar className="h-16 w-16 rounded-[24px] border-4 border-white shadow-md">
+                                    <AvatarFallback className="bg-slate-900 text-white font-bold text-xl">
+                                        {student?.fullName?.charAt(0)}
                                     </AvatarFallback>
                                 </Avatar>
-                                <span className="text-[10px] font-medium text-slate-400">
-                                    Teacher Celine, 2h ago
-                                </span>
+                                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-[3px] border-white shadow-sm" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                                    {student?.fullName}
+                                </h1>
+                                <div className="flex items-center gap-3 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                                    <span className="flex items-center gap-1">
+                                        <Building2 size={12} />
+                                        QC Hub
+                                    </span>
+                                    <span className="font-mono text-indigo-600">
+                                        ID: #{id.toString().padStart(4, '0')}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </motion.section>
-            </div>
-        </motion.div>
+                    <Button
+                        variant="outline"
+                        className="h-10 px-5 rounded-xl border-slate-200 bg-white text-slate-600 font-bold text-[9px] uppercase tracking-widest"
+                    >
+                        <Printer size={14} className="mr-2" /> Print File
+                    </Button>
+                </motion.header>
+
+                {/* --- MAIN GRID --- */}
+                <div className="grid grid-cols-12 gap-6 flex-1 min-h-0">
+                    {/* LEFT SIDEBAR */}
+                    <motion.aside
+                        variants={itemVariants}
+                        className="col-span-12 lg:col-span-3 flex flex-col gap-6"
+                    >
+                        <Card className="rounded-[32px] border-slate-200 shadow-sm bg-white overflow-hidden shrink-0">
+                            <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4 px-6">
+                                <TechnicalLabel>Profile</TechnicalLabel>
+                            </CardHeader>
+                            <CardContent className="p-6 space-y-4">
+                                <IdentityRow
+                                    icon={<Target size={16} />}
+                                    label="Primary Goal"
+                                    value="Sensory Processing"
+                                />
+                                <IdentityRow
+                                    icon={<ShieldCheck size={16} />}
+                                    label="Verification"
+                                    value="Clinically Validated"
+                                />
+                                <IdentityRow
+                                    icon={<Calendar size={16} />}
+                                    label="Start Date"
+                                    value="Aug 24, 2024"
+                                />
+                            </CardContent>
+                        </Card>
+
+                        <div className="rounded-[32px] bg-indigo-600 p-6 text-white shadow-lg relative overflow-hidden shrink-0">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Zap
+                                    size={14}
+                                    className="text-yellow-300 fill-yellow-300"
+                                />
+                                <TechnicalLabel className="text-white opacity-90">
+                                    AI Insights
+                                </TechnicalLabel>
+                            </div>
+                            <p className="text-xs font-medium leading-relaxed opacity-90 italic">
+                                "Focus peaks in morning sessions. Consider
+                                tactical tasks before 11AM."
+                            </p>
+                        </div>
+                    </motion.aside>
+
+                    {/* CENTER COLUMN (SCROLLABLE) */}
+                    <motion.main
+                        variants={itemVariants}
+                        className="col-span-12 lg:col-span-6 flex flex-col gap-6 min-h-0"
+                    >
+                        <div className="grid grid-cols-3 gap-4 shrink-0">
+                            <div className="bg-white rounded-[24px] border border-slate-200 p-4 text-center">
+                                <TechnicalLabel>Avg Score</TechnicalLabel>
+                                <p className="text-xl font-bold text-slate-900">
+                                    94%
+                                </p>
+                            </div>
+                            <div className="bg-white rounded-[24px] border border-slate-200 p-4 text-center">
+                                <TechnicalLabel>Total Time</TechnicalLabel>
+                                <p className="text-xl font-bold text-slate-900">
+                                    {activitySessions.length > 0
+                                        ? '12.5h'
+                                        : '0h'}
+                                </p>
+                            </div>
+                            <div className="bg-white rounded-[24px] border border-slate-200 p-4 text-center">
+                                <TechnicalLabel>Focus</TechnicalLabel>
+                                <p className="text-xl font-bold text-slate-900">
+                                    88%
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden relative">
+                            <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+                                <TechnicalLabel>
+                                    Interaction History
+                                </TechnicalLabel>
+                                {isFetching && (
+                                    <div
+                                        className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse"
+                                        title="Syncing data..."
+                                    />
+                                )}
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                                {/* DATA CONDITIONAL RENDER FIX */}
+                                {isSuccess && activitySessions.length > 0 ? (
+                                    <TimelineTrackList
+                                        data={activitySessions}
+                                        className="border-0 shadow-none"
+                                    />
+                                ) : (
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-300">
+                                        <Activity
+                                            size={32}
+                                            className="mb-2 opacity-50"
+                                        />
+                                        <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">
+                                            No Active History
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="h-10 w-full shrink-0" />
+                            </div>
+
+                            <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                        </div>
+                    </motion.main>
+
+                    {/* RIGHT SIDEBAR */}
+                    <motion.section
+                        variants={itemVariants}
+                        className="col-span-12 lg:col-span-3 flex flex-col gap-6"
+                    >
+                        <Card className="rounded-[32px] border-slate-200 shadow-sm bg-white overflow-hidden shrink-0">
+                            <CardHeader className="py-4 px-6 border-b border-slate-50">
+                                <TechnicalLabel>Metrics</TechnicalLabel>
+                            </CardHeader>
+                            <CardContent className="p-6 space-y-6">
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-[10px] font-bold uppercase">
+                                        <span>Task Completion</span>
+                                        <span>85%</span>
+                                    </div>
+                                    <Progress value={85} className="h-1.5" />
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-[10px] font-bold uppercase">
+                                        <span>Social Reg</span>
+                                        <span>72%</span>
+                                    </div>
+                                    <Progress value={72} className="h-1.5" />
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <div className="rounded-[32px] border-2 border-amber-100 bg-amber-50/40 p-6 shrink-0">
+                            <div className="flex items-center gap-2 mb-3 text-amber-700">
+                                <MessageSquareText size={14} />
+                                <TechnicalLabel className="text-amber-700">
+                                    Clinical Note
+                                </TechnicalLabel>
+                            </div>
+                            <p className="text-xs font-semibold text-slate-700 italic">
+                                "Highly engaged with audio-visual cues today."
+                            </p>
+                        </div>
+                    </motion.section>
+                </div>
+            </motion.div>
+        </div>
     );
 }

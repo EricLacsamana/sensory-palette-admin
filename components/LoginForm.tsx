@@ -149,7 +149,7 @@ export default function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
                         {isLoading ? (
                             <Loader2Icon className="h-4 w-4 animate-spin" />
                         ) : (
-                            'Launch Workspace'
+                            'Sign In'
                         )}
                     </Button>
                 </form>

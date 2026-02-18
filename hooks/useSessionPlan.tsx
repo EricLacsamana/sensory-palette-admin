@@ -7,26 +7,25 @@ import { ActivitySessionEntry } from '@/types/activitiy-session';
 import { Activity } from '@/types/actitivity';
 import { calculateSchedule } from '@/components/SessionPlanningModal/utils/scheduler';
 import { toast } from 'sonner';
+import { UserResponse } from '@/types';
 
 interface SessionPlanProps {
     startAt: string;
     endAt: string;
+    student?: UserResponse;
 }
 
-export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
-    // --- STATE ---
+export const useSessionPlan = ({
+    startAt,
+    endAt,
+    student,
+}: SessionPlanProps) => {
     const [localDraft, setLocalDraft] = useState<ActivitySessionEntry[] | null>(
         null,
     );
     const [deletedDocumentIds, setDeletedDocumentIds] = useState<string[]>([]);
-
-    // --- HISTORY ---
     const [past, setPast] = useState<ActivitySessionEntry[][]>([]);
     const [future, setFuture] = useState<ActivitySessionEntry[][]>([]);
-
-    // --- RENDER-PHASE RESET ---
-    // We store the 'last seen' startAt to detect when the date changes.
-    // This avoids the "setState in useEffect" warning and is more performant.
     const [prevStartAt, setPrevStartAt] = useState(startAt);
 
     if (startAt !== prevStartAt) {
@@ -37,7 +36,6 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
         setFuture([]);
     }
 
-    // --- QUERY SETUP ---
     const startOfDay = new Date(startAt);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(startAt);
@@ -64,7 +62,7 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
         staleTime: 0,
     });
 
-    // 1. Base Entries
+    // 1. Base Entries - Calculate duration from startAt/endAt
     const currentBaseEntries = useMemo((): ActivitySessionEntry[] => {
         if (localDraft !== null) return localDraft;
 
@@ -78,17 +76,27 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
                     new Date(a.startAt).getTime() -
                     new Date(b.startAt).getTime(),
             )
-            .map((s: any) => ({
-                ...s,
-                isLocked: true,
-                type: 'activity',
-                instanceId:
-                    s.documentId || s.id?.toString() || crypto.randomUUID(),
-                student: s.student,
-            }));
+            .map((s: any) => {
+                const sTime = new Date(s.startAt).getTime();
+                const eTime = new Date(s.endAt).getTime();
+                // Calculate duration in minutes from timestamps
+                const duration = Math.max(
+                    Math.round((eTime - sTime) / 60000),
+                    0,
+                );
+
+                return {
+                    ...s,
+                    isLocked: true,
+                    type: 'activity',
+                    durationMinutes: duration, // Computed from timestamps
+                    instanceId:
+                        s.documentId || s.id?.toString() || crypto.randomUUID(),
+                    student: s.student,
+                };
+            });
     }, [localDraft, activitySessions]);
 
-    // --- HISTORY HELPERS ---
     const commitChange = useCallback(
         (newDraft: ActivitySessionEntry[]) => {
             setPast((prev) => [...prev, currentBaseEntries]);
@@ -121,7 +129,6 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
             startAt,
         );
         const activitiesOnly = items.filter((i) => i.type === 'activity');
-
         const sessionEndMs = new Date(endAt).getTime();
         const totalAvailable = Math.max(
             0,
@@ -130,20 +137,16 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
 
         const validatedItems = items.map((item) => {
             if (item.type !== 'activity') return item;
-
             let hasConflict = false;
             let conflictReason = '';
-
             const itemStart = new Date(item.startAt).getTime();
             const itemEnd = new Date(item.endAt).getTime();
 
-            // Check 1: Session Boundary
             if (itemEnd > sessionEndMs) {
                 hasConflict = true;
                 conflictReason = 'Exceeds session time';
             }
 
-            // Check 2: Collision with LOCKED items
             if (!hasConflict) {
                 const collision = activitiesOnly.find(
                     (other) =>
@@ -152,23 +155,17 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
                         itemStart < new Date(other.endAt).getTime() &&
                         itemEnd > new Date(other.startAt).getTime(),
                 );
-
                 if (collision) {
                     hasConflict = true;
                     conflictReason = 'Overlaps locked activity';
                 }
             }
-
             return { ...item, hasConflict, conflictReason };
         });
 
-        const validatedDraft = validatedItems.filter(
-            (i) => i.type === 'activity',
-        );
-
         return {
             timelineItems: validatedItems,
-            draftWithTimes: validatedDraft,
+            draftWithTimes: validatedItems.filter((i) => i.type === 'activity'),
             capacityMetrics: {
                 percentUsed:
                     totalAvailable > 0
@@ -181,8 +178,6 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
         };
     }, [currentBaseEntries, startAt, endAt]);
 
-    // --- ACTIONS ---
-
     const toggleLock = useCallback(
         (id: string) => {
             const itemIndex = currentBaseEntries.findIndex(
@@ -191,45 +186,8 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
             const item = currentBaseEntries[itemIndex];
             if (!item) return;
 
-            // Prevent Unlocking if it causes overlap
-            if (item.isLocked) {
-                const prevItemEntry = currentBaseEntries[itemIndex - 1];
-                const prevItemRendered = prevItemEntry
-                    ? timelineItems.find(
-                          (t) => t.instanceId === prevItemEntry.instanceId,
-                      )
-                    : null;
-
-                const snapStartMs = prevItemRendered
-                    ? new Date(prevItemRendered.endAt).getTime()
-                    : new Date(startAt).getTime();
-
-                const durationMs = (item.durationMinutes || 30) * 60000;
-                const snapEndMs = snapStartMs + durationMs;
-
-                const hasConflict = currentBaseEntries.some((other) => {
-                    if (other.instanceId === id) return false;
-                    if (!other.isLocked) return false;
-
-                    const otherStart = new Date(other.startAt).getTime();
-                    const otherEnd = other.endAt
-                        ? new Date(other.endAt).getTime()
-                        : otherStart + (other.durationMinutes || 30) * 60000;
-
-                    return snapStartMs < otherEnd && snapEndMs > otherStart;
-                });
-
-                if (hasConflict) {
-                    toast.error(
-                        "Cannot unlock: Activity doesn't fit in the available gap.",
-                    );
-                    return;
-                }
-            }
-
             const newDraft = currentBaseEntries.map((currItem) => {
                 if (currItem.instanceId !== id) return currItem;
-
                 const willBeLocked = !currItem.isLocked;
                 let newStart = currItem.startAt;
                 let newEnd = currItem.endAt;
@@ -253,27 +211,23 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
             });
             commitChange(newDraft);
         },
-        [currentBaseEntries, timelineItems, startAt, commitChange],
+        [currentBaseEntries, timelineItems, commitChange],
     );
 
     const updateActivityStartTime = useCallback(
         (id: string, timeStr: string) => {
-            const base = currentBaseEntries;
             const [hours, minutes] = timeStr.split(':').map(Number);
             const baseDate = new Date(startAt);
             baseDate.setHours(hours, minutes, 0, 0);
-            const newIsoStart = baseDate.toISOString();
 
-            const newDraft = base.map((item) => {
+            const newDraft = currentBaseEntries.map((item) => {
                 if (item.instanceId !== id) return item;
-                const endDate = new Date(baseDate);
-                endDate.setMinutes(
-                    endDate.getMinutes() + (item.durationMinutes || 30),
-                );
+                const duration = item.durationMinutes || 30;
+                const endDate = new Date(baseDate.getTime() + duration * 60000);
                 return {
                     ...item,
                     isLocked: true,
-                    startAt: newIsoStart,
+                    startAt: baseDate.toISOString(),
                     endAt: endDate.toISOString(),
                 };
             });
@@ -290,31 +244,21 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
             let currentCursor = new Date(startAt).getTime();
 
             const finalDraft = activitiesOnly.map((item) => {
+                // Priority: item.durationMinutes (computed earlier) or fallback
                 const durationMs = (item.durationMinutes || 30) * 60000;
                 let newStartIso = '';
                 let newEndIso = '';
 
-                const isItemLocked = item.isLocked;
-
-                if (isItemLocked && item.startAt) {
+                if (item.isLocked && item.startAt) {
                     const lockedStartTime = new Date(item.startAt).getTime();
-                    if (lockedStartTime > currentCursor) {
+                    if (lockedStartTime > currentCursor)
                         currentCursor = lockedStartTime;
-                    }
-                }
 
-                if (isItemLocked && item.startAt) {
                     newStartIso = item.startAt;
-                    const existingEndMs = item.endAt
+                    // If locked, we respect its existing endAt or compute it from duration
+                    const finalEndMs = item.endAt
                         ? new Date(item.endAt).getTime()
-                        : 0;
-                    const computedEndMs =
-                        new Date(item.startAt).getTime() + durationMs;
-                    const finalEndMs =
-                        existingEndMs > new Date(item.startAt).getTime()
-                            ? existingEndMs
-                            : computedEndMs;
-
+                        : lockedStartTime + durationMs;
                     newEndIso = new Date(finalEndMs).toISOString();
                     currentCursor = finalEndMs;
                 } else {
@@ -322,9 +266,9 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
                     currentCursor += durationMs;
                     newEndIso = new Date(currentCursor).toISOString();
                 }
+
                 return {
                     ...item,
-                    isLocked: isItemLocked,
                     startAt: newStartIso,
                     endAt: newEndIso,
                 };
@@ -336,19 +280,22 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
 
     const addActivity = useCallback(
         (activity: Activity) => {
+            const duration = activity.durationMinutes || 30;
             const entry: ActivitySessionEntry = {
                 instanceId: crypto.randomUUID(),
                 activity,
-                durationMinutes: activity.durationMinutes,
+
+                durationMinutes: duration,
                 isLocked: false,
                 type: 'activity',
                 startAt: '',
                 endAt: '',
                 documentId: '',
+                ...(student ? { student } : {}),
             };
             commitChange([...currentBaseEntries, entry]);
         },
-        [currentBaseEntries, commitChange],
+        [currentBaseEntries, commitChange, student], // 3. Add student to dependencies
     );
 
     const insertAtGap = useCallback(
@@ -360,7 +307,7 @@ export const useSessionPlan = ({ startAt, endAt }: SessionPlanProps) => {
             const entry: ActivitySessionEntry = {
                 instanceId: crypto.randomUUID(),
                 activity,
-                durationMinutes: activity.durationMinutes || 0,
+                durationMinutes: activity.durationMinutes || 30,
                 isLocked: false,
                 type: 'activity',
                 startAt: '',

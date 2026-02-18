@@ -4,6 +4,7 @@ export interface Role {
 }
 export interface User {
     id: number;
+    documentId: string;
     username: string;
     email?: string;
     role?: Role;
@@ -30,17 +31,22 @@ export interface UserResponse {
     username: string;
     email: string;
     firstName?: string;
-    fullName?: string;
+    middleName?: string;
     lastName?: string;
+    fullName?: string;
+    dateOfBirth?: string;
+    gender?: 'male' | 'female' | undefined;
     profilePicture?: StrapiMedia;
     createdAt: string;
     publishedAt?: string;
 
-    role?: {
-        id: number;
-        name: string;
-        type: string;
-    };
+    role?:
+        | {
+              id: number;
+              name: string;
+              type: string;
+          }
+        | string;
 }
 // types/strapi.ts
 

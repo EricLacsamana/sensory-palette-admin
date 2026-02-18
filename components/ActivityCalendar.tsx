@@ -26,6 +26,8 @@ import {
     Filter,
     Clock,
     Activity,
+    Flag,
+    CalendarClock,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -56,11 +58,27 @@ const statusConfig: Record<
         bg: string;
         border: string;
         text: string;
-        dot: string; // Added for solid dot color
+        dot: string;
         icon: any;
         label: string;
     }
 > = {
+    pending: {
+        bg: 'bg-slate-50',
+        border: 'border-slate-200',
+        text: 'text-slate-600',
+        dot: 'bg-slate-400',
+        icon: Clock,
+        label: 'Pending',
+    },
+    in_progress: {
+        bg: 'bg-indigo-50',
+        border: 'border-indigo-200',
+        text: 'text-indigo-700',
+        dot: 'bg-indigo-500',
+        icon: PlayCircle,
+        label: 'Live',
+    },
     completed: {
         bg: 'bg-emerald-50',
         border: 'border-emerald-200',
@@ -68,14 +86,6 @@ const statusConfig: Record<
         dot: 'bg-emerald-500',
         icon: CheckCircle2,
         label: 'Done',
-    },
-    'in-progress': {
-        bg: 'bg-indigo-50',
-        border: 'border-indigo-200',
-        text: 'text-indigo-700',
-        dot: 'bg-indigo-500',
-        icon: PlayCircle,
-        label: 'Live',
     },
     interrupted: {
         bg: 'bg-amber-50',
@@ -85,21 +95,29 @@ const statusConfig: Record<
         icon: PauseCircle,
         label: 'Paused',
     },
-    upcoming: {
-        bg: 'bg-slate-50',
-        border: 'border-slate-200',
-        text: 'text-slate-600',
-        dot: 'bg-slate-400',
-        icon: Clock,
-        label: 'Scheduled',
-    },
-    abandoned: {
+    cancelled: {
         bg: 'bg-rose-50',
         border: 'border-rose-200',
         text: 'text-rose-700',
         dot: 'bg-rose-500',
         icon: XCircle,
+        label: 'Cancelled',
+    },
+    abandoned: {
+        bg: 'bg-stone-50',
+        border: 'border-stone-200',
+        text: 'text-stone-600',
+        dot: 'bg-stone-400',
+        icon: Flag,
         label: 'Dropped',
+    },
+    reschedule_requested: {
+        bg: 'bg-purple-50',
+        border: 'border-purple-200',
+        text: 'text-purple-700',
+        dot: 'bg-purple-500',
+        icon: CalendarClock,
+        label: 'Reschedule',
     },
 };
 
@@ -123,7 +141,15 @@ export function ActivityCalendar({ className }: { className?: string }) {
 
     // --- DATA ---
     const { data: sessions = [], isFetching } = useQuery({
-        queryKey: ['activity-sessions', { populate: '*' }],
+        queryKey: [
+            'activity-sessions',
+            {
+                populate: {
+                    activity: { populate: '*' },
+                    student: { populate: '*' },
+                },
+            },
+        ],
         queryFn: getActivitySessionsNew,
     });
 
@@ -155,12 +181,16 @@ export function ActivityCalendar({ className }: { className?: string }) {
 
     const currentMonthStats = useMemo(() => {
         if (!Array.isArray(sessions)) return { total: 0, rate: 0 };
-        const currentMonthSessions = sessions.filter((s: any) =>
-            isSameMonth(parseISO(s.startAt), viewDate),
+
+        const currentMonthSessions = sessions.filter(
+            (s: any) =>
+                // ADD THIS: s.startAt && ...
+                s.startAt && isSameMonth(parseISO(s.startAt), viewDate),
         );
+
         const completed = currentMonthSessions.filter(
             (s: any) => s.activitySessionStatus === 'completed',
-        ).length;
+        );
         const completionRate =
             currentMonthSessions.length > 0
                 ? Math.round((completed / currentMonthSessions.length) * 100)
@@ -310,7 +340,7 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                 key={dateKey}
                                 onClick={() => setSelectedDate(day)}
                                 className={cn(
-                                    'relative flex flex-col min-w-0 transition-all duration-200 group cursor-default',
+                                    'relative flex flex-col h-full min-w-0 transition-all duration-200 group cursor-default overflow-hidden',
                                     'bg-white hover:bg-slate-50',
                                     !isCurrentMonth &&
                                         'bg-slate-50/30 text-slate-300',
@@ -319,7 +349,7 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                 )}
                             >
                                 {/* Date Number Row */}
-                                <div className="p-2 flex justify-between items-start shrink-0">
+                                <div className="p-1.5 md:p-2 flex justify-between items-start shrink-0">
                                     <span
                                         className={cn(
                                             'text-[10px] font-medium h-6 w-6 flex items-center justify-center rounded-lg tabular-nums transition-all',
@@ -336,15 +366,16 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                     </span>
                                 </div>
 
-                                {/* Dots Container */}
-                                <div className="flex-1 px-2 pb-2 flex flex-wrap content-start gap-1.5 overflow-y-auto scrollbar-none">
+                                {/* Slots Container */}
+                                <div className="flex-1 px-1.5 pb-1.5 md:px-2 md:pb-2 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 content-start overflow-y-auto scrollbar-none">
                                     {daySessions.map((session) => {
+                                        // THIS IS THE FIX: Defaulting to 'pending' instead of 'upcoming'
                                         const status =
                                             session.activitySessionStatus ||
-                                            'upcoming';
+                                            'pending';
                                         const config =
                                             statusConfig[status] ||
-                                            statusConfig.upcoming;
+                                            statusConfig.pending;
 
                                         return (
                                             <Tooltip
@@ -356,7 +387,7 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                                 <TooltipTrigger asChild>
                                                     <div
                                                         className={cn(
-                                                            'h-2 w-2 rounded-full transition-all duration-200 cursor-pointer hover:scale-125 hover:ring-2 ring-offset-1 ring-slate-100',
+                                                            'aspect-square w-full max-w-[14px] rounded-[3px] transition-all duration-200 cursor-pointer hover:scale-110 hover:shadow-sm',
                                                             config.dot,
                                                         )}
                                                     />
@@ -432,10 +463,27 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                                         </div>
                                                         <div className="flex items-start gap-3">
                                                             <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-                                                                <Activity
-                                                                    size={14}
-                                                                    className="text-slate-500"
-                                                                />
+                                                                {session
+                                                                    ?.activity
+                                                                    .banner ? (
+                                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                                    <img
+                                                                        src={FormatService.formatStrapiMedia(
+                                                                            session
+                                                                                .activity
+                                                                                .banner,
+                                                                            'thumbnail',
+                                                                        )}
+                                                                        alt="session-activity-banner"
+                                                                    />
+                                                                ) : (
+                                                                    <Activity
+                                                                        size={
+                                                                            14
+                                                                        }
+                                                                        className="text-slate-500"
+                                                                    />
+                                                                )}
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-tight">

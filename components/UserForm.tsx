@@ -35,7 +35,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 // --- VALIDATION SCHEMA ---
-export const studentFormSchema = z.object({
+export const userFormSchema = z.object({
     username: z.string().min(3, 'Minimum 3 characters.'),
     email: z.string().email('Invalid email.').min(6),
     password: z
@@ -43,10 +43,9 @@ export const studentFormSchema = z.object({
         .min(6, 'Minimum 6 characters.')
         .optional()
         .or(z.literal('')),
-
-    // Default system flags
-    confirmed: z.boolean().default(true),
-    blocked: z.boolean().default(false),
+    role: z.string().min(1, 'Role is required.'),
+    confirmed: z.boolean(),
+    blocked: z.boolean(),
 
     profilePicture: z.any().optional(),
     firstName: z.string().min(1, 'First name is required.'),
@@ -63,47 +62,44 @@ export const studentFormSchema = z.object({
     countryCode: z.string().max(2, 'Max 2 chars').optional(),
     isDefault: z.boolean().optional(),
 
-    guardianName: z.string().min(1, 'Guardian name is required.'),
-    guardianRelationship: z.string().min(1, 'Relationship is required.'),
-    guardianContact: z.string().min(1, 'Contact is required.'),
+    guardianName: z.string().optional(),
+    guardianRelationship: z.string().optional(),
+    guardianContact: z.string().optional(),
     guardianEmail: z
         .string()
-        .email('Invalid email.')
+        .email('Invalid email')
         .optional()
         .or(z.literal('')),
 });
 
-export type StudentFormValues = z.infer<typeof studentFormSchema>;
+export type UserFormValues = z.infer<typeof userFormSchema>;
 
-interface EnrollStudentFormProps {
-    onSubmit: (values: StudentFormValues) => void;
+interface UserFormProps {
+    initialData?: any;
+    onSubmit: (values: UserFormValues) => void;
     onCancel: () => void;
     isLoading: boolean;
 }
 
-const STEPS = [
-    { id: 1, title: 'Account' },
-    { id: 2, title: 'Personal' },
-    { id: 3, title: 'Address' },
-    { id: 4, title: 'Guardian' }, // Always included for students
-];
-
-export default function EnrollStudentForm({
+export default function UserForm({
+    initialData,
     onSubmit,
     onCancel,
     isLoading,
-}: EnrollStudentFormProps) {
+}: UserFormProps) {
     const [step, setStep] = React.useState(1);
     const [showPassword, setShowPassword] = React.useState(false);
     const [imagePreview, setImagePreview] = React.useState<string | null>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const isEditing = !!initialData;
 
-    const form = useForm<StudentFormValues>({
-        resolver: zodResolver(studentFormSchema),
+    const form = useForm<UserFormValues>({
+        resolver: zodResolver(userFormSchema),
         defaultValues: {
             username: '',
             email: '',
             password: '',
+            role: '',
             confirmed: true,
             blocked: false,
             profilePicture: null,
@@ -124,6 +120,41 @@ export default function EnrollStudentForm({
             guardianEmail: '',
         },
     });
+
+    const selectedRole = form.watch('role');
+    const isStudent =
+        String(selectedRole) === '4' ||
+        String(selectedRole).toLowerCase().includes('student');
+
+    const STEPS = React.useMemo(() => {
+        const baseSteps = [
+            { id: 1, title: 'Account' },
+            { id: 2, title: 'Personal' },
+            { id: 3, title: 'Address' },
+        ];
+        if (isStudent) baseSteps.push({ id: 4, title: 'Guardian' });
+        return baseSteps;
+    }, [isStudent]);
+
+    React.useEffect(() => {
+        if (initialData) {
+            form.reset({
+                ...form.getValues(),
+                username: initialData.username || '',
+                email: initialData.email || '',
+                role:
+                    initialData.role?.id?.toString() || initialData.role || '',
+                confirmed: initialData.confirmed ?? true,
+                blocked: initialData.blocked ?? false,
+                firstName: initialData.firstName || '',
+                lastName: initialData.lastName || '',
+                dateOfBirth: initialData.dateOfBirth || '',
+                gender: initialData.gender || undefined,
+            });
+            if (initialData.profilePicture?.url)
+                setImagePreview(initialData.profilePicture.url);
+        }
+    }, [initialData, form]);
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -147,7 +178,19 @@ export default function EnrollStudentForm({
                 'postalCode',
                 'countryCode',
             ]);
+        } else if (step === 4) {
+            form.setValue('guardianName', '');
+            form.setValue('guardianRelationship', '');
+            form.setValue('guardianContact', '');
+            form.setValue('guardianEmail', '');
+            form.clearErrors([
+                'guardianName',
+                'guardianRelationship',
+                'guardianContact',
+                'guardianEmail',
+            ]);
         }
+
         if (step < STEPS.length) {
             setStep((prev) => prev + 1);
         } else {
@@ -157,10 +200,11 @@ export default function EnrollStudentForm({
 
     const handleSmartSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
         if (step < STEPS.length) {
-            let fieldsToValidate: (keyof StudentFormValues)[] = [];
+            let fieldsToValidate: (keyof UserFormValues)[] = [];
             if (step === 1)
-                fieldsToValidate = ['username', 'email', 'password'];
+                fieldsToValidate = ['username', 'email', 'password', 'role'];
             if (step === 2)
                 fieldsToValidate = [
                     'firstName',
@@ -176,22 +220,17 @@ export default function EnrollStudentForm({
                     'postalCode',
                     'countryCode',
                 ];
-            if (step === 4)
-                fieldsToValidate = [
-                    'guardianName',
-                    'guardianRelationship',
-                    'guardianContact',
-                    'guardianEmail',
-                ];
 
             const isStepValid = await form.trigger(fieldsToValidate);
-            if (isStepValid) setStep((prev) => prev + 1);
+            if (isStepValid) {
+                setStep((prev) => prev + 1);
+            }
         } else {
             await form.handleSubmit(onSubmit)(e);
         }
     };
 
-    // Reusable styles
+    // --- REUSABLE CLASSNAMES FOR ANTI-JUMPING ---
     const formItemClass = 'relative pb-4 space-y-1';
     const formLabelClass =
         'text-[9px] font-bold text-slate-500 uppercase tracking-wider ml-1';
@@ -202,7 +241,7 @@ export default function EnrollStudentForm({
 
     return (
         <div className="flex flex-col w-full">
-            {/* WIZARD PROGRESS BAR */}
+            {/* --- ULTRA-COMPACT WIZARD PROGRESS BAR --- */}
             <div className="mb-4 relative px-4">
                 <div className="absolute top-1/2 left-6 right-6 h-0.5 bg-slate-100 -translate-y-1/2 z-0" />
                 <div
@@ -211,6 +250,7 @@ export default function EnrollStudentForm({
                         width: `calc(${((step - 1) / (STEPS.length - 1)) * 100}% - 1.5rem)`,
                     }}
                 />
+
                 <div className="relative z-10 flex justify-between">
                     {STEPS.map((s) => (
                         <div
@@ -250,8 +290,9 @@ export default function EnrollStudentForm({
 
             <Form {...form}>
                 <form onSubmit={handleSmartSubmit} className="flex flex-col">
+                    {/* Fixed Height Container prevents form from jumping between steps */}
                     <div className="min-h-[260px] md:min-h-[280px] flex flex-col justify-start">
-                        {/* STEP 1: ACCOUNT */}
+                        {/* --- STEP 1: ACCOUNT INFO --- */}
                         <div
                             className={cn(
                                 'animate-in fade-in duration-300',
@@ -267,7 +308,7 @@ export default function EnrollStudentForm({
                                             <FormLabel
                                                 className={formLabelClass}
                                             >
-                                                Student Username *
+                                                Username *
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
@@ -290,7 +331,7 @@ export default function EnrollStudentForm({
                                             <FormLabel
                                                 className={formLabelClass}
                                             >
-                                                Student Email *
+                                                Email *
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
@@ -314,7 +355,9 @@ export default function EnrollStudentForm({
                                             <FormLabel
                                                 className={formLabelClass}
                                             >
-                                                Password
+                                                {isEditing
+                                                    ? 'New Password'
+                                                    : 'Password *'}
                                             </FormLabel>
                                             <div className="relative">
                                                 <FormControl>
@@ -350,10 +393,55 @@ export default function EnrollStudentForm({
                                         </FormItem>
                                     )}
                                 />
+                                <FormField
+                                    control={form.control}
+                                    name="role"
+                                    render={({ field }) => (
+                                        <FormItem className={formItemClass}>
+                                            <FormLabel
+                                                className={formLabelClass}
+                                            >
+                                                Role *
+                                            </FormLabel>
+                                            <Select
+                                                onValueChange={field.onChange}
+                                                defaultValue={field.value}
+                                                disabled={isLoading}
+                                            >
+                                                <FormControl>
+                                                    <SelectTrigger
+                                                        className={
+                                                            formInputClass
+                                                        }
+                                                    >
+                                                        <SelectValue placeholder="Select role" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="1">
+                                                        Admin
+                                                    </SelectItem>
+                                                    <SelectItem value="2">
+                                                        Therapist
+                                                    </SelectItem>
+                                                    <SelectItem value="3">
+                                                        Secretary
+                                                    </SelectItem>
+                                                    <SelectItem value="4">
+                                                        Student
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage
+                                                className={formMessageClass}
+                                            />
+                                        </FormItem>
+                                    )}
+                                />
                             </div>
                         </div>
 
-                        {/* STEP 2: PERSONAL */}
+                        {/* --- STEP 2: PERSONAL INFO --- */}
                         <div
                             className={cn(
                                 'animate-in fade-in duration-300',
@@ -396,6 +484,7 @@ export default function EnrollStudentForm({
                                     </div>
                                 </div>
                             </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-0 mt-1">
                                 <FormField
                                     control={form.control}
@@ -464,6 +553,7 @@ export default function EnrollStudentForm({
                                     )}
                                 />
                             </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0">
                                 <FormField
                                     control={form.control}
@@ -530,7 +620,7 @@ export default function EnrollStudentForm({
                             </div>
                         </div>
 
-                        {/* STEP 3: ADDRESS */}
+                        {/* --- STEP 3: ADDRESS --- */}
                         <div
                             className={cn(
                                 'animate-in fade-in duration-300',
@@ -654,110 +744,120 @@ export default function EnrollStudentForm({
                             </div>
                         </div>
 
-                        {/* STEP 4: GUARDIAN */}
-                        <div
-                            className={cn(
-                                'animate-in fade-in duration-300',
-                                step === 4 ? 'block' : 'hidden',
-                            )}
-                        >
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0">
-                                <FormField
-                                    control={form.control}
-                                    name="guardianName"
-                                    render={({ field }) => (
-                                        <FormItem className={formItemClass}>
-                                            <FormLabel
-                                                className={formLabelClass}
-                                            >
-                                                Guardian Name *
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    className={formInputClass}
-                                                    {...field}
+                        {/* --- STEP 4: GUARDIAN (CONDITIONAL) --- */}
+                        {isStudent && (
+                            <div
+                                className={cn(
+                                    'animate-in fade-in duration-300',
+                                    step === 4 ? 'block' : 'hidden',
+                                )}
+                            >
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0">
+                                    <FormField
+                                        control={form.control}
+                                        name="guardianName"
+                                        render={({ field }) => (
+                                            <FormItem className={formItemClass}>
+                                                <FormLabel
+                                                    className={formLabelClass}
+                                                >
+                                                    Guardian Name
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        className={
+                                                            formInputClass
+                                                        }
+                                                        {...field}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage
+                                                    className={formMessageClass}
                                                 />
-                                            </FormControl>
-                                            <FormMessage
-                                                className={formMessageClass}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="guardianRelationship"
-                                    render={({ field }) => (
-                                        <FormItem className={formItemClass}>
-                                            <FormLabel
-                                                className={formLabelClass}
-                                            >
-                                                Relationship *
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    placeholder="e.g. Mother, Father"
-                                                    className={formInputClass}
-                                                    {...field}
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="guardianRelationship"
+                                        render={({ field }) => (
+                                            <FormItem className={formItemClass}>
+                                                <FormLabel
+                                                    className={formLabelClass}
+                                                >
+                                                    Relationship
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        placeholder="e.g. Mother, Father"
+                                                        className={
+                                                            formInputClass
+                                                        }
+                                                        {...field}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage
+                                                    className={formMessageClass}
                                                 />
-                                            </FormControl>
-                                            <FormMessage
-                                                className={formMessageClass}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="guardianContact"
-                                    render={({ field }) => (
-                                        <FormItem className={formItemClass}>
-                                            <FormLabel
-                                                className={formLabelClass}
-                                            >
-                                                Contact Number *
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    type="tel"
-                                                    className={formInputClass}
-                                                    {...field}
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="guardianContact"
+                                        render={({ field }) => (
+                                            <FormItem className={formItemClass}>
+                                                <FormLabel
+                                                    className={formLabelClass}
+                                                >
+                                                    Contact Number
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        type="tel"
+                                                        className={
+                                                            formInputClass
+                                                        }
+                                                        {...field}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage
+                                                    className={formMessageClass}
                                                 />
-                                            </FormControl>
-                                            <FormMessage
-                                                className={formMessageClass}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="guardianEmail"
-                                    render={({ field }) => (
-                                        <FormItem className={formItemClass}>
-                                            <FormLabel
-                                                className={formLabelClass}
-                                            >
-                                                Email Address
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    type="email"
-                                                    className={formInputClass}
-                                                    {...field}
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="guardianEmail"
+                                        render={({ field }) => (
+                                            <FormItem className={formItemClass}>
+                                                <FormLabel
+                                                    className={formLabelClass}
+                                                >
+                                                    Email Address
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        type="email"
+                                                        className={
+                                                            formInputClass
+                                                        }
+                                                        {...field}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage
+                                                    className={formMessageClass}
                                                 />
-                                            </FormControl>
-                                            <FormMessage
-                                                className={formMessageClass}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
-                    {/* ACTIONS */}
+                    {/* --- ACTIONS --- */}
                     <div className="flex gap-2 pt-2 border-t border-slate-100 mt-auto">
                         {step === 1 ? (
                             <Button
@@ -780,7 +880,7 @@ export default function EnrollStudentForm({
                             </Button>
                         )}
 
-                        {step === 3 && (
+                        {(step === 3 || step === 4) && (
                             <Button
                                 type="button"
                                 variant="secondary"
@@ -809,7 +909,7 @@ export default function EnrollStudentForm({
                                 {isLoading ? (
                                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
                                 ) : (
-                                    'Enroll Learner'
+                                    'Complete Setup'
                                 )}
                             </Button>
                         )}

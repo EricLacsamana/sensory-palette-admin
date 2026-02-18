@@ -1,18 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import {
-    X,
-    Sparkles,
-    Undo2,
-    Redo2,
-    LogOut,
-    Search,
-    Badge,
-    User,
-    IdCard,
-    ArrowRight,
-} from 'lucide-react';
+import { Search, User, IdCard } from 'lucide-react';
 import { Reorder, AnimatePresence, motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -45,11 +34,26 @@ import {
     updateActivitySession,
     deleteActivitySession,
 } from '@/api/acitivity-session';
-import { ActivitySessionEntry } from '@/types/activitiy-session';
 import { FormatService } from '@/utils/helpers';
 import { Input } from '@base-ui/react';
 import { UserResponse } from '@/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+
+// Variants for the timeline slide effect
+const timelineVariants = {
+    enter: (direction: number) => ({
+        x: direction > 0 ? 40 : -40,
+        opacity: 0,
+    }),
+    center: {
+        x: 0,
+        opacity: 1,
+    },
+    exit: (direction: number) => ({
+        x: direction < 0 ? 40 : -40,
+        opacity: 0,
+    }),
+};
 
 const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const router = useRouter();
@@ -63,7 +67,8 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [showExitConfirm, setShowExitConfirm] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
-    const [showOtherStudents, setShowOtherStudents] = useState(true);
+    const [isShowOtherStudents, setIsShowOtherStudents] = useState(true);
+    const [slideDirection, setSlideDirection] = useState(0);
 
     const studentId = useMemo(() => {
         const id = params?.id || searchParams.get('studentId');
@@ -82,10 +87,12 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const [endAt, setEndAt] = useState(initialIso.end);
 
     const { data: student } = useQuery({
-        queryKey: ['student', studentId],
+        queryKey: ['student', { id: studentId }],
         queryFn: getStudent,
         enabled: !!studentId,
     });
+
+    console.log('student', student);
     const { data: studentsList = [] } = useQuery({
         queryKey: ['students', searchQuery],
         queryFn: getStudents,
@@ -118,9 +125,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         redo,
         canUndo,
         canRedo,
-    } = useSessionPlan({ startAt, endAt });
-
-    const dateKey = new Date(startAt).toLocaleDateString('en-CA');
+    } = useSessionPlan({ startAt, endAt, student });
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -139,6 +144,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
 
     const performClose = () => {
         reset();
+        setShowExitConfirm(false);
         const p = new URLSearchParams(searchParams.toString());
         p.delete('isActivitySessionPlanningOpen');
         p.delete('studentId');
@@ -147,41 +153,47 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         queryClient.invalidateQueries({ queryKey: ['activity-sessions'] });
     };
 
+    const handleRequestClose = () => {
+        if (isDirty) {
+            setShowExitConfirm(true);
+        } else {
+            performClose();
+        }
+    };
+
     const handleSubmit = async () => {
         if (isSubmitting) return;
         setIsSubmitting(true);
+
         try {
-            const deletePromises = deletedDocumentIds.map((id) =>
-                deleteActivitySession(id),
-            );
-            const upsertPromises = draft.map(
-                (session: ActivitySessionEntry) => {
-                    const payload = {
-                        startAt: FormatService.formatDateTime(
-                            session.startAt,
-                            'iso',
-                        ),
-                        endAt: FormatService.formatDateTime(
-                            session.endAt,
-                            'iso',
-                        ),
-                        durationMinutes: session.durationMinutes,
-                    };
-                    return session.documentId
-                        ? updateActivitySession(session.documentId, payload)
-                        : createActivitySession({
-                              ...payload,
-                              activity: session.activity.documentId,
-                              student: session.student?.id || studentId,
-                          });
-                },
-            );
-            await Promise.all([...deletePromises, ...upsertPromises]);
+            for (const id of deletedDocumentIds) {
+                await deleteActivitySession(id);
+            }
+
+            for (const session of draft) {
+                const payload = {
+                    startAt: session.startAt,
+                    endAt: session.endAt,
+                };
+
+                const targetId = session.documentId || (session as any).id;
+
+                if (targetId) {
+                    await updateActivitySession(targetId, payload);
+                } else {
+                    await createActivitySession({
+                        ...payload,
+                        activity: session.activity?.documentId,
+                        student: session.student?.id || studentId,
+                    });
+                }
+            }
+
             toast.success('Session plan synchronized successfully');
             performClose();
         } catch (error) {
-            console.error(error);
-            toast.error('Failed to save changes.');
+            console.error('Critical Save Error:', error);
+            toast.error('Failed to sync schedule. Check connection.');
         } finally {
             setIsSubmitting(false);
         }
@@ -198,6 +210,19 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
             }
         }
         setIsDragging(false);
+    };
+
+    const handleTimeChange = (type: 'start' | 'end', val: string) => {
+        if (type === 'start') {
+            const oldDate = new Date(startAt).setHours(0, 0, 0, 0);
+            const newDate = new Date(val).setHours(0, 0, 0, 0);
+            if (oldDate !== newDate) {
+                setSlideDirection(newDate > oldDate ? 1 : -1);
+            }
+            setStartAt(val);
+        } else {
+            setEndAt(val);
+        }
     };
 
     const renderMainContent = () => {
@@ -307,17 +332,15 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                     redo={redo}
                     canRedo={canRedo}
                     canUndo={canUndo}
-                    student={student}
+                    user={student}
                     isSidebarOpen={isSidebarOpen}
                     setIsSidebarOpen={setIsSidebarOpen}
                     startAt={startAt}
                     endAt={endAt}
-                    onChange={(type, val) =>
-                        type === 'start' ? setStartAt(val) : setEndAt(val)
-                    }
+                    onChange={handleTimeChange}
                     isDirty={isDirty}
-                    showOtherStudents={showOtherStudents}
-                    setShowOtherStudents={setShowOtherStudents}
+                    isShowOtherUsers={isShowOtherStudents}
+                    setIsShowOtherUsers={setIsShowOtherStudents}
                 />
                 <div className="flex-1 flex overflow-hidden">
                     <ActivitiesSiderbar
@@ -349,91 +372,135 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                 {FormatService.formatTime(endAt, '12h-simple')}
                             </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto bg-slate-50/30 relative">
-                            <div className="w-full max-w-3xl mx-auto pl-2 pr-6 py-8 relative z-10">
-                                <div className="absolute left-[80px] top-0 bottom-0 w-px bg-slate-200/50 z-0" />
-                                <AnimatePresence mode="popLayout">
-                                    <Reorder.Group
-                                        axis="y"
-                                        values={draft}
-                                        onReorder={reorderActivities}
-                                        className="space-y-0 relative"
-                                    >
-                                        <TimelineEndpoint
-                                            type="start"
-                                            time={FormatService.formatTime(
-                                                startAt,
-                                                '12h-simple',
-                                            )}
-                                        />
-                                        <div className="my-2 relative">
-                                            {timelineItems
-                                                .filter(
-                                                    (item) =>
-                                                        showOtherStudents ||
-                                                        item.student?.id ===
-                                                            studentId,
-                                                )
-                                                .map((item) => (
-                                                    <TimelineItem
-                                                        key={item.instanceId}
-                                                        variant={item.type}
-                                                        data={item}
-                                                        currentStudentId={
-                                                            studentId
-                                                        }
-                                                        isDraggingAny={
-                                                            isDragging
-                                                        }
-                                                        sessionStart={startAt}
-                                                        sessionEnd={endAt}
-                                                        onDragStart={() =>
-                                                            setIsDragging(true)
-                                                        }
-                                                        onDragEnd={() =>
-                                                            setIsDragging(false)
-                                                        }
-                                                        onRemove={() =>
-                                                            removeActivity(
-                                                                item.instanceId,
-                                                            )
-                                                        }
-                                                        onToggleLock={() =>
-                                                            toggleLock(
-                                                                item.instanceId,
-                                                            )
-                                                        }
-                                                        onGapDrop={(activity) =>
-                                                            insertAtGap(
-                                                                item.instanceId,
-                                                                activity,
-                                                            )
-                                                        }
-                                                        onTimeChange={(time) =>
-                                                            updateActivityStartTime(
-                                                                item.instanceId,
-                                                                time,
-                                                            )
-                                                        }
-                                                        showDetails={
-                                                            !isSidebarOpen
-                                                        }
-                                                    />
-                                                ))}
-                                        </div>
-                                        <TimelineEndpoint
-                                            type="end"
-                                            time={FormatService.formatTime(
-                                                endAt,
-                                                '12h-simple',
-                                            )}
-                                        />
-                                    </Reorder.Group>
-                                </AnimatePresence>
-                            </div>
+
+                        {/* ANIMATED TIMELINE CONTAINER */}
+                        <div className="flex-1 bg-slate-50/30 relative overflow-hidden">
+                            <AnimatePresence
+                                mode="wait"
+                                custom={slideDirection}
+                                initial={false}
+                            >
+                                <motion.div
+                                    key={startAt.split('T')[0]} // The key changes when the day changes, triggering animation
+                                    custom={slideDirection}
+                                    variants={timelineVariants}
+                                    initial="enter"
+                                    animate="center"
+                                    exit="exit"
+                                    transition={{
+                                        duration: 0.25,
+                                        ease: 'easeInOut',
+                                    }}
+                                    className="w-full h-full overflow-y-auto"
+                                >
+                                    <div className="w-full max-w-3xl mx-auto pl-2 pr-6 py-8 relative z-10">
+                                        <div className="absolute left-[80px] top-0 bottom-0 w-px bg-slate-200/50 z-0" />
+                                        <AnimatePresence mode="popLayout">
+                                            <Reorder.Group
+                                                axis="y"
+                                                values={draft}
+                                                onReorder={reorderActivities}
+                                                className="space-y-0 relative"
+                                            >
+                                                <TimelineEndpoint
+                                                    type="start"
+                                                    time={FormatService.formatTime(
+                                                        startAt,
+                                                        '12h-simple',
+                                                    )}
+                                                />
+                                                <div className="my-2 relative">
+                                                    {timelineItems
+                                                        .filter(
+                                                            (item) =>
+                                                                isShowOtherStudents ||
+                                                                item.student
+                                                                    ?.id ===
+                                                                    studentId,
+                                                        )
+                                                        .map((item) => (
+                                                            <TimelineItem
+                                                                key={
+                                                                    item.instanceId
+                                                                }
+                                                                variant={
+                                                                    item.type
+                                                                }
+                                                                data={item}
+                                                                currentStudentId={
+                                                                    studentId
+                                                                }
+                                                                isDraggingAny={
+                                                                    isDragging
+                                                                }
+                                                                sessionStart={
+                                                                    startAt
+                                                                }
+                                                                sessionEnd={
+                                                                    endAt
+                                                                }
+                                                                onDragStart={() =>
+                                                                    setIsDragging(
+                                                                        true,
+                                                                    )
+                                                                }
+                                                                onDragEnd={() =>
+                                                                    setIsDragging(
+                                                                        false,
+                                                                    )
+                                                                }
+                                                                onRemove={() =>
+                                                                    removeActivity(
+                                                                        item.instanceId,
+                                                                    )
+                                                                }
+                                                                onToggleLock={() =>
+                                                                    toggleLock(
+                                                                        item.instanceId,
+                                                                    )
+                                                                }
+                                                                onGapDrop={(
+                                                                    activity,
+                                                                ) =>
+                                                                    insertAtGap(
+                                                                        item.instanceId,
+                                                                        activity,
+                                                                    )
+                                                                }
+                                                                onTimeChange={(
+                                                                    time,
+                                                                ) =>
+                                                                    updateActivityStartTime(
+                                                                        item.instanceId,
+                                                                        time,
+                                                                    )
+                                                                }
+                                                                showDetails={
+                                                                    !isSidebarOpen
+                                                                }
+                                                            />
+                                                        ))}
+                                                </div>
+                                                <TimelineEndpoint
+                                                    type="end"
+                                                    time={FormatService.formatTime(
+                                                        endAt,
+                                                        '12h-simple',
+                                                    )}
+                                                />
+                                            </Reorder.Group>
+                                        </AnimatePresence>
+                                    </div>
+                                </motion.div>
+                            </AnimatePresence>
                         </div>
+                        {/* END ANIMATED TIMELINE CONTAINER */}
+
                         <div className="h-20 border-t border-slate-100 flex items-center justify-end px-8 bg-white shrink-0 z-50 gap-3">
-                            <Button variant="ghost" onClick={performClose}>
+                            <Button
+                                variant="ghost"
+                                onClick={handleRequestClose}
+                            >
                                 Cancel
                             </Button>
                             <Button
@@ -456,8 +523,21 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                 richColors
                 toastOptions={{ style: { zIndex: 9999 }, duration: 4000 }}
             />
-            <Dialog open>
-                <DialogContent className="!max-w-[1400px] !w-[65vw] h-[92vh] p-0 flex flex-col bg-white overflow-hidden sm:rounded-3xl shadow-2xl border-none">
+            <Dialog
+                open
+                onOpenChange={(open) => {
+                    if (!open) handleRequestClose();
+                }}
+            >
+                <DialogContent
+                    onPointerDownOutside={(e) => {
+                        if (isDirty) e.preventDefault();
+                    }}
+                    onEscapeKeyDown={(e) => {
+                        if (isDirty) e.preventDefault();
+                    }}
+                    className="!max-w-[1400px] !w-[65vw] h-[92vh] p-0 flex flex-col bg-white overflow-hidden sm:rounded-3xl shadow-2xl border-none [&>button]:cursor-pointer [&>button]:z-[100] [&>button]:p-2 [&>button]:rounded-full [&>button]:bg-white/50 [&>button]:hover:bg-white [&>button]:transition-all"
+                >
                     <DialogTitle className="sr-only">
                         Session Planner
                     </DialogTitle>

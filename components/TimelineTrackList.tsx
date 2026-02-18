@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, Variants } from 'framer-motion';
 import {
     Play,
@@ -8,28 +8,29 @@ import {
     Clock,
     MoreHorizontal,
     ArrowRight,
+    Gamepad2,
+    Activity,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ActivitySessionResponse } from '@/types/activitiy-session';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 
 // --- Animation Variants ---
 const listVariants: Variants = {
     hidden: { opacity: 0 },
     show: {
         opacity: 1,
-        transition: { staggerChildren: 0.05, delayChildren: 0.1 },
+        transition: { staggerChildren: 0.1, delayChildren: 0.05 },
     },
 };
 
 const itemVariants: Variants = {
-    hidden: { opacity: 0, x: -10 },
+    hidden: { opacity: 0, y: 15, scale: 0.98 },
     show: {
         opacity: 1,
-        x: 0,
-        transition: { type: 'spring', stiffness: 300, damping: 24 },
+        y: 0,
+        scale: 1,
+        transition: { type: 'spring', stiffness: 400, damping: 30 },
     },
 };
 
@@ -41,134 +42,185 @@ const TimelineTrackItem = ({
     item: ActivitySessionResponse;
     isLast: boolean;
 }) => {
-    let startTime = '--:--';
-    let ampm = '';
+    // 1. Live Timer State
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-    if (item.startAt) {
+    const status = item.activitySessionStatus || 'pending';
+    const isCompleted = status === 'completed';
+    const isInProgress = status === 'in_progress';
+    const isUpcoming = status === 'pending' || status === 'scheduled';
+
+    // 2. Timer Logic (Only runs if active and has a start time)
+    useEffect(() => {
+        if (!isInProgress || !item.actualStartAt) return;
+
+        const startTime = new Date(item.actualStartAt).getTime();
+
+        const updateTimer = () => {
+            const now = new Date().getTime();
+            const difference = Math.floor((now - startTime) / 1000);
+            setElapsedSeconds(difference > 0 ? difference : 0);
+        };
+
+        updateTimer(); // Initial call to avoid 1s delay
+        const intervalId = setInterval(updateTimer, 1000);
+
+        return () => clearInterval(intervalId);
+    }, [isInProgress, item.actualStartAt]);
+
+    // 3. Format Timer Output
+    const formatElapsed = (totalSeconds: number) => {
+        const m = Math.floor(totalSeconds / 60);
+        const s = totalSeconds % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    // 4. Standard Date Formatting
+    let timeDisplay = '--:--';
+    let ampm = '';
+    const timeToFormat = item.actualStartAt || item.startAt;
+
+    if (timeToFormat) {
         try {
-            const date = parseISO(item.startAt);
-            startTime = format(date, 'h:mm');
+            const date = parseISO(timeToFormat);
+            timeDisplay = format(date, 'h:mm');
             ampm = format(date, 'a');
         } catch (e) {
             console.error('Date parse error', e);
         }
     }
 
-    const status = item.activitySessionStatus || 'upcoming';
-    const isCompleted = status === 'completed';
-    const isInProgress = status === 'in-progress';
-    const isUpcoming = status === 'pending';
-
     return (
         <motion.div
             variants={itemVariants}
-            className={cn(
-                'group relative flex gap-4 w-full',
-                isCompleted && 'opacity-60',
-            )}
+            className="group relative flex w-full"
         >
-            {/* Time Column */}
-            <div className="w-[52px] flex flex-col items-end pt-3 shrink-0">
+            {/* Time Column (Fixed Width) */}
+            <div className="w-[60px] flex flex-col items-end pt-3.5 pr-4 shrink-0">
                 <span
                     className={cn(
-                        'text-xs font-bold tabular-nums leading-none tracking-tight',
-                        isInProgress ? 'text-indigo-600' : 'text-slate-700',
+                        'text-[13px] font-black tabular-nums leading-none tracking-tight',
+                        isInProgress
+                            ? 'text-indigo-600'
+                            : isCompleted
+                              ? 'text-slate-400'
+                              : 'text-slate-700',
                     )}
                 >
-                    {startTime}
+                    {timeDisplay}
                 </span>
-                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">
+                <span
+                    className={cn(
+                        'text-[9px] font-bold uppercase tracking-widest mt-1',
+                        isInProgress ? 'text-indigo-400' : 'text-slate-400',
+                    )}
+                >
                     {ampm}
                 </span>
             </div>
 
-            {/* Spine */}
+            {/* Timeline Spine */}
             <div className="relative flex flex-col items-center shrink-0 w-6">
+                <div className="w-0.5 h-3.5 bg-slate-100" />
+
                 <div
                     className={cn(
-                        'w-3 h-3 rounded-full border-[2px] z-20 mt-[14px] transition-all duration-300 relative',
+                        'w-3.5 h-3.5 rounded-full border-2 z-20 transition-all duration-300 relative',
                         isInProgress
-                            ? 'bg-indigo-600 border-indigo-100 ring-2 ring-indigo-50 scale-110 shadow-sm'
+                            ? 'bg-indigo-600 border-indigo-100 ring-[3px] ring-indigo-50 shadow-sm'
                             : isCompleted
-                              ? 'bg-slate-200 border-slate-300'
+                              ? 'bg-emerald-500 border-emerald-100'
                               : 'bg-white border-slate-300 group-hover:border-indigo-400',
                     )}
                 >
                     {isInProgress && (
-                        <span className="absolute inset-0 rounded-full bg-indigo-500 animate-ping opacity-75" />
+                        <span className="absolute -inset-1.5 rounded-full bg-indigo-500 animate-ping opacity-40" />
                     )}
                 </div>
+
                 {!isLast && (
-                    <div className="w-px flex-1 absolute top-7 bottom-[-16px] z-0 bg-slate-200" />
+                    <div
+                        className={cn(
+                            'w-0.5 flex-1 absolute top-[26px] bottom-[-14px] z-0 transition-colors',
+                            isCompleted ? 'bg-emerald-100' : 'bg-slate-100',
+                        )}
+                    />
                 )}
             </div>
 
-            {/* Card Content */}
-            <div className="flex-1 pb-4 min-w-0">
+            {/* Card Content Column */}
+            <div className="flex-1 pb-4 pl-4 min-w-0">
                 <div
                     className={cn(
-                        'rounded-xl border p-3 flex items-center justify-between transition-all duration-200',
+                        'rounded-[20px] p-4 flex items-center justify-between transition-all duration-300 border',
                         isInProgress
-                            ? 'bg-white border-indigo-200 shadow-sm ring-1 ring-indigo-50'
-                            : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-sm',
+                            ? 'bg-indigo-50/50 border-indigo-100 shadow-sm'
+                            : isCompleted
+                              ? 'bg-white border-slate-100 opacity-80'
+                              : 'bg-white border-slate-100 hover:border-slate-200 hover:shadow-sm',
                     )}
                 >
-                    <div className="flex flex-col gap-1 overflow-hidden">
+                    <div className="flex flex-col gap-1.5 overflow-hidden pr-4">
                         <h5
                             className={cn(
-                                'text-sm font-semibold truncate',
+                                'text-sm font-black truncate tracking-tight',
                                 isInProgress
-                                    ? 'text-slate-900'
-                                    : 'text-slate-700',
+                                    ? 'text-indigo-900'
+                                    : 'text-slate-900',
                             )}
                         >
                             {item.activity?.name || 'Untitled Activity'}
                         </h5>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
+                            {/* LIVE TIMER BADGE */}
                             {isInProgress && (
-                                <Badge
-                                    variant="secondary"
-                                    className="h-5 px-1.5 bg-indigo-50 text-indigo-700 border-indigo-100 rounded-[4px] text-[9px] font-bold uppercase tracking-wider gap-1"
-                                >
-                                    <Clock
-                                        size={10}
-                                        className="animate-pulse"
-                                    />
-                                    Active
-                                </Badge>
+                                <div className="flex items-center gap-1.5 bg-indigo-600 text-white px-2.5 py-0.5 rounded-md shadow-sm shadow-indigo-200">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                                    <span className="text-[11px] font-black tracking-widest tabular-nums">
+                                        {formatElapsed(elapsedSeconds)}
+                                    </span>
+                                </div>
                             )}
+
                             {isCompleted && (
-                                <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-600">
-                                    <CheckCircle2 size={12} />
-                                    Completed
-                                </span>
+                                <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
+                                    <CheckCircle2 size={12} strokeWidth={3} />
+                                    <span>Done</span>
+                                </div>
                             )}
                             {isUpcoming && (
-                                <span className="text-[10px] font-medium text-slate-400">
-                                    {item.durationMinutes
-                                        ? `${item.durationMinutes}m duration`
-                                        : 'Scheduled'}
-                                </span>
+                                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                    <Clock size={12} />
+                                    <span>Pending</span>
+                                </div>
+                            )}
+
+                            {/* Duration Target Indicator */}
+                            {item.activity?.durationMinutes && (
+                                <>
+                                    <span className="text-slate-300">•</span>
+                                    <span className="text-[10px] font-bold text-slate-400 font-mono">
+                                        {item.activity.durationMinutes} MIN GOAL
+                                    </span>
+                                </>
                             )}
                         </div>
                     </div>
 
-                    <div className="pl-3">
+                    {/* Action Area */}
+                    <div className="shrink-0 flex items-center justify-center">
                         {isInProgress ? (
-                            <Button
-                                size="icon"
-                                className="h-8 w-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-200"
-                            >
-                                <Play size={12} fill="currentColor" />
-                            </Button>
+                            <div className="h-10 w-10 rounded-[14px] bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200 animate-pulse">
+                                <Activity size={18} />
+                            </div>
+                        ) : isCompleted ? (
+                            <div className="h-10 w-10 flex items-center justify-center rounded-[14px] bg-slate-50 text-emerald-500">
+                                <CheckCircle2 size={18} />
+                            </div>
                         ) : (
-                            <div className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-50 text-slate-300 transition-colors">
-                                {isCompleted ? (
-                                    <CheckCircle2 size={16} />
-                                ) : (
-                                    <ArrowRight size={16} />
-                                )}
+                            <div className="h-10 w-10 flex items-center justify-center rounded-[14px] bg-slate-50 text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors">
+                                <ArrowRight size={18} />
                             </div>
                         )}
                     </div>
@@ -178,6 +230,7 @@ const TimelineTrackItem = ({
     );
 };
 
+// --- MAIN EXPORT COMPONENT ---
 export const TimelineTrackList = ({
     data = [],
     className,
@@ -186,67 +239,30 @@ export const TimelineTrackList = ({
     className?: string;
 }) => {
     return (
-        <div
-            className={cn(
-                'flex flex-col h-full bg-white rounded-2xl border border-slate-200 overflow-hidden',
-                className,
-            )}
-        >
-            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        Session Timeline
-                    </span>
-                    <Badge
-                        variant="outline"
-                        className="text-[9px] h-4 px-1 border-slate-200 text-slate-500 font-mono"
-                    >
-                        {data.length}
-                    </Badge>
-                </div>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-slate-400 hover:text-indigo-600"
-                >
-                    <MoreHorizontal size={14} />
-                </Button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 relative">
-                <div
-                    className="absolute inset-0 pointer-events-none opacity-20"
-                    style={{
-                        backgroundImage:
-                            'radial-gradient(#cbd5e1 1px, transparent 1px)',
-                        backgroundSize: '20px 20px',
-                    }}
-                />
-
-                <motion.div
-                    variants={listVariants}
-                    initial="hidden"
-                    animate="show"
-                    className="relative z-10 space-y-0"
-                >
-                    {data.length === 0 ? (
-                        <div className="h-32 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-100 rounded-xl bg-slate-50/30">
-                            <Clock size={20} className="mb-2 opacity-50" />
-                            <span className="text-xs font-medium">
-                                No sessions scheduled
-                            </span>
-                        </div>
-                    ) : (
-                        data.map((item, idx) => (
-                            <TimelineTrackItem
-                                key={item.id || idx}
-                                item={item}
-                                isLast={idx === data.length - 1}
-                            />
-                        ))
-                    )}
-                </motion.div>
-            </div>
+        <div className={cn('w-full', className)}>
+            <motion.div
+                variants={listVariants}
+                initial="hidden"
+                animate="show"
+                className="relative z-10 flex flex-col"
+            >
+                {data.length === 0 ? (
+                    <div className="h-40 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-100 rounded-[24px] bg-slate-50/50">
+                        <Gamepad2 size={24} className="mb-3 opacity-40" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                            No Timeline Data
+                        </span>
+                    </div>
+                ) : (
+                    data.map((item, idx) => (
+                        <TimelineTrackItem
+                            key={item.id || item.documentId || idx}
+                            item={item}
+                            isLast={idx === data.length - 1}
+                        />
+                    ))
+                )}
+            </motion.div>
         </div>
     );
 };

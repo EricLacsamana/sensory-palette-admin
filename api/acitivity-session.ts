@@ -9,30 +9,6 @@ import qs from 'qs';
 export const getActivitySessionsNew = async (ctx: any = {}) => {
     const [, query] = ctx.queryKey;
 
-    console.log('quack', query);
-    // if (!!studentId) {
-    //     query.filters.student = studentId;
-    // }
-
-    // if (startAt && endDate && startAt !== 'undefined') {
-    //     query.filters.startAt = {
-    //         $gte: startAt,
-    //         $lte: endDate,
-    //     };
-    //     query.pagination.pageSize = 100;
-    // } else {
-    //     query.pagination.page = pageParam || page || 1;
-    //     query.pagination.pageSize = limit || 15;
-    // }
-
-    // 4. Add Search Logic
-    // if (searchTerm && searchTerm.trim() !== '') {
-    //     query.filters.$or = [
-    //         { student: { firstName: { $containsi: searchTerm } } },
-    //         { activity: { name: { $containsi: searchTerm } } },
-    //     ];
-    // }
-
     const queryString = qs.stringify(query, { encodeValuesOnly: true });
     console.log('queryString', queryString);
     // console.log('query', queryString);

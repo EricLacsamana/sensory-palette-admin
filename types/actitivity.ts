@@ -1,6 +1,7 @@
 import { StrapiMedia } from '.';
 
 export interface Activity {
+    id: number;
     documentId: string;
     activityId: string;
     name: string;

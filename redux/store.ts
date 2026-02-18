@@ -1,4 +1,4 @@
-import { configureStore, combineReducers } from '@reduxjs/toolkit';
+import { configureStore, combineReducers, Action } from '@reduxjs/toolkit';
 import {
     persistStore,
     persistReducer,
@@ -12,9 +12,24 @@ import {
 import storage from 'redux-persist/lib/storage';
 import authReducer from './auth/authSlice';
 
-const rootReducer = combineReducers({
+// 1. Define the app-level combined reducer
+const appReducer = combineReducers({
     auth: authReducer,
 });
+
+// 2. Define the Root Reducer with the reset logic
+const rootReducer = (
+    state: ReturnType<typeof appReducer> | undefined,
+    action: Action,
+) => {
+    if (action.type === 'auth/logout') {
+        // Clear physical storage
+        storage.removeItem('persist:root');
+        // Reset state to undefined (triggering initialStates)
+        state = undefined;
+    }
+    return appReducer(state, action);
+};
 
 const persistConfig = {
     key: 'root',
@@ -23,6 +38,7 @@ const persistConfig = {
     whitelist: ['auth'],
 };
 
+// 3. Create the persisted reducer
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
 export const store = configureStore({
@@ -44,5 +60,7 @@ export const store = configureStore({
 
 export const persistor = persistStore(store);
 
-export type RootState = ReturnType<typeof store.getState>;
+// --- THE FIX FOR THE TYPE ERROR ---
+// Use appReducer instead of store.getState to avoid 'PersistPartial' confusion
+export type RootState = ReturnType<typeof appReducer>;
 export type AppDispatch = typeof store.dispatch;

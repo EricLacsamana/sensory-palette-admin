@@ -18,6 +18,7 @@ import {
     LayoutGrid,
     Plus,
     Settings2,
+    Users2,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -47,11 +48,9 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
     const { data: user } = useQuery({
         queryKey: ['me'],
         queryFn: me,
-        refetchOnWindowFocus: true,
     });
 
     const handleLogout = () => {
-        router.push('/auth/login');
         dispatch(logout());
     };
 
@@ -60,6 +59,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
         { path: '/students', label: 'Learners', icon: Users },
         { path: '/activities', label: 'Game Center', icon: Gamepad2 },
         { path: '/activity-sessions', label: 'Sessions', icon: Activity },
+        { path: '/users', label: 'Users Directory', icon: Users2 },
         { path: '/devices', label: 'Sensors', icon: Wifi, badge: 'LIVE' },
     ];
 

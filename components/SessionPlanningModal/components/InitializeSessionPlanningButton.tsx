@@ -55,7 +55,7 @@ export const InitializeSessionButton = ({
             </div>
 
             {/* Label */}
-            <span>Initialize Session</span>
+            <span>Schdule New Session</span>
 
             {/* Optional: Decorator Icon for "AI/Magic" feel */}
             <Sparkles

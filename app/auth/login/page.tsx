@@ -1,13 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { useMutation } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 
 import { loginUser } from '@/api/auth';
-import { loginStart, loginSuccess, loginFailure } from '@/redux/auth/authSlice';
+import {
+    loginStart,
+    loginSuccess,
+    loginFailure,
+    logout,
+} from '@/redux/auth/authSlice';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ShieldAlert, Info } from 'lucide-react';
@@ -49,12 +54,13 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen w-full flex items-center justify-center bg-[#F8FAFC] relative overflow-hidden">
+        // FIX: Replaced 'min-h-screen' with 'min-h-full py-12 flex-1' to allow safe overflow
+        <div className="flex-1 min-h-full flex flex-col items-center justify-center py-12 bg-[#F8FAFC] relative overflow-hidden">
             {/* --- THEME BACKGROUND ELEMENTS --- */}
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/5 rounded-full blur-[120px]" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500/5 rounded-full blur-[120px]" />
 
-            <div className="w-full max-w-[440px] px-6 relative z-10">
+            <div className="w-full max-w-[440px] px-6 relative z-10 my-auto">
                 {/* --- ERROR FEEDBACK (Themed) --- */}
                 {error && (
                     <Alert
