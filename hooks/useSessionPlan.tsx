@@ -54,6 +54,19 @@ export const useSessionPlan = ({
                         $gte: startOfDay.toISOString(),
                         $lte: endOfDay.toISOString(),
                     },
+                    $or: [
+                        {
+                            actualStartAt: { $null: true },
+                        },
+                        {
+                            activitySessionStatus: { $eq: 'pending' },
+                        },
+                        {
+                            activitySessionStatus: {
+                                $eq: 'reschedule_requested',
+                            },
+                        },
+                    ],
                 },
             },
         ],
@@ -284,7 +297,6 @@ export const useSessionPlan = ({
             const entry: ActivitySessionEntry = {
                 instanceId: crypto.randomUUID(),
                 activity,
-
                 durationMinutes: duration,
                 isLocked: false,
                 type: 'activity',

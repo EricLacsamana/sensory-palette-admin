@@ -3,6 +3,7 @@ import { Inter, Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import StoreProvider from '@/providers/StoreProvider';
 import LayoutWrapper from '@/components/LayoutWrapper';
+import { Toaster } from 'sonner';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
@@ -28,6 +29,7 @@ export default function RootLayout({
             >
                 <StoreProvider>
                     <LayoutWrapper>{children}</LayoutWrapper>
+                    <Toaster position="top-right" richColors duration={4000} />
                 </StoreProvider>
             </body>
         </html>
