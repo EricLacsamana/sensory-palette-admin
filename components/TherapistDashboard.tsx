@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; // Ensure useQueryClient is here
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import {
     Presentation,
@@ -106,75 +106,111 @@ const DashboardStatCard = ({ title, value, trend, icon, colorClass }: any) => (
     </div>
 );
 
-// --- SUB-COMPONENT: Feed Item ---
+/// --- SUB-COMPONENT: Feed Item ---
 const ActivityFeedItem = ({
     session,
     isLast,
 }: {
     session: ActivitySessionResponse;
     isLast: boolean;
-}) => (
-    <div className="flex gap-4 relative group">
-        <div className="flex flex-col items-center shrink-0 w-8">
-            <div className="h-8 w-8 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 z-10 group-hover:border-indigo-200 group-hover:shadow-sm transition-all">
-                <Avatar className="h-full w-full rounded-lg">
-                    <AvatarImage
-                        src={FormatService.formatStrapiMedia(
-                            session.activity?.banner,
-                            'thumbnail',
-                        )}
-                        className="object-cover"
-                    />
-                    <AvatarFallback className="text-[9px] bg-indigo-50 text-indigo-600 font-bold">
-                        {session.activity?.name?.charAt(0)}
-                    </AvatarFallback>
-                </Avatar>
-            </div>
-            {!isLast && (
-                <div className="w-px flex-1 bg-slate-100 my-1 group-hover:bg-slate-200 transition-colors" />
-            )}
-        </div>
-        <div className="flex-1 pb-6 pt-1 min-w-0">
-            <div className="flex justify-between items-start">
-                <div className="space-y-0.5">
-                    <p className="text-xs font-semibold text-slate-900 truncate">
-                        {session.activity?.name}
-                    </p>
-                    <p className="text-[10px] font-medium text-slate-500 flex items-center gap-1">
-                        <span className="text-indigo-600">
-                            {session.student?.firstName}
-                        </span>
-                        <span>•</span>
-                        <span className="tabular-nums">
-                            {session.startAt
-                                ? format(new Date(session.startAt), 'h:mm a')
-                                : '--:--'}
-                        </span>
-                    </p>
+}) => {
+    // Updated Config: fresh hues, slightly darker text for contrast, and subtle borders
+    const statusConfig: Record<string, { label: string; className: string }> = {
+        completed: {
+            label: 'Done',
+            className: 'bg-teal-50 text-teal-700 border-teal-200/60',
+        },
+        in_progress: {
+            label: 'Live',
+            className:
+                'bg-blue-50 text-blue-700 border-blue-200/60 animate-pulse',
+        },
+        pending: {
+            label: 'Pending',
+            className: 'bg-amber-50 text-amber-700 border-amber-200/60',
+        },
+        cancelled: {
+            label: 'Void',
+            className: 'bg-red-50 text-red-700 border-red-200/60',
+        },
+        interrupted: {
+            label: 'Paused',
+            className: 'bg-orange-50 text-orange-700 border-orange-200/60',
+        },
+        abandoned: {
+            label: 'Dropped',
+            className: 'bg-slate-50 text-slate-600 border-slate-200/60',
+        },
+        reschedule_requested: {
+            label: 'Resched',
+            className: 'bg-violet-50 text-violet-700 border-violet-200/60',
+        },
+    };
+
+    const statusKey = session.activitySessionStatus || 'pending';
+    const { label, className } =
+        statusConfig[statusKey] || statusConfig.pending;
+
+    return (
+        <div className="flex gap-4 relative group">
+            <div className="flex flex-col items-center shrink-0 w-8">
+                <div className="h-8 w-8 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 z-10 group-hover:border-indigo-200 group-hover:shadow-sm transition-all">
+                    <Avatar className="h-full w-full rounded-lg">
+                        <AvatarImage
+                            src={FormatService.formatStrapiMedia(
+                                session.activity?.banner,
+                                'thumbnail',
+                            )}
+                            className="object-cover"
+                        />
+                        <AvatarFallback className="text-[9px] bg-indigo-50 text-indigo-600 font-bold">
+                            {session.activity?.name?.charAt(0)}
+                        </AvatarFallback>
+                    </Avatar>
                 </div>
-                <Badge
-                    variant="secondary"
-                    className={cn(
-                        'text-[9px] h-5 px-1.5 font-bold uppercase tracking-wide border-0',
-                        session.activitySessionStatus === 'completed'
-                            ? 'bg-emerald-50 text-emerald-600'
-                            : 'bg-amber-50 text-amber-600',
-                    )}
-                >
-                    {session.activitySessionStatus === 'completed'
-                        ? 'Done'
-                        : 'Pending'}
-                </Badge>
+                {!isLast && (
+                    <div className="w-px flex-1 bg-slate-100 my-1 group-hover:bg-slate-200 transition-colors" />
+                )}
+            </div>
+            <div className="flex-1 pb-6 pt-1 min-w-0">
+                <div className="flex justify-between items-start">
+                    <div className="space-y-0.5">
+                        <p className="text-xs font-semibold text-slate-900 truncate">
+                            {session.activity?.name}
+                        </p>
+                        <p className="text-[10px] font-medium text-slate-500 flex items-center gap-1">
+                            <span className="text-indigo-600">
+                                {session.student?.firstName}
+                            </span>
+                            <span>•</span>
+                            <span className="tabular-nums">
+                                {session.startAt
+                                    ? format(
+                                          new Date(session.startAt),
+                                          'h:mm a',
+                                      )
+                                    : '--:--'}
+                            </span>
+                        </p>
+                    </div>
+                    <Badge
+                        variant="secondary"
+                        className={cn(
+                            'text-[9px] h-5 px-1.5 font-bold uppercase tracking-wide border',
+                            className,
+                        )}
+                    >
+                        {label}
+                    </Badge>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 // --- MAIN COMPONENT ---
 export default function Dashboard() {
     const router = useRouter();
-
-    // 1. Initialize Query Client for manual cache busting
     const queryClient = useQueryClient();
 
     const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -244,12 +280,10 @@ export default function Dashboard() {
         setIsModalOpen(true);
     };
 
-    // 2. THE FIX: Update Launch Handler
     const handleLaunchGame = async (session: ActivitySessionResponse) => {
         setIsSheetOpen(false);
         setIsModalOpen(false);
 
-        // Use a loading toast so the user knows something is happening
         const toastId = toast.loading('Initiating secure connection...');
 
         try {
@@ -258,7 +292,6 @@ export default function Dashboard() {
                 actualStartAt: new Date().toISOString(),
             });
 
-            // 🔥 CRITICAL: Force React Query to re-fetch the data to update the Agenda
             await queryClient.invalidateQueries({
                 queryKey: ['activity-sessions'],
             });
@@ -277,7 +310,6 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 overflow-x-hidden relative">
-            {/* Background Grid Pattern */}
             <div
                 className="absolute inset-0 pointer-events-none opacity-[0.4]"
                 style={{
@@ -478,8 +510,8 @@ export default function Dashboard() {
                     existingSession={selectedSessionData.primary}
                     activities={selectedSessionData.allDay}
                     onLaunchActivity={handleLaunchGame}
-                    onLaunchFullSession={
-                        (all: any[]) => handleLaunchGame(all[0]) // Starts the first sequence
+                    onLaunchFullSession={(all: any[]) =>
+                        handleLaunchGame(all[0])
                     }
                 />
             )}
@@ -498,7 +530,7 @@ export default function Dashboard() {
     );
 }
 
-// --- SUB-COMPONENT: Live Session Widget ---
+// --- SUB-COMPONENT: Li// --- SUB-COMPONENT: Live Session Widget ---
 function LiveSessionWidget({
     session,
     queuedSessions,
@@ -510,7 +542,7 @@ function LiveSessionWidget({
 }) {
     const [isMinimized, setIsMinimized] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [isReady, setIsReady] = useState(false); // Added for loading state
+    const [isReady, setIsReady] = useState(false);
 
     const dragControls = useDragControls();
     const queryClient = useQueryClient();
@@ -546,7 +578,7 @@ function LiveSessionWidget({
             } else {
                 setTimeLeft(remaining);
             }
-            setIsReady(true); // Data is calculated and ready to show
+            setIsReady(true);
         }, 1000);
 
         return () => clearInterval(interval);
@@ -608,7 +640,7 @@ function LiveSessionWidget({
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
             className={cn(
                 'fixed bottom-6 right-6 z-50 flex shadow-2xl',
-                isMinimized ? 'rounded-full' : 'rounded-3xl',
+                isMinimized ? 'rounded-2xl' : 'rounded-3xl', // Changed to rounded-2xl
             )}
             style={{ touchAction: 'none' }}
             layout
@@ -619,9 +651,11 @@ function LiveSessionWidget({
                     className="relative group cursor-grab active:cursor-grabbing"
                     onPointerDown={(e) => dragControls.start(e)}
                 >
-                    <Card className="rounded-full bg-white/95 backdrop-blur-xl border border-slate-200/80 p-1.5 pr-2 flex items-center gap-3 shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:border-indigo-200 hover:shadow-[0_8px_30px_rgb(99,102,241,0.15)] transition-all duration-300">
+                    {/* Changed Card rounded-full to rounded-2xl, tweaked padding slightly */}
+                    <Card className="rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200/80 p-2 pr-2.5 flex items-center gap-3 shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:border-indigo-200 hover:shadow-[0_8px_30px_rgb(99,102,241,0.15)] transition-all duration-300">
                         <div className="relative">
-                            <Avatar className="h-10 w-10 rounded-full border border-slate-100 shadow-sm">
+                            {/* Changed Avatar rounded-full to rounded-xl */}
+                            <Avatar className="h-10 w-10 rounded-xl border border-slate-100 shadow-sm">
                                 <AvatarImage
                                     src={FormatService.formatStrapiMedia(
                                         session.student?.profilePicture,
@@ -629,11 +663,11 @@ function LiveSessionWidget({
                                     )}
                                     className="object-cover"
                                 />
-                                <AvatarFallback className="bg-slate-50 text-slate-600 font-bold text-xs">
+                                <AvatarFallback className="bg-slate-50 text-slate-600 font-bold text-xs rounded-xl">
                                     {session.student?.firstName?.charAt(0)}
                                 </AvatarFallback>
                             </Avatar>
-                            <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5">
+                            <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5">
                                 <span
                                     className={cn(
                                         'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75',
@@ -685,11 +719,12 @@ function LiveSessionWidget({
                         </div>
                         <div className="h-6 w-px bg-slate-100 mx-1" />
                         <div className="flex items-center gap-0.5">
+                            {/* Changed Button rounded-full to rounded-xl */}
                             <Button
                                 variant="ghost"
                                 size="icon"
                                 disabled={updateSessionMutation.isPending}
-                                className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                className="h-8 w-8 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                                 onPointerDownCapture={(e) =>
                                     e.stopPropagation()
                                 }
@@ -714,10 +749,11 @@ function LiveSessionWidget({
                                     />
                                 )}
                             </Button>
+                            {/* Changed Button rounded-full to rounded-xl */}
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                                className="h-8 w-8 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
                                 onPointerDownCapture={(e) =>
                                     e.stopPropagation()
                                 }
@@ -732,6 +768,7 @@ function LiveSessionWidget({
                     </Card>
                 </motion.div>
             ) : (
+                /* --- EXPANDED STATE (Unchanged) --- */
                 <Card className="rounded-3xl bg-white border border-slate-200 shadow-2xl overflow-hidden flex flex-row">
                     <motion.div
                         layout

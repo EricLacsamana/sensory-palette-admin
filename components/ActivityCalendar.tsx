@@ -64,60 +64,60 @@ const statusConfig: Record<
     }
 > = {
     pending: {
-        bg: 'bg-slate-50',
-        border: 'border-slate-200',
-        text: 'text-slate-600',
-        dot: 'bg-slate-400',
+        bg: 'bg-amber-50',
+        border: 'border-amber-200',
+        text: 'text-amber-700',
+        dot: 'bg-amber-400',
         icon: Clock,
         label: 'Pending',
     },
     in_progress: {
-        bg: 'bg-indigo-50',
-        border: 'border-indigo-200',
-        text: 'text-indigo-700',
-        dot: 'bg-indigo-500',
+        bg: 'bg-blue-50',
+        border: 'border-blue-200',
+        text: 'text-blue-700',
+        dot: 'bg-blue-500 animate-pulse',
         icon: PlayCircle,
         label: 'Live',
     },
     completed: {
-        bg: 'bg-emerald-50',
-        border: 'border-emerald-200',
-        text: 'text-emerald-700',
-        dot: 'bg-emerald-500',
+        bg: 'bg-teal-50',
+        border: 'border-teal-200',
+        text: 'text-teal-700',
+        dot: 'bg-teal-500',
         icon: CheckCircle2,
         label: 'Done',
     },
     interrupted: {
-        bg: 'bg-amber-50',
-        border: 'border-amber-200',
-        text: 'text-amber-700',
-        dot: 'bg-amber-500',
+        bg: 'bg-orange-50',
+        border: 'border-orange-200',
+        text: 'text-orange-700',
+        dot: 'bg-orange-500',
         icon: PauseCircle,
         label: 'Paused',
     },
     cancelled: {
-        bg: 'bg-rose-50',
-        border: 'border-rose-200',
-        text: 'text-rose-700',
-        dot: 'bg-rose-500',
+        bg: 'bg-red-50',
+        border: 'border-red-200',
+        text: 'text-red-700',
+        dot: 'bg-red-500',
         icon: XCircle,
-        label: 'Cancelled',
+        label: 'Void',
     },
     abandoned: {
-        bg: 'bg-stone-50',
-        border: 'border-stone-200',
-        text: 'text-stone-600',
-        dot: 'bg-stone-400',
+        bg: 'bg-slate-50',
+        border: 'border-slate-200',
+        text: 'text-slate-600',
+        dot: 'bg-slate-400',
         icon: Flag,
         label: 'Dropped',
     },
     reschedule_requested: {
-        bg: 'bg-purple-50',
-        border: 'border-purple-200',
-        text: 'text-purple-700',
-        dot: 'bg-purple-500',
+        bg: 'bg-violet-50',
+        border: 'border-violet-200',
+        text: 'text-violet-700',
+        dot: 'bg-violet-500',
         icon: CalendarClock,
-        label: 'Reschedule',
+        label: 'Resched',
     },
 };
 
@@ -170,31 +170,49 @@ export function ActivityCalendar({ className }: { className?: string }) {
 
     const sessionsByDate = useMemo(() => {
         const groups: Record<string, ActivitySessionResponse[]> = {};
+
         filteredSessions.forEach((session: ActivitySessionResponse) => {
-            if (!session.startAt) return;
-            const dateKey = format(parseISO(session.startAt), 'yyyy-MM-dd');
+            // 🔥 PRIORITIZE actualStartAt OVER startAt FOR GROUPING
+            const effectiveStart = session.actualStartAt || session.startAt;
+            if (!effectiveStart) return;
+
+            const dateKey = format(parseISO(effectiveStart), 'yyyy-MM-dd');
             if (!groups[dateKey]) groups[dateKey] = [];
             groups[dateKey].push(session);
         });
+
+        // 🔥 CHRONOLOGICAL SORTING: Prioritize actualStartAt OVER startAt
+        Object.keys(groups).forEach((dateKey) => {
+            groups[dateKey].sort((a, b) => {
+                const timeA = new Date(a.actualStartAt || a.startAt!).getTime();
+                const timeB = new Date(b.actualStartAt || b.startAt!).getTime();
+                return timeA - timeB;
+            });
+        });
+
         return groups;
     }, [filteredSessions]);
 
     const currentMonthStats = useMemo(() => {
         if (!Array.isArray(sessions)) return { total: 0, rate: 0 };
 
-        const currentMonthSessions = sessions.filter(
-            (s: any) =>
-                // ADD THIS: s.startAt && ...
-                s.startAt && isSameMonth(parseISO(s.startAt), viewDate),
-        );
+        const currentMonthSessions = sessions.filter((s: any) => {
+            const effectiveStart = s.actualStartAt || s.startAt;
+            return (
+                effectiveStart &&
+                isSameMonth(parseISO(effectiveStart), viewDate)
+            );
+        });
 
         const completed = currentMonthSessions.filter(
             (s: any) => s.activitySessionStatus === 'completed',
-        );
+        ).length;
+
         const completionRate =
             currentMonthSessions.length > 0
                 ? Math.round((completed / currentMonthSessions.length) * 100)
                 : 0;
+
         return { total: currentMonthSessions.length, rate: completionRate };
     }, [sessions, viewDate]);
 
@@ -227,7 +245,7 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                     {currentMonthStats.total} Events
                                 </span>
                                 <span className="h-1 w-1 rounded-full bg-slate-300" />
-                                <span className="text-[10px] font-medium text-emerald-600 uppercase tracking-wide">
+                                <span className="text-[10px] font-medium text-teal-600 uppercase tracking-wide">
                                     {currentMonthStats.rate}% Completion
                                 </span>
                             </div>
@@ -335,12 +353,25 @@ export function ActivityCalendar({ className }: { className?: string }) {
                         const isSelected =
                             selectedDate && isSameDay(day, selectedDate);
 
+                        // 🔥 OVERFLOW LOGIC
+                        const MAX_VISIBLE = 4;
+                        const totalSessions = daySessions.length;
+                        const visibleSessions =
+                            totalSessions > 5
+                                ? daySessions.slice(0, MAX_VISIBLE)
+                                : daySessions;
+                        const hiddenSessions =
+                            totalSessions > 5
+                                ? daySessions.slice(MAX_VISIBLE)
+                                : [];
+                        const overflowCount = hiddenSessions.length;
+
                         return (
                             <div
                                 key={dateKey}
                                 onClick={() => setSelectedDate(day)}
                                 className={cn(
-                                    'relative flex flex-col h-full min-w-0 transition-all duration-200 group cursor-default overflow-hidden',
+                                    'relative flex flex-col h-full min-w-0 transition-all duration-200 group cursor-pointer overflow-hidden',
                                     'bg-white hover:bg-slate-50',
                                     !isCurrentMonth &&
                                         'bg-slate-50/30 text-slate-300',
@@ -367,15 +398,19 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                 </div>
 
                                 {/* Slots Container */}
-                                <div className="flex-1 px-1.5 pb-1.5 md:px-2 md:pb-2 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 content-start overflow-y-auto scrollbar-none">
-                                    {daySessions.map((session) => {
-                                        // THIS IS THE FIX: Defaulting to 'pending' instead of 'upcoming'
+                                <div className="flex-1 px-1.5 pb-1.5 md:px-2 md:pb-2 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 content-start overflow-hidden">
+                                    {visibleSessions.map((session) => {
                                         const status =
                                             session.activitySessionStatus ||
                                             'pending';
                                         const config =
                                             statusConfig[status] ||
                                             statusConfig.pending;
+
+                                        // Prioritize actualStartAt for display
+                                        const displayStart =
+                                            session.actualStartAt ||
+                                            session.startAt;
 
                                         return (
                                             <Tooltip
@@ -402,10 +437,10 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                                             variant="outline"
                                                             className="bg-white text-slate-500 text-[9px] font-mono h-5"
                                                         >
-                                                            {session.startAt
+                                                            {displayStart
                                                                 ? format(
                                                                       parseISO(
-                                                                          session.startAt,
+                                                                          displayStart,
                                                                       ),
                                                                       'h:mm a',
                                                                   )
@@ -503,6 +538,91 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                             </Tooltip>
                                         );
                                     })}
+
+                                    {/* 🔥 NEW DETAILED OVERFLOW TOOLTIP */}
+                                    {overflowCount > 0 && (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <div className="flex items-center justify-center aspect-square w-full max-w-[14px] rounded-[3px] bg-slate-200 text-slate-600 text-[8px] font-bold hover:bg-slate-300 transition-colors shadow-sm cursor-pointer select-none">
+                                                    +{overflowCount}
+                                                </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent
+                                                side="right"
+                                                sideOffset={10}
+                                                className="p-3 border-slate-200 shadow-xl bg-white rounded-xl min-w-[220px] max-w-[280px] z-50"
+                                            >
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">
+                                                    {overflowCount} Remaining
+                                                    Events
+                                                </div>
+                                                <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                                                    {hiddenSessions.map(
+                                                        (session) => {
+                                                            const status =
+                                                                session.activitySessionStatus ||
+                                                                'pending';
+                                                            const config =
+                                                                statusConfig[
+                                                                    status
+                                                                ] ||
+                                                                statusConfig.pending;
+                                                            const displayStart =
+                                                                session.actualStartAt ||
+                                                                session.startAt;
+
+                                                            return (
+                                                                <div
+                                                                    key={
+                                                                        session.id ||
+                                                                        session.documentId
+                                                                    }
+                                                                    className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-colors"
+                                                                >
+                                                                    <div
+                                                                        className={cn(
+                                                                            'w-2 h-2 rounded-full shrink-0 shadow-sm',
+                                                                            config.dot,
+                                                                        )}
+                                                                    />
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-xs font-semibold text-slate-900 truncate">
+                                                                            {session
+                                                                                .activity
+                                                                                ?.name ||
+                                                                                'Activity'}
+                                                                        </p>
+                                                                        <p className="text-[10px] font-medium text-slate-500 mt-0.5 flex items-center gap-1.5">
+                                                                            <span className="text-indigo-600 font-semibold">
+                                                                                {
+                                                                                    session
+                                                                                        .student
+                                                                                        ?.firstName
+                                                                                }
+                                                                            </span>
+                                                                            <span>
+                                                                                •
+                                                                            </span>
+                                                                            <span className="tabular-nums">
+                                                                                {displayStart
+                                                                                    ? format(
+                                                                                          parseISO(
+                                                                                              displayStart,
+                                                                                          ),
+                                                                                          'h:mm a',
+                                                                                      )
+                                                                                    : 'TBD'}
+                                                                            </span>
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        },
+                                                    )}
+                                                </div>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    )}
                                 </div>
                             </div>
                         );
