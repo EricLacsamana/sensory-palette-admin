@@ -125,7 +125,7 @@ export default function StudentsDirectory() {
                                 <Database size={12} /> Learner Database
                             </div>
                             <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                                Master Roster
+                                My Students
                             </h1>
                         </div>
 
@@ -146,12 +146,12 @@ export default function StudentsDirectory() {
                                     }
                                     colorClass="bg-emerald-50 text-emerald-600"
                                 />
-                                <StatBadge
+                                {/* <StatBadge
                                     icon={School}
                                     label="Campus"
                                     value="QC-01"
                                     colorClass="bg-amber-50 text-amber-600"
-                                />
+                                /> */}
                             </div>
 
                             <Separator
@@ -166,13 +166,13 @@ export default function StudentsDirectory() {
                                 <DialogTrigger asChild>
                                     <Button className="h-11 pl-4 pr-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 font-bold text-xs uppercase tracking-wide transition-all active:scale-95">
                                         <Plus className="mr-2 h-4 w-4" />
-                                        Enroll Learner
+                                        Enroll Student
                                     </Button>
                                 </DialogTrigger>
                                 <DialogContent className="max-w-2xl p-0 border-none bg-transparent shadow-none">
                                     <DialogHeader className="sr-only">
                                         <DialogTitle>
-                                            Enroll New Learner
+                                            Enroll New Student
                                         </DialogTitle>
                                     </DialogHeader>
                                     <EnrollStudenModalForm
@@ -280,7 +280,7 @@ export default function StudentsDirectory() {
                                 No results found
                             </h3>
                             <p className="text-sm font-medium text-slate-400 mt-2 max-w-[320px]">
-                                We couldn't find any learners matching your
+                                We couldn't find any students matching your
                                 current search parameters.
                             </p>
                             <Button

@@ -39,7 +39,50 @@ import { Input } from '@base-ui/react';
 import { UserResponse } from '@/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 
-// Variants for the timeline slide effect
+// --- SINGLE SOURCE OF TRUTH FOR OPERATING HOURS ---
+export const getOperatingHoursForDate = (targetDate: Date | string) => {
+    const base = new Date(targetDate);
+    const startStr = process.env.NEXT_PUBLIC_OPERATING_START || '08:00';
+    const endStr = process.env.NEXT_PUBLIC_OPERATING_END || '18:00';
+
+    const [startHour, startMin] = startStr.split(':').map(Number);
+    const [endHour, endMin] = endStr.split(':').map(Number);
+
+    const s = new Date(base);
+    s.setHours(startHour, startMin, 0, 0);
+
+    const e = new Date(base);
+    e.setHours(endHour, endMin, 0, 0);
+
+    const now = new Date();
+    const isToday =
+        s.getFullYear() === now.getFullYear() &&
+        s.getMonth() === now.getMonth() &&
+        s.getDate() === now.getDate();
+
+    if (isToday) {
+        const coeff = 1000 * 60 * 5; // 5-minute rounding
+        const roundedNow = new Date(Math.ceil(now.getTime() / coeff) * coeff);
+        if (roundedNow > s) {
+            s.setTime(roundedNow.getTime());
+        }
+    }
+
+    // FIX: Always use the exact operating end time instead of a +2 hour padding
+    let finalEnd = new Date(e);
+
+    // Failsafe: if the start time somehow gets pushed past the operating end time
+    if (s > e) {
+        s.setTime(e.getTime());
+    }
+
+    return {
+        start: s.toISOString(),
+        end: finalEnd.toISOString(),
+    };
+};
+// --------------------------------------------------
+
 const timelineVariants = {
     enter: (direction: number) => ({
         x: direction > 0 ? 40 : -40,
@@ -76,23 +119,18 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     }, [params?.id, searchParams]);
 
     const initialIso = useMemo(() => {
-        const s = new Date();
-        s.setHours(8, 0, 0, 0);
-        const e = new Date();
-        e.setHours(18, 0, 0, 0);
-        return { start: s.toISOString(), end: e.toISOString() };
+        return getOperatingHoursForDate(new Date());
     }, []);
 
     const [startAt, setStartAt] = useState(initialIso.start);
     const [endAt, setEndAt] = useState(initialIso.end);
 
-    const { data: student } = useQuery({
-        queryKey: ['student', { id: studentId }],
+    const { data: student, isLoading: isLoadingStudent } = useQuery({
+        queryKey: ['student', studentId],
         queryFn: getStudent,
         enabled: !!studentId,
     });
 
-    console.log('student', student);
     const { data: studentsList = [] } = useQuery({
         queryKey: ['students', searchQuery],
         queryFn: getStudents,
@@ -212,16 +250,105 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         setIsDragging(false);
     };
 
-    const handleTimeChange = (type: 'start' | 'end', val: string) => {
-        if (type === 'start') {
-            const oldDate = new Date(startAt).setHours(0, 0, 0, 0);
-            const newDate = new Date(val).setHours(0, 0, 0, 0);
-            if (oldDate !== newDate) {
-                setSlideDirection(newDate > oldDate ? 1 : -1);
+    const handleTimeChange = (
+        type: 'start' | 'end' | 'date',
+        val1: string,
+        val2?: string,
+    ) => {
+        if (type === 'date' && val1) {
+            const newBounds = getOperatingHoursForDate(val1);
+
+            const oldDateNum = new Date(startAt).setHours(0, 0, 0, 0);
+            const newDateNum = new Date(newBounds.start).setHours(0, 0, 0, 0);
+
+            if (oldDateNum !== newDateNum) {
+                setSlideDirection(newDateNum > oldDateNum ? 1 : -1);
             }
-            setStartAt(val);
-        } else {
-            setEndAt(val);
+
+            const now = new Date();
+            const originalStartStr =
+                process.env.NEXT_PUBLIC_OPERATING_START || '08:00';
+            const [startHour, startMin] = originalStartStr
+                .split(':')
+                .map(Number);
+
+            if (
+                newDateNum === now.setHours(0, 0, 0, 0) &&
+                new Date(newBounds.start) >
+                    new Date(new Date().setHours(startHour, startMin, 0, 0))
+            ) {
+                toast.warning(
+                    'Adjusted to current time (cannot schedule in the past)',
+                    { id: 'past-schedule' },
+                );
+            }
+
+            setStartAt(newBounds.start);
+            setEndAt(newBounds.end);
+            return;
+        }
+
+        // Fallbacks for any remaining inner-component overrides (if any)
+        let newDate = new Date(val1);
+
+        if (type === 'start') {
+            const now = new Date();
+            const isToday =
+                newDate.getFullYear() === now.getFullYear() &&
+                newDate.getMonth() === now.getMonth() &&
+                newDate.getDate() === now.getDate();
+
+            if (isToday && newDate < now) {
+                toast.error(
+                    'Adjusted to current time (cannot schedule in the past)',
+                    { id: 'past-schedule' },
+                );
+                const coeff = 1000 * 60 * 5;
+                newDate = new Date(Math.ceil(now.getTime() / coeff) * coeff);
+            }
+
+            const oldDateNum = new Date(startAt).setHours(0, 0, 0, 0);
+            const newDateNum = new Date(newDate).setHours(0, 0, 0, 0);
+
+            if (oldDateNum !== newDateNum) {
+                setSlideDirection(newDateNum > oldDateNum ? 1 : -1);
+            }
+
+            setStartAt(newDate.toISOString());
+
+            let currentEnd = new Date(endAt);
+            currentEnd.setFullYear(
+                newDate.getFullYear(),
+                newDate.getMonth(),
+                newDate.getDate(),
+            );
+
+            if (newDate >= currentEnd) {
+                currentEnd = new Date(newDate.getTime() + 2 * 60 * 60 * 1000);
+            }
+
+            const endStr = process.env.NEXT_PUBLIC_OPERATING_END || '18:00';
+            const [endHour, endMin] = endStr.split(':').map(Number);
+            const absoluteEnd = new Date(currentEnd);
+            absoluteEnd.setHours(endHour, endMin, 0, 0);
+
+            if (currentEnd > absoluteEnd) {
+                currentEnd.setTime(absoluteEnd.getTime());
+            }
+
+            setEndAt(currentEnd.toISOString());
+        } else if (type === 'end') {
+            const currentStart = new Date(startAt);
+
+            if (newDate <= currentStart) {
+                const autoFixedEnd = new Date(
+                    currentStart.getTime() + 2 * 60 * 60 * 1000,
+                );
+                setEndAt(autoFixedEnd.toISOString());
+                return;
+            }
+
+            setEndAt(newDate.toISOString());
         }
     };
 
@@ -373,7 +500,6 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                             </div>
                         </div>
 
-                        {/* ANIMATED TIMELINE CONTAINER */}
                         <div className="flex-1 bg-slate-50/30 relative overflow-hidden">
                             <AnimatePresence
                                 mode="wait"
@@ -381,7 +507,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                 initial={false}
                             >
                                 <motion.div
-                                    key={startAt.split('T')[0]} // The key changes when the day changes, triggering animation
+                                    key={startAt.split('T')[0]}
                                     custom={slideDirection}
                                     variants={timelineVariants}
                                     initial="enter"
@@ -494,7 +620,6 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                 </motion.div>
                             </AnimatePresence>
                         </div>
-                        {/* END ANIMATED TIMELINE CONTAINER */}
 
                         <div className="h-20 border-t border-slate-100 flex items-center justify-end px-8 bg-white shrink-0 z-50 gap-3">
                             <Button

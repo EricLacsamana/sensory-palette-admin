@@ -3,14 +3,28 @@ import { Activity } from './actitivity';
 
 export enum ActivitySessionStatus {
     Pending = 'pending',
-    InProgress = 'in-progress',
+    Queued = 'queued',
+    InProgress = 'in_progress',
+    Paused = 'paused', // Added Paused Status
     Completed = 'completed',
     Cancelled = 'cancelled',
-    Interrupted = 'interrupted',
     Abandoned = 'abandoned',
     Reschedule = 'reschedule',
 }
 
+export type PauseReason =
+    | 'Bathroom Break'
+    | 'Behavioral Interruption'
+    | 'Tech Issue'
+    | 'Learner Initiated'
+    | 'Fatigue / Break'
+    | 'Other';
+
+export interface TimeLog {
+    status: 'start' | 'pause' | 'resume';
+    timestamp: string;
+    reason?: PauseReason | string;
+}
 export interface ActivitySessionResponse {
     id: number | string;
     documentId: string;
@@ -26,6 +40,8 @@ export interface ActivitySessionResponse {
     score?: number;
     createdAt: string; // ISO String
     updatedAt: string; // ISO String
+    timeLogs: TimeLog[];
+    enableLearnerControls?: boolean;
 }
 
 export type ActivitySessionEntry = Omit<
@@ -45,6 +61,8 @@ export type ActivitySessionEntry = Omit<
     documentId?: string;
     activity: Activity;
     type: 'activity' | 'gap';
+    enableLearnerControls?: boolean;
+    rawTelemetry: unknown[];
 };
 
 export type CreateActivitySessionPayload = {
@@ -57,9 +75,15 @@ export type CreateActivitySessionPayload = {
 };
 
 export type UpdatectivitySessionPayload = {
-    startAt: string;
-    endAt: string;
+    startAt?: string;
+    endAt?: string;
+    actualStartAt?: string | null;
+    actualEndAt?: string | null;
     teacherNotes?: string;
     durationMinutes?: number;
-    activitiySessionStatus?: ActivitySessionStatus;
+    activitySessionStatus?: ActivitySessionStatus;
+    score?: number;
+    rawTelemetry?: unknown[];
+    timeLogs?: TimeLog[];
+    enableLearnerControls?: boolean;
 };

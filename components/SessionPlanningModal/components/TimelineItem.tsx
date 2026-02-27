@@ -44,11 +44,15 @@ interface TimelineItemProps {
     showDetails?: boolean;
 }
 
+// Store totalMinutes for easy comparison against the current time
 const BASE_START_TIMES = Array.from({ length: 49 }, (_, i) => {
     const totalMinutes = 8 * 60 + i * 15;
     const h = Math.floor(totalMinutes / 60);
     const m = totalMinutes % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    return {
+        str: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+        totalMinutes,
+    };
 });
 
 export const TimelineEndpoint = ({
@@ -147,6 +151,7 @@ export const TimelineItem = ({
         return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     };
 
+    // --- STRICT TIME CONSTRAINTS LOGIC ---
     const timeOptions = useMemo(() => {
         if (isForeign || status === 'cancelled') return [];
         const baseDate = sessionStart
@@ -154,18 +159,35 @@ export const TimelineItem = ({
             : data.startAt
               ? new Date(data.startAt)
               : new Date();
+
         const duration = data.durationMinutes || 30;
         const sessionEndMs = sessionEnd
             ? new Date(sessionEnd).getTime()
             : Number.MAX_SAFE_INTEGER;
 
-        return BASE_START_TIMES.map((startStr) => {
-            const [h, m] = startStr.split(':').map(Number);
+        const now = new Date();
+        const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+
+        // Determine if the base date is "Today"
+        const isToday =
+            baseDate.getFullYear() === now.getFullYear() &&
+            baseDate.getMonth() === now.getMonth() &&
+            baseDate.getDate() === now.getDate();
+
+        return BASE_START_TIMES.map((timeObj) => {
+            // 1. Check against current time if today
+            if (isToday && timeObj.totalMinutes < currentTotalMinutes) {
+                return null;
+            }
+
+            const [h, m] = timeObj.str.split(':').map(Number);
             const optStart = new Date(baseDate);
             optStart.setHours(h, m, 0, 0);
+
             const optEnd = new Date(optStart);
             optEnd.setMinutes(optEnd.getMinutes() + duration);
 
+            // 2. Check against the overall session boundary
             if (optEnd.getTime() > sessionEndMs) return null;
 
             const format = (d: Date) =>
@@ -175,7 +197,7 @@ export const TimelineItem = ({
                     hour12: true,
                 });
             return {
-                value: startStr,
+                value: timeObj.str,
                 label: `${format(optStart)} - ${format(optEnd)}`,
             };
         }).filter(Boolean) as { value: string; label: string }[];
@@ -378,7 +400,7 @@ export const TimelineItem = ({
                                         </option>
                                     ))
                                 ) : (
-                                    <option disabled>No slots</option>
+                                    <option disabled>No slots available</option>
                                 )}
                             </select>
                             <div className="absolute -right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover/time:opacity-100 transition-opacity pointer-events-none">

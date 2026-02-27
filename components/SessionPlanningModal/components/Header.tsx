@@ -11,7 +11,6 @@ import {
     Undo2,
     Redo2,
     Users,
-    ChevronDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DialogHeader } from '@/components/ui/dialog';
@@ -34,7 +33,11 @@ interface HeaderProps {
     setIsSidebarOpen: (val: boolean) => void;
     startAt: string;
     endAt: string;
-    onChange: (type: 'start' | 'end', val: string) => void;
+    onChange: (
+        type: 'start' | 'end' | 'date',
+        val1: string,
+        val2?: string,
+    ) => void;
     undo: () => void;
     redo: () => void;
     canUndo: boolean;
@@ -43,13 +46,6 @@ interface HeaderProps {
     isShowOtherUsers: boolean;
     setIsShowOtherUsers: (val: boolean) => void;
 }
-
-const TIME_OPTIONS = Array.from({ length: 49 }, (_, i) => {
-    const totalMinutes = 8 * 60 + i * 15;
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-});
 
 const slideVariants = {
     enter: (direction: number) => ({
@@ -88,48 +84,62 @@ export const Header = ({
     const dStart = new Date(startAt);
     const dEnd = new Date(endAt);
 
+    const now = new Date();
+
+    const isToday =
+        dStart.getFullYear() === now.getFullYear() &&
+        dStart.getMonth() === now.getMonth() &&
+        dStart.getDate() === now.getDate();
+
+    const todayStr = now.toLocaleDateString('en-CA');
     const _dateValue = dStart.toISOString().split('T')[0];
+
     const _toTimeStr = (d: Date) =>
-        `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        d.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+        });
+
     const _displayDate = dStart.toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',
         day: 'numeric',
     });
 
-    const handleUpdate = (type: 'date' | 'start' | 'end', newVal: string) => {
+    const handleUpdate = (type: 'date', newVal: string) => {
         if (type === 'date') {
             const [y, m, d] = newVal.split('-').map(Number);
             const nStart = new Date(startAt);
             const nEnd = new Date(endAt);
             [nStart, nEnd].forEach((date) => date.setFullYear(y, m - 1, d));
-            onChange('start', nStart.toISOString());
-            onChange('end', nEnd.toISOString());
-        } else {
-            const [h, min] = newVal.split(':').map(Number);
-            const target = new Date(type === 'start' ? startAt : endAt);
-            target.setHours(h, min, 0, 0);
-            onChange(type, target.toISOString());
+
+            onChange('date', nStart.toISOString(), nEnd.toISOString());
         }
     };
 
     const handleShiftDate = (offset: number) => {
-        setDirection(offset > 0 ? 1 : -1);
         const currentStart = new Date(startAt);
         const currentEnd = new Date(endAt);
 
         currentStart.setDate(currentStart.getDate() + offset);
         currentEnd.setDate(currentEnd.getDate() + offset);
 
-        onChange('start', currentStart.toISOString());
-        onChange('end', currentEnd.toISOString());
+        const checkDate = new Date(currentStart);
+        checkDate.setHours(0, 0, 0, 0);
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (checkDate.getTime() < today.getTime()) return;
+
+        setDirection(offset > 0 ? 1 : -1);
+        onChange('date', currentStart.toISOString(), currentEnd.toISOString());
     };
 
     return (
         <TooltipProvider delayDuration={0}>
-            {/* FIX: Changed `px-4` to `pl-4 pr-12` (or pr-14 if needed) to clear the Dialog close button */}
             <DialogHeader className="h-14 pl-4 pr-12 border-b border-slate-200 flex flex-row items-center justify-between shrink-0 bg-white/95 backdrop-blur-sm z-30 gap-3">
-                {/* LEFT SECTION */}
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                     <Button
                         variant="ghost"
@@ -188,13 +198,13 @@ export const Header = ({
                     </div>
                 </div>
 
-                {/* CENTER SECTION */}
                 <div className="flex items-center justify-center gap-2 shrink-0">
                     <div className="flex items-center bg-white border border-slate-200 hover:border-indigo-300 shadow-sm rounded-md transition-all h-8">
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-l-md rounded-r-none text-slate-500 hover:text-indigo-600 hover:bg-slate-50 shrink-0"
+                            disabled={isToday}
+                            className="h-8 w-8 rounded-l-md rounded-r-none text-slate-500 hover:text-indigo-600 hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent shrink-0"
                             onClick={() => handleShiftDate(-1)}
                         >
                             <ChevronLeft size={16} />
@@ -232,6 +242,7 @@ export const Header = ({
                             </AnimatePresence>
                             <input
                                 type="date"
+                                min={todayStr}
                                 className="absolute inset-0 opacity-0 cursor-pointer z-20 w-full"
                                 value={_dateValue}
                                 onChange={(e) => {
@@ -260,68 +271,40 @@ export const Header = ({
                         </Button>
                     </div>
 
-                    <div className="flex items-center h-8 bg-slate-50 border border-slate-200 rounded-md shadow-inner px-1 gap-1">
-                        <div className="relative group/start px-2 h-6 flex items-center gap-1.5 hover:bg-white hover:shadow-sm rounded transition-all cursor-pointer shrink-0">
+                    <div className="flex items-center h-8 bg-slate-50 border border-slate-200 rounded-md shadow-inner px-2.5 gap-2">
+                        <div className="flex items-center gap-1.5 shrink-0">
                             <Clock
                                 size={12}
-                                className="text-slate-400 group-hover/start:text-emerald-500"
+                                className={cn(
+                                    isToday
+                                        ? 'text-amber-500'
+                                        : 'text-emerald-500',
+                                )}
                             />
-                            <span className="text-[11px] font-semibold text-slate-600 group-hover/start:text-slate-900 tabular-nums">
+                            <span className="text-[11px] font-semibold text-slate-700 tabular-nums">
                                 {_toTimeStr(dStart)}
                             </span>
-                            <ChevronDown
-                                size={10}
-                                className="text-slate-300 group-hover/start:text-slate-500"
-                            />
-                            <select
-                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                value={_toTimeStr(dStart)}
-                                onChange={(e) =>
-                                    handleUpdate('start', e.target.value)
-                                }
-                            >
-                                {TIME_OPTIONS.map((t) => (
-                                    <option key={`start-${t}`} value={t}>
-                                        {t}
-                                    </option>
-                                ))}
-                            </select>
+                            {/* NEW: Visual 'Now' indicator for the current time constraint */}
+                            {isToday && (
+                                <span className="text-[9px] text-amber-600 bg-amber-100 px-1 py-0.5 rounded border border-amber-200 uppercase tracking-wider font-bold shadow-sm">
+                                    Now
+                                </span>
+                            )}
                         </div>
 
                         <div className="text-slate-300 shrink-0">
                             <ChevronRight size={10} />
                         </div>
 
-                        <div className="relative group/end px-2 h-6 flex items-center gap-1.5 hover:bg-white hover:shadow-sm rounded transition-all cursor-pointer shrink-0">
-                            <Clock
-                                size={12}
-                                className="text-slate-400 group-hover/end:text-rose-500"
-                            />
-                            <span className="text-[11px] font-semibold text-slate-600 group-hover/end:text-slate-900 tabular-nums">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            <Clock size={12} className="text-rose-500" />
+                            <span className="text-[11px] font-semibold text-slate-700 tabular-nums">
                                 {_toTimeStr(dEnd)}
                             </span>
-                            <ChevronDown
-                                size={10}
-                                className="text-slate-300 group-hover/end:text-slate-500"
-                            />
-                            <select
-                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                value={_toTimeStr(dEnd)}
-                                onChange={(e) =>
-                                    handleUpdate('end', e.target.value)
-                                }
-                            >
-                                {TIME_OPTIONS.map((t) => (
-                                    <option key={`end-${t}`} value={t}>
-                                        {t}
-                                    </option>
-                                ))}
-                            </select>
                         </div>
                     </div>
                 </div>
 
-                {/* RIGHT SECTION */}
                 <div className="flex items-center justify-end gap-2 flex-1 min-w-0">
                     <div className="flex items-center bg-slate-50 p-0.5 rounded-md border border-slate-200 shrink-0">
                         <Tooltip>

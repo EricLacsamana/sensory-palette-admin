@@ -11,10 +11,12 @@ import {
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import authReducer from './auth/authSlice';
+import gameSessionReducer from './game/gameSessionSlice';
 
 // 1. Define the app-level combined reducer
 const appReducer = combineReducers({
     auth: authReducer,
+    gameSession: gameSessionReducer, // 👈 Register the slice here
 });
 
 // 2. Define the Root Reducer with the reset logic
@@ -35,7 +37,8 @@ const persistConfig = {
     key: 'root',
     version: 1,
     storage,
-    whitelist: ['auth'],
+    // 👈 Add 'gameSession' to the whitelist so telemetry survives page refreshes
+    whitelist: ['auth', 'gameSession'],
 };
 
 // 3. Create the persisted reducer

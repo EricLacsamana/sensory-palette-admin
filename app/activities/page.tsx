@@ -169,7 +169,7 @@ const ActivityLibrary = () => {
                                     <img
                                         src={
                                             activity.banner?.url
-                                                ? `http://localhost:1337${activity.banner.url}`
+                                                ? `${process.env.NEXT_PUBLIC_API_URL}${activity.banner.url}`
                                                 : 'https://via.placeholder.com/400x225'
                                         }
                                         alt={activity.name}

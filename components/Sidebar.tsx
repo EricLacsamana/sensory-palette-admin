@@ -19,6 +19,7 @@ import {
     Plus,
     Settings2,
     Users2,
+    Settings,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -45,7 +46,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
     const dispatch = useDispatch();
     const pathname = usePathname();
 
-    const { data: user } = useQuery({
+    const { data: user, isLoading } = useQuery({
         queryKey: ['me'],
         queryFn: me,
     });
@@ -54,14 +55,68 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
         dispatch(logout());
     };
 
+    const userRole = user?.role?.type;
+
+    if (userRole === 'student') {
+        return null;
+    }
+
     const navItems = [
-        { path: '/', label: 'Overview', icon: PieChart },
-        { path: '/students', label: 'Learners', icon: Users },
-        { path: '/activities', label: 'Game Center', icon: Gamepad2 },
-        { path: '/activity-sessions', label: 'Sessions', icon: Activity },
-        { path: '/users', label: 'Users Directory', icon: Users2 },
-        { path: '/devices', label: 'Sensors', icon: Wifi, badge: 'LIVE' },
+        {
+            path: '/',
+            label: 'Overview',
+            icon: PieChart,
+            allowedRoles: ['admin', 'therapist', 'secretary'],
+        },
+        {
+            path: '/students',
+            label: 'Learners',
+            icon: Users,
+            allowedRoles: ['therapist', 'secretary'],
+        },
+        {
+            path: '/activities',
+            label: 'Activity Center',
+            icon: Gamepad2,
+            allowedRoles: ['therapist'],
+        },
+        {
+            path: '/activity-manager',
+            label: 'Activity Manager',
+            icon: Gamepad2,
+            allowedRoles: ['admin'],
+        },
+        {
+            path: '/activity-sessions',
+            label: 'Sessions',
+            icon: Activity,
+            allowedRoles: ['admin', 'therapist', 'secretary'],
+        },
+        {
+            path: '/users',
+            label: 'Users Directory',
+            icon: Users2,
+            allowedRoles: ['admin', 'secretary'],
+        },
+        // {
+        //     path: '/devices',
+        //     label: 'Sensors',
+        //     icon: Wifi,
+        //     badge: 'LIVE',
+        //     allowedRoles: ['admin', 'therapist'],
+        // },
+        {
+            path: '/settings',
+            label: 'Settings',
+            icon: Settings,
+            allowedRoles: ['admin', 'therapist', 'secretary'],
+        },
     ];
+
+    // Filter items based on the current user's role
+    const visibleNavItems = navItems.filter(
+        (item) => !userRole || item.allowedRoles.includes(userRole),
+    );
 
     return (
         <TooltipProvider delayDuration={100}>
@@ -71,6 +126,18 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                     isCollapsed ? 'w-[72px]' : 'w-[260px]',
                 )}
             >
+                {/* --- FLOATING COLLAPSE TOGGLE BUTTON --- */}
+                <button
+                    onClick={() => setIsCollapsed(!isCollapsed)}
+                    className="absolute -right-3.5 top-[50px] z-50 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm transition-all hover:scale-110 hover:text-indigo-600 focus:outline-none"
+                >
+                    {isCollapsed ? (
+                        <ChevronRight size={14} />
+                    ) : (
+                        <ChevronLeft size={14} />
+                    )}
+                </button>
+
                 {/* --- HEADER / LOGO AREA --- */}
                 <div className="h-16 flex items-center px-5 border-b border-slate-100 shrink-0">
                     <div className="flex items-center gap-3 overflow-hidden">
@@ -115,7 +182,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                                         className="object-cover"
                                     />
                                     <AvatarFallback className="bg-slate-200 text-slate-500 rounded-lg text-xs font-bold">
-                                        {user?.fullName?.charAt(0)}
+                                        {user?.fullName?.charAt(0) || '?'}
                                     </AvatarFallback>
                                 </Avatar>
                                 <span className="absolute -bottom-1 -right-1 block h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
@@ -125,13 +192,13 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                                 <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
-                                    className="flex flex-col min-w-0"
+                                    className="flex flex-col min-w-0 pr-4"
                                 >
                                     <p className="truncate text-sm font-semibold text-slate-900 leading-none mb-1">
-                                        {user?.fullName || 'Therapist'}
+                                        {user?.fullName || 'Loading...'}
                                     </p>
                                     <p className="truncate text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                                        {user?.role?.name || 'Admin'}
+                                        {user?.role?.name || '...'}
                                     </p>
                                 </motion.div>
                             )}
@@ -140,77 +207,86 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                         {/* Settings Gear Hover Effect */}
                         {!isCollapsed && (
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 text-slate-400 hover:text-indigo-600"
-                                >
-                                    <Settings2 size={14} />
-                                </Button>
+                                <Link href="/settings">
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-slate-400 hover:text-indigo-600 bg-white/80 backdrop-blur-sm"
+                                    >
+                                        <Settings2 size={14} />
+                                    </Button>
+                                </Link>
                             </div>
                         )}
                     </div>
                 </div>
 
                 {/* --- PRIMARY ACTION --- */}
-                <div
-                    className={cn(
-                        'px-3 mb-6 transition-all',
-                        isCollapsed ? 'flex justify-center' : '',
-                    )}
-                >
-                    {isCollapsed ? (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    size="icon"
-                                    className="h-10 w-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200"
-                                    onClick={() => {
-                                        // Simple hack to trigger the same logic as the full button
-                                        const btn =
-                                            document.getElementById(
-                                                'init-session-btn',
-                                            );
-                                        if (btn) btn.click();
-                                        else {
-                                            // Fallback if needed, or implement direct routing here
-                                            const params = new URLSearchParams(
-                                                window.location.search,
-                                            );
-                                            params.set(
-                                                'isActivitySessionPlanningOpen',
-                                                'true',
-                                            );
-                                            router.push(
-                                                `${pathname}?${params.toString()}`,
-                                            );
-                                        }
-                                    }}
-                                >
-                                    <Plus size={20} className="text-white" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">
-                                Initialize Session
-                            </TooltipContent>
-                        </Tooltip>
-                    ) : (
-                        <div className="animate-in fade-in zoom-in-95 duration-300">
-                            <InitializeSessionButton className="w-full" />
-                        </div>
-                    )}
-                </div>
+                {['therapist', 'secretary'].includes(userRole) && (
+                    <div
+                        className={cn(
+                            'px-3 mb-6 transition-all',
+                            isCollapsed ? 'flex justify-center' : '',
+                        )}
+                    >
+                        {isCollapsed ? (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        size="icon"
+                                        className="h-10 w-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200"
+                                        onClick={() => {
+                                            const btn =
+                                                document.getElementById(
+                                                    'init-session-btn',
+                                                );
+                                            if (btn) btn.click();
+                                            else {
+                                                const params =
+                                                    new URLSearchParams(
+                                                        window.location.search,
+                                                    );
+                                                params.set(
+                                                    'isActivitySessionPlanningOpen',
+                                                    'true',
+                                                );
+                                                router.push(
+                                                    `${pathname}?${params.toString()}`,
+                                                );
+                                            }
+                                        }}
+                                    >
+                                        <Plus
+                                            size={20}
+                                            className="text-white"
+                                        />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="right">
+                                    Initialize Session
+                                </TooltipContent>
+                            </Tooltip>
+                        ) : (
+                            <div className="animate-in fade-in zoom-in-95 duration-300">
+                                <InitializeSessionButton className="w-full" />
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* --- NAVIGATION --- */}
                 <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-                    {!isCollapsed && (
+                    {!isCollapsed && visibleNavItems.length > 0 && (
                         <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                             Platform
                         </div>
                     )}
 
-                    {navItems.map((item) => {
-                        const active = pathname === item.path;
+                    {visibleNavItems.map((item) => {
+                        const active =
+                            pathname === item.path ||
+                            (item.path !== '/' &&
+                                pathname.startsWith(item.path));
                         const Icon = item.icon;
 
                         return (
@@ -287,8 +363,8 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                     })}
                 </div>
 
-                {/* --- FOOTER / COLLAPSE TOGGLE --- */}
-                <div className="p-3 border-t border-slate-100 bg-slate-50/30 space-y-2">
+                {/* --- FOOTER --- */}
+                <div className="p-3 border-t border-slate-100 bg-slate-50/30">
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <button
@@ -317,19 +393,6 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                             </TooltipContent>
                         )}
                     </Tooltip>
-
-                    <button
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                        className={cn(
-                            'flex items-center justify-center w-full h-8 rounded-lg text-slate-400 hover:bg-white hover:text-indigo-600 hover:shadow-sm border border-transparent hover:border-slate-200 transition-all',
-                        )}
-                    >
-                        {isCollapsed ? (
-                            <ChevronRight size={16} />
-                        ) : (
-                            <ChevronLeft size={16} />
-                        )}
-                    </button>
                 </div>
             </aside>
         </TooltipProvider>

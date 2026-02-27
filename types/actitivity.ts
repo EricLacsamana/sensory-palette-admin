@@ -1,4 +1,5 @@
 import { StrapiMedia } from '.';
+import { Category } from './categories';
 
 export interface Activity {
     id: number;
@@ -10,6 +11,8 @@ export interface Activity {
     padConfiguration?: Record<string, unknown>;
     activityStatus: 'active' | 'disabled' | 'coming_soon';
     durationMinutes: number;
+    categories?: Category[];
+    activityUrl?: string;
     createdAt: string;
     updatedAt: string;
     publishedAt?: string;
@@ -26,7 +29,7 @@ export interface Activity {
 export interface ActivityEntry extends Partial<Activity> {
     // Identity
     instanceId: string;
-    id?: number | string;
+    id?: number;
 
     // UI State
     isLocked: boolean;

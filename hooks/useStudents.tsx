@@ -4,7 +4,7 @@ import { getStudent } from '../api/students';
 export const useStudent = (studentId: number) => {
     return useQuery({
         queryKey: ['student', studentId],
-        queryFn: () => getStudent(studentId),
+        queryFn: getStudent,
         enabled: !!studentId,
         staleTime: 1000 * 60 * 5,
     });

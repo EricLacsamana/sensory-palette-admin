@@ -36,6 +36,7 @@ export interface UserResponse {
     fullName?: string;
     dateOfBirth?: string;
     gender?: 'male' | 'female' | undefined;
+    age?: number;
     profilePicture?: StrapiMedia;
     createdAt: string;
     publishedAt?: string;

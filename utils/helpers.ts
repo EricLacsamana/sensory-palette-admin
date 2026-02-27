@@ -1,5 +1,6 @@
 import { format, parseISO, isDate, startOfDay, endOfDay } from 'date-fns';
 import { StrapiMedia, StrapiResponse } from '@/types';
+import { TimeLog, ActivitySessionStatus } from '@/types/activitiy-session';
 
 /* -------------------- */
 /* Date/Time Types      */
@@ -145,9 +146,7 @@ export class FormatService {
         const path = formatUrl || resource.url;
 
         if (path.startsWith('/')) {
-            const baseUrl =
-                process.env.NEXT_PUBLIC_STRAPI_API_URL ||
-                'http://127.0.0.1:1337';
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL;
             return `${baseUrl}${path}`;
         }
 
@@ -192,3 +191,43 @@ export class FormatService {
         return `${minutes} ${mLabel}`;
     }
 }
+
+export const calculateElapsedSeconds = (
+    timeLogs: TimeLog[] | null | undefined,
+    actualStartAt: string | null | undefined,
+    status: ActivitySessionStatus,
+): number => {
+    // Fallback for older sessions before timeLogs was implemented
+    if (!timeLogs || timeLogs.length === 0) {
+        if (!actualStartAt) return 0;
+        if (status === ActivitySessionStatus.Paused) return 0; // Can't accurately calculate old paused sessions
+        return Math.floor(
+            (new Date().getTime() - new Date(actualStartAt).getTime()) / 1000,
+        );
+    }
+
+    let totalActiveMs = 0;
+    let currentStartMs: number | null = null;
+
+    timeLogs.forEach((log) => {
+        const time = new Date(log.timestamp).getTime();
+
+        if (log.status === 'start' || log.status === 'resume') {
+            currentStartMs = time;
+        } else if (log.status === 'pause' && currentStartMs !== null) {
+            totalActiveMs += time - currentStartMs;
+            currentStartMs = null;
+        }
+    });
+
+    // If currently InProgress (meaning the last event was start/resume)
+    // Add the time from that last event to THIS EXACT SECOND.
+    if (
+        currentStartMs !== null &&
+        status === ActivitySessionStatus.InProgress
+    ) {
+        totalActiveMs += new Date().getTime() - currentStartMs;
+    }
+
+    return Math.max(0, Math.floor(totalActiveMs / 1000));
+};

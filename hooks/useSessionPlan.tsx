@@ -6,7 +6,6 @@ import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { ActivitySessionEntry } from '@/types/activitiy-session';
 import { Activity } from '@/types/actitivity';
 import { calculateSchedule } from '@/components/SessionPlanningModal/utils/scheduler';
-import { toast } from 'sonner';
 import { UserResponse } from '@/types';
 
 interface SessionPlanProps {
@@ -36,10 +35,25 @@ export const useSessionPlan = ({
         setFuture([]);
     }
 
+    // --- UPDATED: Date boundaries for fetching ---
     const startOfDay = new Date(startAt);
     startOfDay.setHours(0, 0, 0, 0);
+
     const endOfDay = new Date(startAt);
     endOfDay.setHours(23, 59, 59, 999);
+
+    const now = new Date();
+    const isToday =
+        startOfDay.getFullYear() === now.getFullYear() &&
+        startOfDay.getMonth() === now.getMonth() &&
+        startOfDay.getDate() === now.getDate();
+
+    // If viewing today, only fetch from this exact moment onward.
+    // If viewing a future date, fetch the whole day.
+    const queryStartBound = isToday
+        ? now.toISOString()
+        : startOfDay.toISOString();
+    // ----------------------------------------------
 
     const { data: activitySessions, isLoading: isQueryLoading } = useQuery({
         queryKey: [
@@ -51,31 +65,21 @@ export const useSessionPlan = ({
                 },
                 filters: {
                     startAt: {
-                        $gte: startOfDay.toISOString(),
+                        $gte: queryStartBound, // <-- Applied dynamic boundary here
                         $lte: endOfDay.toISOString(),
                     },
-                    $or: [
-                        {
-                            actualStartAt: { $null: true },
-                        },
-                        {
-                            activitySessionStatus: { $eq: 'pending' },
-                        },
-                        {
-                            activitySessionStatus: {
-                                $eq: 'reschedule_requested',
-                            },
-                        },
-                    ],
+                    actualStartAt: { $null: true },
+                    activitySessionStatus: {
+                        $in: ['pending', 'reschedule'],
+                    },
                 },
             },
         ],
         queryFn: getActivitySessionsNew,
-        enabled: !!startAt,
+        enabled: true,
         staleTime: 0,
     });
 
-    // 1. Base Entries - Calculate duration from startAt/endAt
     const currentBaseEntries = useMemo((): ActivitySessionEntry[] => {
         if (localDraft !== null) return localDraft;
 
@@ -92,7 +96,6 @@ export const useSessionPlan = ({
             .map((s: any) => {
                 const sTime = new Date(s.startAt).getTime();
                 const eTime = new Date(s.endAt).getTime();
-                // Calculate duration in minutes from timestamps
                 const duration = Math.max(
                     Math.round((eTime - sTime) / 60000),
                     0,
@@ -102,7 +105,7 @@ export const useSessionPlan = ({
                     ...s,
                     isLocked: true,
                     type: 'activity',
-                    durationMinutes: duration, // Computed from timestamps
+                    durationMinutes: duration,
                     instanceId:
                         s.documentId || s.id?.toString() || crypto.randomUUID(),
                     student: s.student,
@@ -135,7 +138,6 @@ export const useSessionPlan = ({
         setLocalDraft(next);
     }, [future, currentBaseEntries]);
 
-    // 2. Scheduler & Validation
     const { timelineItems, draftWithTimes, capacityMetrics } = useMemo(() => {
         const { items, totalDuration } = calculateSchedule(
             currentBaseEntries,
@@ -257,7 +259,6 @@ export const useSessionPlan = ({
             let currentCursor = new Date(startAt).getTime();
 
             const finalDraft = activitiesOnly.map((item) => {
-                // Priority: item.durationMinutes (computed earlier) or fallback
                 const durationMs = (item.durationMinutes || 30) * 60000;
                 let newStartIso = '';
                 let newEndIso = '';
@@ -268,7 +269,6 @@ export const useSessionPlan = ({
                         currentCursor = lockedStartTime;
 
                     newStartIso = item.startAt;
-                    // If locked, we respect its existing endAt or compute it from duration
                     const finalEndMs = item.endAt
                         ? new Date(item.endAt).getTime()
                         : lockedStartTime + durationMs;
@@ -294,20 +294,32 @@ export const useSessionPlan = ({
     const addActivity = useCallback(
         (activity: Activity) => {
             const duration = activity.durationMinutes || 30;
+            let currentCursor = new Date(startAt).getTime();
+
+            if (timelineItems && timelineItems.length > 0) {
+                const latestItem = timelineItems.reduce((latest, item) => {
+                    const itemEnd = item.endAt
+                        ? new Date(item.endAt).getTime()
+                        : 0;
+                    return itemEnd > latest ? itemEnd : latest;
+                }, currentCursor);
+                currentCursor = latestItem;
+            }
+
             const entry: ActivitySessionEntry = {
                 instanceId: crypto.randomUUID(),
                 activity,
                 durationMinutes: duration,
-                isLocked: false,
+                isLocked: true,
                 type: 'activity',
-                startAt: '',
-                endAt: '',
+                startAt: new Date(currentCursor).toISOString(),
+                endAt: new Date(currentCursor + duration * 60000).toISOString(),
                 documentId: '',
                 ...(student ? { student } : {}),
             };
             commitChange([...currentBaseEntries, entry]);
         },
-        [currentBaseEntries, commitChange, student], // 3. Add student to dependencies
+        [currentBaseEntries, commitChange, student, startAt, timelineItems],
     );
 
     const insertAtGap = useCallback(
@@ -316,22 +328,32 @@ export const useSessionPlan = ({
             const idx = currentBaseEntries.findIndex(
                 (i) => i.instanceId === targetId,
             );
+
+            let tempStart = startAt;
+            if (idx !== -1 && currentBaseEntries[idx].startAt) {
+                tempStart = currentBaseEntries[idx].startAt;
+            }
+
+            const duration = activity.durationMinutes || 30;
             const entry: ActivitySessionEntry = {
                 instanceId: crypto.randomUUID(),
                 activity,
-                durationMinutes: activity.durationMinutes || 30,
-                isLocked: false,
+                durationMinutes: duration,
+                isLocked: true,
                 type: 'activity',
-                startAt: '',
-                endAt: '',
+                startAt: tempStart,
+                endAt: new Date(
+                    new Date(tempStart).getTime() + duration * 60000,
+                ).toISOString(),
                 documentId: '',
             };
+
             const copy = [...currentBaseEntries];
             if (idx !== -1) copy.splice(idx, 0, entry);
             else copy.push(entry);
             commitChange(copy);
         },
-        [currentBaseEntries, commitChange],
+        [currentBaseEntries, commitChange, startAt],
     );
 
     const removeActivity = useCallback(

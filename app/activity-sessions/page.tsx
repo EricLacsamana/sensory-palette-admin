@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { useInView } from 'react-intersection-observer';
 import { Activity, Search, Filter, X } from 'lucide-react';
 
 import { getActivitySessionsNew } from '@/api/acitivity-session';
@@ -14,8 +13,7 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Adjust this import path based on where you saved the table component
-import { ActivitySessionLogsTable } from '@/components/ActivitySessionLogs';
+import { ActivitySessionLogsTable } from '@/components/ActivitySessionLogsTable';
 
 export default function ActivitySessions() {
     const router = useRouter();
@@ -23,8 +21,6 @@ export default function ActivitySessions() {
 
     const [inputValue, setInputValue] = useState(searchParams.get('q') || '');
     const [debouncedSearch, setDebouncedSearch] = useState(inputValue);
-
-    const { ref, inView } = useInView();
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -49,7 +45,18 @@ export default function ActivitySessions() {
     const { data: activitySessions = [], isFetching } = useQuery({
         queryKey: [
             'activity-sessions',
-            { populate: '*', limit: -1, sort: ['updatedAt:desc'] },
+            {
+                populate: {
+                    activity: {
+                        populate: {
+                            categories: true,
+                        },
+                    },
+                    student: true,
+                },
+                limit: -1,
+                sort: ['updatedAt:desc'],
+            },
         ],
         queryFn: getActivitySessionsNew,
     });

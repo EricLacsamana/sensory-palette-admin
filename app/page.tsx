@@ -2,65 +2,27 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, ShieldAlert, Zap } from 'lucide-react';
-import { useSelector } from 'react-redux';
+import { Loader2, Zap } from 'lucide-react';
 
 // API & Types
 import { me } from '@/api/users';
-import { getActivitySessionsNew } from '@/api/acitivity-session';
 
-// UI & Redux
-import { Button } from '@/components/ui/button';
+// UI & Dashboards
 import TherapistDashboard from '@/components/TherapistDashboard';
 import StudentDashboard from '@/components/StudentDashboard';
-import GameShellView from '@/components/GameShellView';
+import AdminDashboard from '@/components/AdminDashboard';
+import ActivitySessionLauncher from '@/components/ActivitySessionLauncher';
 
 export default function RootPage() {
-    // Select Auth state from Redux
-
-    // 1. IDENTITY FETCH: Strictly gated by token and auth loading status
-    // This prevents the "Forbidden" error by waiting for the token to exist
-    const {
-        data: user,
-        isLoading: isUserLoading,
-        isError: isUserError,
-    } = useQuery({
+    const { data: user, isLoading: isUserLoading } = useQuery({
         queryKey: ['me'],
         queryFn: me,
-
-        retry: false, // Prevents a loop of 403 Forbidden errors
-        staleTime: 1000 * 60 * 5, // 5 minute cache
+        retry: false,
+        staleTime: 1000 * 60 * 5,
     });
-
-    console.log('test', user);
 
     const roleType = user?.role?.type;
 
-    // 2. SESSION POLLING: Sequence-dependent on the 'user' query above
-    const { data: activeSessions = [] } = useQuery({
-        queryKey: [
-            'active-session-poll',
-            {
-                filters: {
-                    student: { id: { $eq: user?.id } },
-                    activitySessionStatus: { $eq: 'in_progress' },
-                    actualStartAt: { $notNull: true },
-                },
-                populate: {
-                    activity: { populate: '*' },
-                    student: { populate: '*' },
-                },
-            },
-        ],
-        queryFn: getActivitySessionsNew,
-        // 🔥 THE FIX: Gated by user identity resolution to ensure we have an ID to filter by
-        enabled: !!user?.id && roleType === 'student' && !isUserLoading,
-        refetchInterval: 3000, // 3-second heartbeat for students
-    });
-
-    const activeSession = activeSessions?.[0];
-
-    // --- LOADING STATE: Clinical Splash ---
     if (isUserLoading) {
         return (
             <div className="h-[100dvh] w-full flex flex-col items-center justify-center bg-[#F8FAFC]">
@@ -70,43 +32,24 @@ export default function RootPage() {
                         <Zap size={28} className="animate-pulse fill-current" />
                     </div>
                 </div>
-                <div className="mt-12 text-center">
-                    <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-400">
-                        Secure Entry
-                    </h2>
-                    <p className="text-xs font-bold text-slate-300 mt-2 italic">
-                        Configuring clinical workspace...
-                    </p>
-                </div>
             </div>
         );
     }
 
-    // --- DISPATCHER LOGIC ---
-
-    // A. INTERRUPT: Game Shell (Highest Priority for Students)
-    if (roleType === 'student' && activeSession) {
-        return <GameShellView session={activeSession} />;
+    // If student, the Launcher handles the polling and the GameShell
+    if (roleType === 'student') {
+        return <ActivitySessionLauncher user={user} />;
     }
 
-    // B. DASHBOARD ROUTING
     switch (roleType) {
         case 'admin':
-            return <TherapistDashboard />;
-
+            return <AdminDashboard />;
         case 'therapist':
             return <TherapistDashboard />;
-
-        case 'student':
-            return <StudentDashboard />;
-
         default:
             return (
-                <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 text-slate-400">
-                    <Loader2 className="animate-spin mb-4" size={32} />
-                    <p className="text-[10px] font-black uppercase tracking-widest">
-                        Awaiting Role Validation
-                    </p>
+                <div className="h-screen w-full flex items-center justify-center">
+                    <Loader2 className="animate-spin" />
                 </div>
             );
     }

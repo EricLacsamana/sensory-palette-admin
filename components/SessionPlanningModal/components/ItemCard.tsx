@@ -29,12 +29,13 @@ import { getUserColor } from '@/utils/colors';
 
 export type ActivitySessionStatus =
     | 'pending'
+    | 'queued'
     | 'in_progress'
     | 'completed'
     | 'cancelled'
     | 'interrupted'
     | 'abandoned'
-    | 'reschedule_requested';
+    | 'reschedule';
 
 interface ItemCardProps {
     id: string;
@@ -71,7 +72,7 @@ const STATUS_CONFIG: Record<
     cancelled: { icon: XCircle, label: 'Cancelled' },
     interrupted: { icon: PauseCircle, label: 'Interrupted' },
     abandoned: { icon: AlertCircle, label: 'Abandoned' },
-    reschedule_requested: { icon: CalendarClock, label: 'Reschedule' },
+    reschedule: { icon: CalendarClock, label: 'Reschedule' },
 };
 
 const ItemCard = ({

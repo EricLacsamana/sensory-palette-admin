@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next'; // 👈 Added Viewport import
 import { Inter, Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import StoreProvider from '@/providers/StoreProvider';
@@ -15,6 +15,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
     title: 'Student Directory Management',
     description: 'Therapist Caseload Management System',
+};
+
+// 👇 1. ADD THIS VIEWPORT EXPORT HERE
+export const viewport: Viewport = {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false, // Prevents the mobile browser from zooming in on fast taps
+    viewportFit: 'cover', // Ensures it respects the notch/safe areas on modern phones
 };
 
 export default function RootLayout({

@@ -111,7 +111,7 @@ const statusConfig: Record<
         icon: Flag,
         label: 'Dropped',
     },
-    reschedule_requested: {
+    reschedule: {
         bg: 'bg-violet-50',
         border: 'border-violet-200',
         text: 'text-violet-700',

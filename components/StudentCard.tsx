@@ -2,13 +2,14 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { User, ChevronRight, ShieldCheck, Zap } from 'lucide-react';
+import { ChevronRight, ShieldCheck, Zap } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import type { Student } from '@/types/index';
 
-export function StudentCard({ student }: { student: Student }) {
+import { FormatService } from '@/utils/helpers';
+import { UserAvatar } from './UserAvata';
+import { UserResponse } from '@/types';
+
+export function StudentCard({ student }: { student: UserResponse }) {
     const studentId = student.id;
 
     return (
@@ -20,16 +21,19 @@ export function StudentCard({ student }: { student: Student }) {
                 <div>
                     {/* --- TOP ROW: AVATAR & NAVIGATION --- */}
                     <div className="flex items-center justify-between mb-8">
-                        <div className="relative">
-                            <div className="h-14 w-14 rounded-3xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white group-hover:rotate-6 transition-all duration-500 shadow-sm group-hover:shadow-indigo-200 group-hover:shadow-xl">
-                                <User size={24} strokeWidth={1.5} />
-                            </div>
-                            {/* Live Status Indicator */}
-                            <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-white p-0.5 shadow-sm">
-                                <div className="h-full w-full rounded-full bg-emerald-500 border-2 border-white" />
-                            </div>
-                        </div>
+                        <UserAvatar
+                            src={FormatService.formatStrapiMedia(
+                                student?.profilePicture,
+                                'thumbnail',
+                            )}
+                            size="md"
+                            showStatus={true}
+                            name={student.firstName}
+                            // Pass your card's specific hover effects here
+                            className="group-hover:bg-indigo-600 group-hover:rotate-6 group-hover:shadow-indigo-200 group-hover:shadow-xl [&_[data-radix-avatar-fallback]]:group-hover:text-white"
+                        />
 
+                        {/* Chevron Button */}
                         <div className="h-10 w-10 rounded-2xl border border-slate-100 flex items-center justify-center text-slate-300 group-hover:border-indigo-100 group-hover:text-indigo-600 transition-all duration-300 bg-white">
                             <ChevronRight
                                 size={18}

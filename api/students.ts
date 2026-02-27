@@ -1,6 +1,7 @@
 import api from './index';
 import { ENDPOINTS } from '../constants/api';
 import { User, UserResponse } from '@/types';
+import { QueryFunctionContext } from '@tanstack/react-query';
 
 export interface StudentInput extends Partial<User> {
     password?: string;
@@ -15,30 +16,31 @@ export const getStudents = async (ctx: any): Promise<UserResponse[]> => {
 
     const params = new URLSearchParams();
 
-    // Always populate the role to check it, and filter strictly for "Student"
-    params.append('populate', 'role');
-    params.append('filters[role][name][$eq]', 'Student'); // Case-sensitive: 'Student' or 'student'
+    // Populate ALL relations
+    params.append('populate', '*');
 
-    // 2. If a search term exists, add a case-insensitive "Contains" filter
-    // This creates logic: Role=Student AND (Username contains X OR Email contains X)
+    // Filter strictly for "Student" role
+    params.append('filters[role][name][$eq]', 'Student');
+
     if (searchQuery) {
         params.append('filters[$or][0][username][$containsi]', searchQuery);
         params.append('filters[$or][1][email][$containsi]', searchQuery);
     }
 
-    // 3. Make the request
     const response = await api.get(`${ENDPOINTS.USERS}?${params.toString()}`);
     return response.data;
 };
 
-export const getStudent = async (ctx: any): Promise<UserResponse> => {
-    const [, { id }] = ctx.queryKey;
+export const getStudent = async (
+    ctx: QueryFunctionContext,
+): Promise<UserResponse> => {
+    const [, id] = ctx.queryKey;
 
-    const response = await api.get<UserResponse>(
-        `${ENDPOINTS.USERS}/${id}?populate=role`,
-    );
+    const { data } = await api.get(`${ENDPOINTS.USERS}/${id}?populate=*`);
 
-    return response.data;
+    // Safely handle both standard Strapi responses and the /users endpoint quirk,
+    // and fallback to null so React Query never receives undefined.
+    return data?.data ?? data ?? null;
 };
 
 export const updateStudent = async (

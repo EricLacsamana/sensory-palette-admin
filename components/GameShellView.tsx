@@ -1,207 +1,332 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import {
-    Gamepad2,
-    Maximize2,
-    Minimize2,
-    Loader2,
-    Clock,
-    LogOut,
-} from 'lucide-react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Play, CheckCircle2, Loader2, Activity, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import ColorMatchGame from '@/components/games/ColorMatchGame';
+import { ActivitySessionResponse } from '@/types/activitiy-session';
 import { cn } from '@/lib/utils';
 
-export default function GameShellView({ session }: { session: any }) {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [isStarted, setIsStarted] = useState(false);
-    const [isLaunching, setIsLaunching] = useState(true);
-    const [launchProgress, setLaunchProgress] = useState(0);
-    const [isFullscreen, setIsFullscreen] = useState(false);
+interface GameShellViewProps {
+    session: ActivitySessionResponse & { isHandsFree?: boolean };
+    telemetry: any;
+    isSaving: boolean;
+    onStart: (timestamp: string) => Promise<void>;
+    onPause: () => void;
+    onResume: () => void;
+    onFinish: () => void;
+    onClose: () => void;
+}
 
-    // Timer State
-    const durationMinutes = session?.activity?.durationMinutes;
-    const durationSeconds = durationMinutes * 60;
-    const [timeLeft, setTimeLeft] = useState(durationSeconds);
+export default function GameShellView({
+    session,
+    telemetry,
+    isSaving,
+    onStart,
+    onPause,
+    onResume,
+    onFinish,
+    onClose,
+}: GameShellViewProps) {
+    const { status, initialize } = telemetry;
+    const [countdown, setCountdown] = useState<number | null>(null);
+    const [isInitiating, setIsInitiating] = useState(false);
+    const activity = session?.activity || {};
 
-    // --- 1. AUTO-LAUNCH LOGIC ---
+    const [vh, setVh] = useState('100vh');
     useEffect(() => {
-        // Automatically fill the progress bar over 2 seconds, then show the game
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += 5;
-            setLaunchProgress(progress);
-            if (progress >= 100) {
-                clearInterval(interval);
-                setIsStarted(true);
-                setIsLaunching(false);
-            }
-        }, 100); // 100ms * 20 ticks = 2 seconds
-
-        return () => clearInterval(interval);
+        const updateHeight = () => setVh(`${window.innerHeight}px`);
+        updateHeight();
+        window.addEventListener('resize', updateHeight);
+        return () => window.removeEventListener('resize', updateHeight);
     }, []);
 
-    // --- 2. TIMER LOGIC ---
     useEffect(() => {
-        if (!session?.actualStartAt) return;
-        const startTime = new Date(session.actualStartAt).getTime();
+        if (session?.documentId) {
+            initialize(session.documentId, activity?.documentId || 'unknown');
+        }
+    }, [session?.documentId, activity?.documentId, initialize]);
 
-        const interval = setInterval(() => {
-            const now = new Date().getTime();
-            const elapsedSeconds = Math.floor((now - startTime) / 1000);
-            const remaining = durationSeconds - elapsedSeconds;
+    const tickSfx = useRef<HTMLAudioElement | null>(null);
+    const startSfx = useRef<HTMLAudioElement | null>(null);
 
-            if (remaining <= 0) {
-                setTimeLeft(0);
-                clearInterval(interval);
+    useEffect(() => {
+        tickSfx.current = new Audio(
+            'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',
+        );
+        startSfx.current = new Audio(
+            'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
+        );
+    }, []);
+
+    const shouldShowIframe =
+        status === 'playing' || status === 'paused' || isInitiating;
+
+    const iframeSrc = useMemo(() => {
+        if (!activity.activityUrl) return '';
+        const adminPort = process.env.NEXT_PUBLIC_ADMIN_PORT || '1337';
+        return activity.activityUrl.replace(
+            `http://localhost:${adminPort}`,
+            '',
+        );
+    }, [activity.activityUrl]);
+
+    // --- AUTO-START LOGIC ---
+    useEffect(() => {
+        if (
+            session?.isHandsFree &&
+            status === 'idle' &&
+            countdown === null &&
+            !isInitiating
+        ) {
+            const autoStartTimer = setTimeout(() => {
+                setCountdown(3);
+            }, 150);
+            return () => clearTimeout(autoStartTimer);
+        }
+    }, [session?.isHandsFree, status, countdown, isInitiating]);
+
+    // --- Countdown Logic ---
+    useEffect(() => {
+        if (countdown === null || countdown === 0) return;
+
+        tickSfx.current?.play().catch(() => {});
+
+        const timer = setTimeout(() => {
+            if (countdown === 1) {
+                startSfx.current?.play().catch(() => {});
+                setIsInitiating(true);
+                onStart(new Date().toISOString());
+                setCountdown(0);
             } else {
-                setTimeLeft(remaining);
+                setCountdown(countdown - 1);
             }
         }, 1000);
 
-        return () => clearInterval(interval);
-    }, [session?.actualStartAt, durationSeconds]);
+        return () => clearTimeout(timer);
+    }, [countdown, onStart]);
 
-    // --- FULLSCREEN HANDLER ---
-    // Browsers block auto-fullscreen, so we provide a manual toggle in the header
-    const toggleFullscreen = () => {
-        if (!document.fullscreenElement) {
-            containerRef.current?.requestFullscreen().catch((err) => {
-                console.warn('Fullscreen blocked:', err);
-            });
-        } else {
-            document.exitFullscreen();
-        }
+    const handleClose = () => {
+        setCountdown(null);
+        setIsInitiating(false);
+        onClose();
     };
-
-    useEffect(() => {
-        const handleFullscreenChange = () => {
-            setIsFullscreen(!!document.fullscreenElement);
-        };
-        document.addEventListener('fullscreenchange', handleFullscreenChange);
-        return () =>
-            document.removeEventListener(
-                'fullscreenchange',
-                handleFullscreenChange,
-            );
-    }, []);
-
-    // --- TIME FORMATTER ---
-    const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
-
-    const isTimeCritical = timeLeft <= 60;
 
     return (
         <div
-            ref={containerRef}
-            className="fixed inset-0 bg-slate-950 z-[9999] flex flex-col text-slate-50 overflow-hidden"
+            style={{ height: vh }}
+            className="fixed inset-0 bg-[#f8fafc] dark:bg-[#06080c] z-[9999] flex flex-col font-sans overflow-hidden touch-none"
         >
-            {/* HEADER */}
-            <header className="h-16 md:h-20 border-b border-white/10 bg-slate-900/80 backdrop-blur-md px-6 md:px-8 flex items-center justify-between z-50 shrink-0">
-                {/* Left: Activity Info */}
-                <div className="flex items-center gap-4 w-1/3">
-                    <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-900/50 shrink-0">
-                        <Gamepad2 size={20} className="text-white" />
+            <header className="h-16 md:h-20 shrink-0 border-b border-slate-200/50 dark:border-white/5 bg-white/40 dark:bg-slate-900/10 backdrop-blur-2xl px-6 md:px-8 flex items-center justify-between z-50">
+                <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                        <Activity size={20} className="text-indigo-500" />
                     </div>
-                    <div className="hidden sm:block">
-                        <h1 className="text-sm font-black uppercase tracking-widest text-slate-100 truncate max-w-[200px]">
-                            {session?.activity?.name || 'Activity'}
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                            {status === 'playing'
+                                ? 'Live Activity'
+                                : 'Activity Shell'}
+                        </span>
+                        <h1 className="text-sm font-semibold text-slate-600 dark:text-slate-300 truncate max-w-[150px] md:max-w-xs">
+                            {activity.name}
                         </h1>
-                        <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider truncate max-w-[200px]">
-                            Learner: {session?.student?.firstName}
-                        </p>
                     </div>
                 </div>
 
-                {/* Center: Live Timer */}
-                <div className="flex justify-center w-1/3">
-                    {isStarted && (
-                        <div
-                            className={cn(
-                                'flex items-center gap-2 md:gap-3 px-4 py-1.5 md:px-6 md:py-2 rounded-full border bg-slate-900/50 shadow-inner transition-colors duration-500',
-                                isTimeCritical
-                                    ? 'border-rose-500/50 text-rose-400'
-                                    : 'border-indigo-500/30 text-indigo-300',
+                <div className="flex items-center gap-3">
+                    {session?.enableLearnerControls && (
+                        <>
+                            {status === 'playing' && (
+                                <Button
+                                    variant="outline"
+                                    onClick={onPause}
+                                    className="rounded-full text-[10px] font-bold uppercase tracking-widest px-4 text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100"
+                                >
+                                    <Pause
+                                        size={14}
+                                        className="mr-1.5 fill-current"
+                                    />{' '}
+                                    Pause
+                                </Button>
                             )}
-                        >
-                            <Clock
-                                size={16}
-                                className={cn(
-                                    isTimeCritical && 'animate-pulse',
-                                )}
-                            />
-                            <span className="text-xl md:text-2xl font-black tabular-nums tracking-tighter">
-                                {formatTime(timeLeft)}
-                            </span>
-                        </div>
+                            {status === 'paused' && (
+                                <Button
+                                    onClick={onResume}
+                                    className="rounded-full text-[10px] font-bold uppercase tracking-widest px-4 bg-amber-500 hover:bg-amber-600 text-white"
+                                >
+                                    <Play
+                                        size={14}
+                                        className="mr-1.5 fill-current"
+                                    />{' '}
+                                    Resume
+                                </Button>
+                            )}
+                            {status === 'playing' && (
+                                <Button
+                                    variant="ghost"
+                                    onClick={onFinish}
+                                    className="rounded-full text-[10px] font-black uppercase tracking-[0.2em] px-4 md:px-8 text-slate-400 hover:text-indigo-500"
+                                >
+                                    {isSaving ? (
+                                        <Loader2 className="animate-spin" />
+                                    ) : (
+                                        'Finish'
+                                    )}
+                                </Button>
+                            )}
+                        </>
                     )}
-                </div>
-
-                {/* Right: Controls */}
-                <div className="flex items-center justify-end gap-2 md:gap-3 w-1/3">
                     <Button
                         variant="ghost"
-                        size="icon"
-                        className="text-slate-400 hover:text-white hover:bg-white/10 rounded-xl h-10 w-10"
-                        onClick={toggleFullscreen}
-                        title="Toggle Fullscreen"
+                        size="sm"
+                        className="text-[10px] font-bold text-slate-400 md:hidden"
+                        onClick={handleClose}
                     >
-                        {isFullscreen ? (
-                            <Minimize2 size={18} />
-                        ) : (
-                            <Maximize2 size={18} />
-                        )}
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 font-bold text-xs rounded-xl h-10 px-3 md:px-4"
-                        onClick={() => window.history.back()}
-                    >
-                        <LogOut size={14} className="mr-0 md:mr-2" />
-                        <span className="hidden md:inline">EXIT</span>
+                        EXIT
                     </Button>
                 </div>
             </header>
 
-            {/* MAIN CONTENT AREA */}
-            <main className="flex-1 relative bg-black flex items-center justify-center">
-                {isLaunching ? (
-                    // LOADING / SYNC STATE
-                    <div className="text-center p-12 bg-slate-900/40 border border-white/5 rounded-[40px] max-w-md w-full mx-4 backdrop-blur-md animate-in fade-in duration-500">
-                        <div className="space-y-8 flex flex-col items-center">
-                            <div className="relative">
-                                <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 rounded-full" />
-                                <Loader2
-                                    size={56}
-                                    className="animate-spin text-indigo-500 relative z-10"
-                                />
-                            </div>
-
-                            <div className="w-full space-y-3">
-                                <Progress
-                                    value={launchProgress}
-                                    className="h-1.5 w-full bg-slate-800"
-                                    indicatorClassName="bg-indigo-500"
-                                />
-                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 animate-pulse">
-                                    Syncing therapist environment...
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    // ACTUAL GAME INSTANCE
-                    <div className="w-full h-full animate-in fade-in zoom-in duration-700">
-                        {/* We leave the sample game exactly as requested */}
-                        <ColorMatchGame session={session} />
-                    </div>
+            <main className="flex-1 relative w-full min-h-0 overflow-hidden bg-[#f8fafc] dark:bg-black">
+                {shouldShowIframe && (
+                    <iframe
+                        key={session.documentId}
+                        src={iframeSrc}
+                        className="absolute inset-0 w-full h-full border-none m-0 p-0 block z-10"
+                        allow="autoplay; fullscreen; clipboard-write;"
+                    />
                 )}
+
+                <AnimatePresence mode="wait">
+                    {status === 'paused' && (
+                        <motion.div
+                            key="paused"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[40] flex flex-col items-center justify-center bg-white/60 dark:bg-black/80 backdrop-blur-md"
+                        >
+                            <div className="h-24 w-24 bg-amber-100 rounded-full flex items-center justify-center mb-6 text-amber-500 shadow-xl shadow-amber-500/20">
+                                <Pause size={40} className="fill-current" />
+                            </div>
+                            <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight mb-2">
+                                Activity Paused
+                            </h2>
+                            <p className="text-slate-500 font-medium">{`Take a deep breath. ${session.enableLearnerControls ? 'Click resume' : 'Let your teacher know'} when you are ready.`}</p>
+                        </motion.div>
+                    )}
+
+                    {status === 'completed' && (
+                        <motion.div
+                            key="success"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-[#f8fafc] dark:bg-[#06080c]"
+                        >
+                            <div className="w-full max-w-md text-center bg-white dark:bg-slate-900/40 p-16 rounded-[60px] border border-slate-100 dark:border-white/5 backdrop-blur-3xl shadow-2xl">
+                                <CheckCircle2
+                                    size={60}
+                                    className="text-emerald-500/80 mx-auto mb-10"
+                                />
+                                <h2
+                                    className={cn(
+                                        'font-semibold text-slate-800 dark:text-white',
+                                        session?.isHandsFree === true
+                                            ? 'text-3xl mb-8'
+                                            : 'text-3xl mb-3',
+                                    )}
+                                >
+                                    Wonderful
+                                </h2>
+
+                                {session?.isHandsFree === true ? (
+                                    <div className="flex flex-col items-center gap-3">
+                                        <Loader2
+                                            className="animate-spin text-emerald-500"
+                                            size={24}
+                                        />
+                                        <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                                            Syncing next activity...
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <Button
+                                        className="w-full h-16 mt-4 bg-slate-900 dark:bg-white dark:text-black rounded-2xl"
+                                        onClick={handleClose}
+                                    >
+                                        Home
+                                    </Button>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {status === 'idle' && !isInitiating && (
+                        <motion.div
+                            key="idle-container"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-[#f8fafc] dark:bg-[#06080c]"
+                        >
+                            {countdown !== null ? (
+                                <motion.div className="flex flex-col items-center gap-6">
+                                    {session?.isHandsFree === true && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="px-4 py-2 bg-slate-200 dark:bg-white/10 rounded-full flex items-center gap-2 mb-4"
+                                        >
+                                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                                Auto-Starting Next Activity
+                                            </span>
+                                        </motion.div>
+                                    )}
+                                    <motion.span
+                                        key={countdown}
+                                        initial={{ scale: 0.8, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        className="text-[20vh] font-extralight text-slate-300"
+                                    >
+                                        {countdown}
+                                    </motion.span>
+                                </motion.div>
+                            ) : (
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => setCountdown(3)}
+                                    className="w-64 h-24 rounded-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-2xl flex items-center justify-center gap-4 group cursor-pointer hover:shadow-indigo-500/20"
+                                >
+                                    <Play
+                                        size={24}
+                                        className="text-indigo-50"
+                                        fill="#6366f1"
+                                    />
+                                    <span className="text-xl font-medium text-slate-600 dark:text-slate-100">
+                                        Begin
+                                    </span>
+                                </motion.button>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {isInitiating && status === 'idle' && (
+                        <motion.div
+                            key="initiating"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="absolute inset-0 z-[100] flex items-center justify-center bg-[#f8fafc] dark:bg-[#06080c]"
+                        >
+                            <span className="text-[20vh] font-extralight text-slate-300 animate-pulse">
+                                Enjoy
+                            </span>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </main>
         </div>
     );
