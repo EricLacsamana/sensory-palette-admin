@@ -36,11 +36,11 @@ export const useSessionPlan = ({
     }
 
     // --- UPDATED: Date boundaries for fetching ---
-    const startOfDay = new Date(startAt);
+    const startOfDay = new Date(endAt);
     startOfDay.setHours(0, 0, 0, 0);
 
-    const endOfDay = new Date(startAt);
-    endOfDay.setHours(23, 59, 59, 999);
+    const endOfDay = new Date(endAt);
+    // endOfDay.setHours(23, 59, 59, 999);
 
     const now = new Date();
     const isToday =
@@ -65,7 +65,7 @@ export const useSessionPlan = ({
                 },
                 filters: {
                     startAt: {
-                        $gte: queryStartBound, // <-- Applied dynamic boundary here
+                        $gte: queryStartBound,
                         $lte: endOfDay.toISOString(),
                     },
                     actualStartAt: { $null: true },

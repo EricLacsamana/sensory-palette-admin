@@ -6,26 +6,30 @@ import {
     User,
     Calendar as CalendarIcon,
     ArrowUpRight,
-    Coffee,
     Gamepad2,
     Radio,
     Lock,
+    PauseCircle,
+    PlayCircle,
+    ActivitySquare,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     ActivitySessionResponse,
     ActivitySessionStatus,
 } from '@/types/activitiy-session';
-import { Activity as ActivityType } from '@/types/actitivity';
+import { Activity, Activity as ActivityType } from '@/types/actitivity';
+import { FormatService } from '@/utils/helpers';
 
 interface ScheduleQueueProps {
     sessions: ActivitySessionResponse[];
     onSessionClick: (
         s: ActivitySessionResponse,
-        activities: ActivityType[],
+        activitySessions: ActivitySessionResponse[],
     ) => void;
 }
 
@@ -33,40 +37,44 @@ export function ScheduleQueue({
     sessions,
     onSessionClick,
 }: ScheduleQueueProps) {
+    // Check if ANY session in the entire database is currently live or paused
     const hasGlobalActiveSession = useMemo(() => {
-        return sessions.some(
-            (s) => s.activitySessionStatus === ActivitySessionStatus.InProgress,
-        );
+        return sessions.some((s) => {
+            const status = s.activitySessionStatus?.toLowerCase();
+            return status === 'in_progress' || status === 'paused';
+        });
     }, [sessions]);
 
     const aggregatedLearnerDays = useMemo(() => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const groups: Record<string, any> = {};
 
+        // ✨ THE FIX: Include 'paused' so the active block doesn't vanish when paused!
         const activeAndPendingSessions = sessions.filter((session) => {
             const status =
-                session.activitySessionStatus?.toLowerCase() ||
-                ActivitySessionStatus.Pending;
-            return (
-                status === ActivitySessionStatus.Pending ||
-                status === ActivitySessionStatus.Queued ||
-                // status === 'scheduled' ||
-                status === ActivitySessionStatus.InProgress
-            );
+                session.activitySessionStatus?.toLowerCase() || 'pending';
+            return ['pending', 'in_progress', 'paused'].includes(status);
         });
 
         activeAndPendingSessions.forEach((session) => {
-            if (!session.startAt) return;
+            const effectiveStart = session.actualStartAt || session.startAt;
+            if (!effectiveStart) return;
 
-            const dateStr = format(parseISO(session.startAt), 'yyyy-MM-dd');
-            const studentId = session.student?.id || 'unassigned';
+            const dateObj = new Date(effectiveStart);
+            if (isNaN(dateObj.getTime())) return; // Safety against bad dates
+
+            const dateStr = format(dateObj, 'yyyy-MM-dd');
+            const studentId =
+                session.student?.documentId ||
+                session.student?.id ||
+                'unassigned';
             const groupKey = `${studentId}-${dateStr}`;
 
             if (!groups[groupKey]) {
                 groups[groupKey] = {
                     id: groupKey,
                     student: session.student,
-                    date: parseISO(session.startAt),
+                    date: dateObj,
                     sessions: [],
                 };
             }
@@ -74,17 +82,16 @@ export function ScheduleQueue({
         });
 
         return Object.values(groups).sort((a, b) => {
-            const aIsActive = a.sessions.some(
-                (s: ActivitySessionResponse) =>
-                    s.activitySessionStatus ===
-                    ActivitySessionStatus.InProgress,
-            );
-            const bIsActive = b.sessions.some(
-                (s: ActivitySessionResponse) =>
-                    s.activitySessionStatus ===
-                    ActivitySessionStatus.InProgress,
-            );
+            const aIsActive = a.sessions.some((s: ActivitySessionResponse) => {
+                const stat = s.activitySessionStatus?.toLowerCase();
+                return stat === 'in_progress' || stat === 'paused';
+            });
+            const bIsActive = b.sessions.some((s: ActivitySessionResponse) => {
+                const stat = s.activitySessionStatus?.toLowerCase();
+                return stat === 'in_progress' || stat === 'paused';
+            });
 
+            // Always float active/paused blocks to the very top
             if (aIsActive && !bIsActive) return -1;
             if (!aIsActive && bIsActive) return 1;
 
@@ -95,22 +102,22 @@ export function ScheduleQueue({
     const handleLockedClick = () => {
         toast.error('Session in Progress', {
             description:
-                'You must finish or cancel the active session before launching another sequence.',
+                'You must finish or safely conclude the active session before launching another learner block.',
             icon: <Lock className="text-rose-500" size={16} />,
         });
     };
 
     return (
-        <div className="flex flex-col h-full bg-white rounded-[24px] border border-slate-200 overflow-hidden shadow-sm relative">
-            {/* --- FIXED HEADER --- */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 z-20">
-                <div className="flex items-center gap-4">
+        <div className="flex flex-col h-full bg-slate-50/50 overflow-hidden shadow-sm relative">
+            {/* --- HEADER --- */}
+            <div className="p-6 pb-5 border-b border-slate-200/60 flex items-center justify-between bg-white shrink-0 z-20">
+                <div className="flex items-center gap-3.5">
                     <div
                         className={cn(
-                            'h-10 w-10 rounded-xl flex items-center justify-center text-white transition-colors',
+                            'h-10 w-10 rounded-xl flex items-center justify-center text-white transition-all shadow-sm',
                             hasGlobalActiveSession
-                                ? 'bg-rose-500'
-                                : 'bg-indigo-600',
+                                ? 'bg-rose-500 shadow-rose-200'
+                                : 'bg-indigo-600 shadow-indigo-200',
                         )}
                     >
                         {hasGlobalActiveSession ? (
@@ -120,56 +127,64 @@ export function ScheduleQueue({
                         )}
                     </div>
                     <div>
-                        <h3 className="text-lg font-semibold text-slate-900 tracking-tight leading-tight">
+                        <h3 className="text-base font-black text-slate-900 tracking-tight leading-tight">
                             {hasGlobalActiveSession
-                                ? 'Active Monitoring'
-                                : 'Upcoming Agenda'}
+                                ? 'Live Monitoring'
+                                : 'Upcoming Activities'}
                         </h3>
                         <p
                             className={cn(
-                                'text-xs font-medium',
+                                'text-[11px] font-bold uppercase tracking-widest mt-0.5',
                                 hasGlobalActiveSession
                                     ? 'text-rose-500'
-                                    : 'text-slate-500',
+                                    : 'text-slate-400',
                             )}
                         >
                             {hasGlobalActiveSession
                                 ? 'Other Blocks Locked'
-                                : 'Live & Pending Blocks'}
+                                : 'Pending Blocks'}
                         </p>
                     </div>
                 </div>
-
                 <Badge
                     variant="secondary"
-                    className="h-7 px-3 rounded-lg text-slate-600 font-medium text-xs bg-slate-100 border-none hover:bg-slate-100"
+                    className="bg-slate-100 text-slate-500 hover:bg-slate-100 font-black px-2.5 shadow-inner"
                 >
-                    {aggregatedLearnerDays.length} Block
-                    {aggregatedLearnerDays.length !== 1 && 's'}
+                    {aggregatedLearnerDays.length}
                 </Badge>
             </div>
 
-            {/* --- SCROLLABLE TIMELINE --- */}
-            <div className="flex-1 min-h-0 relative bg-slate-50/50 overflow-y-auto custom-scrollbar">
+            {/* --- TIMELINE BODY --- */}
+            <div className="flex-1 min-h-0 relative overflow-y-auto custom-scrollbar bg-slate-50/30">
                 <div className="p-6 relative z-10 min-h-full">
+                    {/* Spine Line */}
                     {aggregatedLearnerDays.length > 0 && (
-                        <div className="absolute left-[44px] top-6 bottom-6 w-[2px] bg-slate-200 -translate-x-1/2 rounded-full" />
+                        <div className="absolute left-[44px] top-8 bottom-6 w-0.5 bg-gradient-to-b from-slate-200 via-slate-200 to-transparent -translate-x-1/2 rounded-full" />
                     )}
 
                     <div className="space-y-6">
                         {aggregatedLearnerDays.length > 0 ? (
                             aggregatedLearnerDays.map((group) => {
                                 const sorted = [...group.sessions].sort(
-                                    (a, b) =>
-                                        new Date(a.startAt).getTime() -
-                                        new Date(b.startAt).getTime(),
+                                    (a, b) => {
+                                        const timeA = new Date(
+                                            a.actualStartAt || a.startAt,
+                                        ).getTime();
+                                        const timeB = new Date(
+                                            b.actualStartAt || b.startAt,
+                                        ).getTime();
+                                        return (
+                                            (isNaN(timeA) ? 0 : timeA) -
+                                            (isNaN(timeB) ? 0 : timeB)
+                                        );
+                                    },
                                 );
+
                                 const dayStart = format(
-                                    parseISO(sorted[0].startAt),
-                                    'h:mm a',
-                                );
-                                const dayEnd = format(
-                                    parseISO(sorted[sorted.length - 1].endAt),
+                                    new Date(
+                                        sorted[0].actualStartAt ||
+                                            sorted[0].startAt,
+                                    ),
                                     'h:mm a',
                                 );
                                 const totalMin = group.sessions.reduce(
@@ -179,19 +194,21 @@ export function ScheduleQueue({
                                     0,
                                 );
 
-                                const firstActivityName = (
-                                    sorted[0].activity?.name ||
-                                    sorted[0].name ||
-                                    ''
-                                ).toLowerCase();
-                                const isBreak =
-                                    firstActivityName.includes('break');
                                 const isUnassigned = !group.student;
-                                const isGroupActive = group.sessions.some(
+
+                                const isGroupLive = group.sessions.some(
                                     (s: ActivitySessionResponse) =>
-                                        s.activitySessionStatus ===
-                                        ActivitySessionStatus.InProgress,
+                                        s.activitySessionStatus?.toLowerCase() ===
+                                        'in_progress',
                                 );
+                                const isGroupPaused = group.sessions.some(
+                                    (s: ActivitySessionResponse) =>
+                                        s.activitySessionStatus?.toLowerCase() ===
+                                        'paused',
+                                );
+                                const isGroupActive =
+                                    isGroupLive || isGroupPaused;
+
                                 const isLockedByOtherSession =
                                     hasGlobalActiveSession && !isGroupActive;
 
@@ -200,23 +217,23 @@ export function ScheduleQueue({
                                         key={group.id}
                                         className="flex gap-4 relative group animate-in fade-in slide-in-from-bottom-4 duration-500"
                                     >
-                                        {/* Timeline Dot */}
-                                        <div className="w-10 relative flex flex-col top-10 items-center pt-2 shrink-0">
+                                        {/* Timeline Node */}
+                                        <div className="w-10 relative flex flex-col pt-5 items-center shrink-0">
                                             <div
                                                 className={cn(
-                                                    'w-3 h-3 rounded-full z-10 transition-all duration-300 ring-4',
-                                                    isGroupActive
-                                                        ? 'bg-indigo-500 ring-indigo-100 animate-pulse'
-                                                        : isLockedByOtherSession
-                                                          ? 'bg-slate-300 ring-slate-50'
-                                                          : isBreak
-                                                            ? 'bg-amber-400 ring-amber-50'
-                                                            : 'bg-indigo-400 ring-indigo-50 group-hover:bg-indigo-600',
+                                                    'w-3.5 h-3.5 rounded-full z-10 transition-all duration-300 ring-4',
+                                                    isGroupLive
+                                                        ? 'bg-blue-500 ring-blue-100 animate-pulse'
+                                                        : isGroupPaused
+                                                          ? 'bg-orange-400 ring-orange-100'
+                                                          : isLockedByOtherSession
+                                                            ? 'bg-slate-200 ring-slate-100'
+                                                            : 'bg-indigo-400 ring-indigo-50 group-hover:bg-indigo-500 group-hover:ring-indigo-100',
                                                 )}
                                             />
                                         </div>
 
-                                        {/* Interactive Card */}
+                                        {/* Interactive Block Card */}
                                         <button
                                             onClick={() =>
                                                 isLockedByOtherSession
@@ -227,138 +244,162 @@ export function ScheduleQueue({
                                                       )
                                             }
                                             className={cn(
-                                                'flex-1 p-5 rounded-2xl border transition-all duration-200 text-left group/card relative overflow-hidden',
+                                                'flex-1 p-4 rounded-2xl border transition-all duration-200 text-left group/card relative overflow-hidden',
                                                 isLockedByOtherSession
-                                                    ? 'bg-slate-50 border-slate-200 opacity-70 cursor-not-allowed'
+                                                    ? 'bg-slate-50/50 border-slate-200/60 opacity-60 cursor-not-allowed'
                                                     : 'hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]',
-                                                isGroupActive
-                                                    ? 'bg-indigo-50 border-indigo-200'
-                                                    : !isLockedByOtherSession &&
-                                                        isBreak
-                                                      ? 'bg-amber-50/50 border-amber-100 hover:border-amber-300'
+                                                isGroupLive
+                                                    ? 'bg-blue-50/50 border-blue-200 shadow-sm'
+                                                    : isGroupPaused
+                                                      ? 'bg-orange-50/50 border-orange-200 shadow-sm'
                                                       : !isLockedByOtherSession
                                                         ? 'bg-white border-slate-200 hover:border-indigo-200'
                                                         : '',
                                             )}
                                         >
-                                            <div className="flex justify-between items-start mb-5">
-                                                <div className="flex items-center gap-4">
-                                                    <div
+                                            {/* Card Header */}
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar
                                                         className={cn(
-                                                            'h-10 w-10 rounded-xl flex items-center justify-center transition-colors shrink-0',
-                                                            isGroupActive
-                                                                ? 'bg-indigo-600 text-white'
-                                                                : isLockedByOtherSession
-                                                                  ? 'bg-slate-100 text-slate-400'
-                                                                  : isBreak
-                                                                    ? 'bg-amber-100 text-amber-600'
-                                                                    : 'bg-slate-100 text-slate-500 group-hover/card:bg-indigo-100 group-hover/card:text-indigo-600',
+                                                            'h-10 w-10 rounded-xl border shadow-sm transition-colors',
+                                                            isGroupLive
+                                                                ? 'border-blue-200'
+                                                                : isGroupPaused
+                                                                  ? 'border-orange-200'
+                                                                  : 'border-slate-100',
                                                         )}
                                                     >
-                                                        {isLockedByOtherSession ? (
-                                                            <Lock size={18} />
-                                                        ) : isBreak ? (
-                                                            <Coffee size={18} />
-                                                        ) : (
-                                                            <User size={18} />
-                                                        )}
-                                                    </div>
+                                                        <AvatarImage
+                                                            src={FormatService.formatStrapiMedia(
+                                                                group.student
+                                                                    ?.profilePicture,
+                                                                'thumbnail',
+                                                            )}
+                                                            className="object-cover"
+                                                        />
+                                                        <AvatarFallback
+                                                            className={cn(
+                                                                'text-xs font-bold rounded-xl',
+                                                                isGroupActive
+                                                                    ? 'bg-white text-slate-900'
+                                                                    : 'bg-slate-100 text-slate-500',
+                                                            )}
+                                                        >
+                                                            {isUnassigned ? (
+                                                                <User
+                                                                    size={16}
+                                                                />
+                                                            ) : (
+                                                                group.student?.firstName?.charAt(
+                                                                    0,
+                                                                )
+                                                            )}
+                                                        </AvatarFallback>
+                                                    </Avatar>
 
                                                     <div className="min-w-0">
-                                                        <div className="flex items-center gap-2 mb-1">
+                                                        <div className="flex items-center gap-2 mb-0.5">
                                                             <h4
                                                                 className={cn(
-                                                                    'text-base font-semibold truncate',
+                                                                    'text-sm font-black truncate',
                                                                     isGroupActive
-                                                                        ? 'text-indigo-900'
+                                                                        ? 'text-slate-900'
                                                                         : isLockedByOtherSession
                                                                           ? 'text-slate-500'
-                                                                          : 'text-slate-900',
+                                                                          : 'text-slate-800',
                                                                 )}
                                                             >
                                                                 {isUnassigned
                                                                     ? 'Unassigned Block'
                                                                     : `${group.student?.firstName} ${group.student?.lastName}`}
                                                             </h4>
-                                                            {isGroupActive && (
-                                                                <span className="flex items-center gap-1 bg-indigo-500 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider animate-pulse">
-                                                                    <Radio
-                                                                        size={
-                                                                            10
-                                                                        }
-                                                                    />{' '}
-                                                                    Live
-                                                                </span>
-                                                            )}
                                                         </div>
-                                                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                                                            <div className="flex items-center gap-1">
-                                                                <Gamepad2
-                                                                    size={12}
-                                                                />
-                                                                {
-                                                                    group
-                                                                        .sessions
-                                                                        .length
-                                                                }{' '}
-                                                                Task
-                                                                {group.sessions
-                                                                    .length !==
-                                                                    1 && 's'}
-                                                            </div>
-                                                            <span>•</span>
-                                                            <span>
-                                                                {format(
-                                                                    group.date,
-                                                                    'MMM do',
-                                                                )}
-                                                            </span>
+                                                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                                            <Clock size={10} />{' '}
+                                                            {dayStart} •{' '}
+                                                            {totalMin} min
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div
-                                                    className={cn(
-                                                        'h-8 w-8 rounded-full flex items-center justify-center transition-colors shrink-0',
-                                                        isLockedByOtherSession
-                                                            ? 'text-slate-300'
-                                                            : 'text-slate-400 group-hover/card:bg-indigo-50 group-hover/card:text-indigo-600',
-                                                    )}
-                                                >
+                                                {/* Top Right Action / Status */}
+                                                <div className="shrink-0 flex flex-col items-end gap-2">
                                                     {isLockedByOtherSession ? (
-                                                        <Lock size={16} />
+                                                        <div className="h-8 w-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
+                                                            <Lock size={14} />
+                                                        </div>
+                                                    ) : isGroupLive ? (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="bg-blue-100 text-blue-700 font-bold text-[9px] uppercase tracking-widest px-2 py-0.5 animate-pulse"
+                                                        >
+                                                            <PlayCircle
+                                                                size={10}
+                                                                className="mr-1"
+                                                            />{' '}
+                                                            Live
+                                                        </Badge>
+                                                    ) : isGroupPaused ? (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="bg-orange-100 text-orange-700 font-bold text-[9px] uppercase tracking-widest px-2 py-0.5"
+                                                        >
+                                                            <PauseCircle
+                                                                size={10}
+                                                                className="mr-1"
+                                                            />{' '}
+                                                            Paused
+                                                        </Badge>
                                                     ) : (
-                                                        <ArrowUpRight
-                                                            size={18}
-                                                        />
+                                                        <div className="h-8 w-8 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center group-hover/card:bg-indigo-50 group-hover/card:text-indigo-600 transition-colors">
+                                                            <ArrowUpRight
+                                                                size={16}
+                                                            />
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center justify-between pt-4 border-t border-slate-100/60">
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">
-                                                        Start
-                                                    </span>
-                                                    <span className="text-sm font-medium text-slate-700">
-                                                        {dayStart}
+                                            {/* Detailed Activity Previews */}
+                                            <div className="pt-3 border-t border-slate-100/80">
+                                                <div className="flex items-center gap-1 mb-2">
+                                                    <ActivitySquare
+                                                        size={12}
+                                                        className={cn(
+                                                            isGroupActive
+                                                                ? 'text-indigo-500'
+                                                                : 'text-slate-400',
+                                                        )}
+                                                    />
+                                                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                                                        Sequence (
+                                                        {group.sessions.length})
                                                     </span>
                                                 </div>
-
-                                                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-100">
-                                                    <Clock size={12} />
-                                                    <span className="text-xs font-medium">
-                                                        {totalMin}m
-                                                    </span>
-                                                </div>
-
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">
-                                                        End
-                                                    </span>
-                                                    <span className="text-sm font-medium text-slate-700">
-                                                        {dayEnd}
-                                                    </span>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {sorted.map(
+                                                        (
+                                                            s: ActivitySessionResponse,
+                                                        ) => (
+                                                            <Badge
+                                                                key={
+                                                                    s.documentId
+                                                                }
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    'text-[9px] font-semibold border px-2 py-0.5',
+                                                                    isGroupActive
+                                                                        ? 'bg-white border-slate-200 text-slate-700'
+                                                                        : 'bg-slate-50 border-slate-200/60 text-slate-500',
+                                                                )}
+                                                            >
+                                                                {s.activity
+                                                                    ?.name ||
+                                                                    'Task'}
+                                                            </Badge>
+                                                        ),
+                                                    )}
                                                 </div>
                                             </div>
                                         </button>
@@ -367,15 +408,15 @@ export function ScheduleQueue({
                             })
                         ) : (
                             <div className="py-20 flex flex-col items-center justify-center text-center">
-                                <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-4">
+                                <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-300 mb-4 shadow-inner">
                                     <CalendarIcon size={24} />
                                 </div>
-                                <h3 className="text-base font-semibold text-slate-900 mb-1">
-                                    No Scheduled Blocks
+                                <h3 className="text-base font-black text-slate-900 mb-1">
+                                    Queue Empty
                                 </h3>
-                                <p className="text-sm text-slate-500 max-w-[200px]">
-                                    All activity blocks are either completed or
-                                    unassigned.
+                                <p className="text-xs font-medium text-slate-500 max-w-[200px] leading-relaxed">
+                                    All assigned blocks are either completed or
+                                    unassigned for today.
                                 </p>
                             </div>
                         )}

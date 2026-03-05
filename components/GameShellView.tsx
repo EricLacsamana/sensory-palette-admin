@@ -8,7 +8,10 @@ import { ActivitySessionResponse } from '@/types/activitiy-session';
 import { cn } from '@/lib/utils';
 
 interface GameShellViewProps {
-    session: ActivitySessionResponse & { isHandsFree?: boolean };
+    session: ActivitySessionResponse & {
+        isHandsFree?: boolean;
+        enableAdaptiveDifficulty?: boolean;
+    };
     telemetry: any;
     isSaving: boolean;
     onStart: (timestamp: string) => Promise<void>;
@@ -33,7 +36,13 @@ export default function GameShellView({
     const [isInitiating, setIsInitiating] = useState(false);
     const activity = session?.activity || {};
 
+    // 1. SHELL IS THE SOURCE OF TRUTH FOR LEVEL
+    // It can start at a base difficulty if provided by the activity, otherwise 1
+    const [currentLevel, setCurrentLevel] = useState<number>(1);
+
+    const iframeRef = useRef<HTMLIFrameElement>(null);
     const [vh, setVh] = useState('100vh');
+
     useEffect(() => {
         const updateHeight = () => setVh(`${window.innerHeight}px`);
         updateHeight();
@@ -62,14 +71,75 @@ export default function GameShellView({
     const shouldShowIframe =
         status === 'playing' || status === 'paused' || isInitiating;
 
+    // 2. INITIAL IFRAME MOUNT (Only happens once)
     const iframeSrc = useMemo(() => {
         if (!activity.activityUrl) return '';
         const adminPort = process.env.NEXT_PUBLIC_ADMIN_PORT || '1337';
-        return activity.activityUrl.replace(
+        const baseUrl = activity.activityUrl.replace(
             `http://localhost:${adminPort}`,
             '',
         );
-    }, [activity.activityUrl]);
+        const separator = baseUrl.includes('?') ? '&' : '?';
+
+        // Pass initial state so the game boots correctly
+        const adaptiveFlag =
+            session.enableAdaptiveDifficulty !== false ? 'true' : 'false';
+        return `${baseUrl}${separator}adaptive=${adaptiveFlag}&level=${currentLevel}`;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activity.activityUrl]); // Notice we DO NOT put currentLevel here so it doesn't reload the iframe URL
+
+    // 3. SILENT PUSH: Sync Source of Truth down to the iframe without reloading
+    useEffect(() => {
+        if (iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage(
+                {
+                    type: 'SYNC_STATE',
+                    payload: {
+                        isAdaptive: session.enableAdaptiveDifficulty !== false,
+                        level: currentLevel,
+                    },
+                },
+                '*',
+            );
+        }
+    }, [session.enableAdaptiveDifficulty, currentLevel]);
+
+    // 4. LISTEN FOR TELEMETRY & ENFORCE ADAPTIVE LOGIC
+    useEffect(() => {
+        const handleGameMessage = (event: MessageEvent) => {
+            // Only proceed if it's a score update and we have telemetry data
+            if (
+                event.data?.type === 'GAME_SCORE_UPDATE' &&
+                event.data.rawTelemetry
+            ) {
+                const telemetryArray = event.data.rawTelemetry;
+                const latestLog = telemetryArray[telemetryArray.length - 1];
+
+                // 1. Check the Source of Truth from the Session
+                const isAdaptiveEnabled =
+                    session?.enableAdaptiveDifficulty !== false;
+
+                // 2. ONLY update the shell's level state if Adaptive is actually ON
+                if (isAdaptiveEnabled && latestLog?.metadata?.levelShift) {
+                    const shift = latestLog.metadata.levelShift;
+
+                    if (shift === 'up') {
+                        setCurrentLevel((prev) => Math.min(prev + 1, 5));
+                    } else if (shift === 'down') {
+                        setCurrentLevel((prev) => Math.max(prev - 1, 1));
+                    }
+                }
+                // If Adaptive is OFF, the Shell simply ignores 'levelShift'
+                // metadata and keeps currentLevel exactly where it is.
+            }
+        };
+
+        window.addEventListener('message', handleGameMessage);
+        return () => window.removeEventListener('message', handleGameMessage);
+
+        // Ensure session properties are in the dependency array so the listener
+        // doesn't use a stale 'false' or 'true' value.
+    }, [session?.enableAdaptiveDifficulty, session?.documentId]);
 
     // --- AUTO-START LOGIC ---
     useEffect(() => {
@@ -79,19 +149,15 @@ export default function GameShellView({
             countdown === null &&
             !isInitiating
         ) {
-            const autoStartTimer = setTimeout(() => {
-                setCountdown(3);
-            }, 150);
+            const autoStartTimer = setTimeout(() => setCountdown(3), 150);
             return () => clearTimeout(autoStartTimer);
         }
     }, [session?.isHandsFree, status, countdown, isInitiating]);
 
-    // --- Countdown Logic ---
+    // --- COUNTDOWN LOGIC ---
     useEffect(() => {
         if (countdown === null || countdown === 0) return;
-
         tickSfx.current?.play().catch(() => {});
-
         const timer = setTimeout(() => {
             if (countdown === 1) {
                 startSfx.current?.play().catch(() => {});
@@ -102,7 +168,6 @@ export default function GameShellView({
                 setCountdown(countdown - 1);
             }
         }, 1000);
-
         return () => clearTimeout(timer);
     }, [countdown, onStart]);
 
@@ -191,10 +256,12 @@ export default function GameShellView({
             <main className="flex-1 relative w-full min-h-0 overflow-hidden bg-[#f8fafc] dark:bg-black">
                 {shouldShowIframe && (
                     <iframe
+                        ref={iframeRef}
+                        // FIX: Key is strictly the session ID so it NEVER remounts or blinks white.
                         key={session.documentId}
                         src={iframeSrc}
-                        className="absolute inset-0 w-full h-full border-none m-0 p-0 block z-10"
-                        allow="autoplay; fullscreen; clipboard-write;"
+                        className="absolute inset-0 w-full h-full border-none m-0 p-0 block z-10 bg-transparent"
+                        allow="autoplay *; fullscreen *; clipboard-write *; microphone *;"
                     />
                 )}
 
@@ -240,7 +307,6 @@ export default function GameShellView({
                                 >
                                     Wonderful
                                 </h2>
-
                                 {session?.isHandsFree === true ? (
                                     <div className="flex flex-col items-center gap-3">
                                         <Loader2

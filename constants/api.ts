@@ -5,9 +5,11 @@ export const CONFIG = {
 export const ENDPOINTS = {
     ACTIVITIES: '/api/activities',
     ACTIVITY_SESSIONS: '/api/activity-sessions',
+    AUTH: '/api/auth',
     AUTH_LOCAL: '/api/auth/local',
-    STUDENTS: '/api/students', 
-    USERS: '/api/users',     
+    NOTIFICATIONS: '/api/notifications',
+    STUDENTS: '/api/students',
+    USERS: '/api/users',
 } as const;
 
-export type Endpoint = typeof ENDPOINTS[keyof typeof ENDPOINTS];
+export type Endpoint = (typeof ENDPOINTS)[keyof typeof ENDPOINTS];

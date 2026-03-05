@@ -53,7 +53,7 @@ export function UserAvatar({
                 />
                 <AvatarFallback
                     className={cn(
-                        'bg-transparent text-indigo-600 flex items-center justify-center w-full h-full transition-colors duration-500',
+                        'bg-transparent hover:text-slate-500 text-indigo-600 flex items-center justify-center w-full h-full transition-colors duration-500',
                         sizeStyles[size],
                     )}
                 >

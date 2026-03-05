@@ -40,7 +40,7 @@ export interface UserResponse {
     profilePicture?: StrapiMedia;
     createdAt: string;
     publishedAt?: string;
-
+    activePasscode: string;
     role?:
         | {
               id: number;

@@ -71,10 +71,10 @@ export function SessionDetailView({ session }: { session: any }) {
                             className="absolute -right-4 -top-4 opacity-10 rotate-12"
                         />
                         <p className="text-sm font-medium opacity-95 relative z-10 italic">
-                            "
+                            &quot;
                             {session.recommendationActivity ||
                                 'Consistent tactical feedback is improving learner engagement. Recommend increasing difficulty in next module.'}
-                            "
+                            &quot;
                         </p>
                     </div>
                 </div>
@@ -90,7 +90,7 @@ export function SessionDetailView({ session }: { session: any }) {
                         </span>
                     </div>
                     <div className="bg-white border border-slate-100 rounded-[32px] p-7 text-slate-600 text-sm leading-relaxed shadow-sm">
-                        {session.teacherNotes ||
+                        {session.clinicalObservations ||
                             'No clinical notes were recorded during this session.'}
                     </div>
                 </div>

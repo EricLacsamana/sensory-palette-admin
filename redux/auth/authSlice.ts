@@ -18,6 +18,12 @@ interface LoginPayload {
     jwt: string;
 }
 
+// Payload specifically for direct token injection (like our Passcode flow)
+interface CredentialsPayload {
+    token: string;
+    user?: any; // We accept the user object, but React Query handles storing it!
+}
+
 const authSlice = createSlice({
     name: 'auth',
     initialState,
@@ -38,13 +44,25 @@ const authSlice = createSlice({
             state.token = null;
             state.isAuthenticated = false;
         },
+        // ✨ NEW: Instantly injects credentials (used by the Student Passcode Login)
+        setCredentials: (state, action: PayloadAction<CredentialsPayload>) => {
+            state.token = action.payload.token;
+            state.isAuthenticated = true;
+            state.isLoading = false;
+            state.error = null;
+        },
         // 🔥 THE SEAMLESS RESET: Return to initialState exactly
         logout: () => initialState,
     },
 });
 
-export const { loginStart, loginSuccess, loginFailure, logout } =
-    authSlice.actions;
+export const {
+    loginStart,
+    loginSuccess,
+    loginFailure,
+    logout,
+    setCredentials,
+} = authSlice.actions;
 export default authSlice.reducer;
 
 export const selectIsAuthenticated = (state: { auth: AuthState }) =>

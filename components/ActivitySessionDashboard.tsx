@@ -50,6 +50,10 @@ import {
     updateActivitySession,
 } from '@/api/acitivity-session';
 import { cn } from '@/lib/utils';
+import {
+    ActivitySessionResponse,
+    BehavioralIndicator,
+} from '@/types/activitiy-session';
 
 // --- ANIMATION CONFIG ---
 const containerVariants: Variants = {
@@ -233,14 +237,14 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
 export default function ActivitySessionDashboard({
     session,
 }: {
-    session: any;
+    session: ActivitySessionResponse;
 }) {
     const queryClient = useQueryClient();
     const router = useRouter();
 
     const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [notesContent, setNotesContent] = useState(
-        session.teacherNotes || '',
+        session.clinicalObservations || '',
     );
 
     const aiMutation = useMutation({
@@ -256,7 +260,7 @@ export default function ActivitySessionDashboard({
     const updateNotesMutation = useMutation({
         mutationFn: (newNotes: string) =>
             updateActivitySession(session.documentId, {
-                teacherNotes: newNotes,
+                clinicalObservations: newNotes,
             }),
         onSuccess: () => {
             toast.success('Clinical notes saved');
@@ -267,20 +271,6 @@ export default function ActivitySessionDashboard({
         },
         onError: () => toast.error('Failed to save notes. Please try again.'),
     });
-
-    // Helper to format full dates consistently
-    const formatFullDate = (dateString: string) => {
-        if (!dateString) return '--:--';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
 
     const formatOnlyDate = (dateString: string) => {
         if (!dateString) return 'Unknown Date';
@@ -304,13 +294,15 @@ export default function ActivitySessionDashboard({
             Low: 30,
         };
 
-        return session.behavioralIndicators.map((indicator: any) => ({
-            pattern: indicator.pattern,
-            score: confidenceScoreMap[indicator.confidence] || 0,
-            fullMark: 100,
-            confidence: indicator.confidence,
-            evidence: indicator.evidence,
-        }));
+        return session.behavioralIndicators.map(
+            (indicator: BehavioralIndicator) => ({
+                pattern: indicator.pattern,
+                score: confidenceScoreMap[indicator.confidence] || 0,
+                fullMark: 100,
+                confidence: indicator.confidence,
+                evidence: indicator.evidence,
+            }),
+        );
     }, [session.behavioralIndicators]);
 
     const renderPrimaryAction = () => {
@@ -491,13 +483,13 @@ export default function ActivitySessionDashboard({
                     <AnalysisStat
                         label="AI Accuracy"
                         value={
-                            session.accuracy !== undefined &&
-                            session.accuracy !== null
-                                ? `${session.accuracy}%`
+                            session.aiAccuracy !== undefined &&
+                            session.aiAccuracy !== null
+                                ? `${session.aiAccuracy}%`
                                 : '---'
                         }
                         subtitle={
-                            session.accuracy
+                            session.aiAccuracy
                                 ? 'Diagnostic Assessment'
                                 : 'Awaiting Analysis'
                         }
@@ -862,7 +854,7 @@ export default function ActivitySessionDashboard({
                                                 onClick={() => {
                                                     setIsEditingNotes(false);
                                                     setNotesContent(
-                                                        session.teacherNotes ||
+                                                        session.clinicalObservations ||
                                                             '',
                                                     );
                                                 }}
@@ -894,8 +886,8 @@ export default function ActivitySessionDashboard({
                                 ) : (
                                     <div className="space-y-8">
                                         <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-medium">
-                                            {session.teacherNotes ? (
-                                                session.teacherNotes
+                                            {session.clinicalObservations ? (
+                                                session.clinicalObservations
                                             ) : (
                                                 <span className="text-slate-400 italic font-normal text-xs">
                                                     No clinician observations

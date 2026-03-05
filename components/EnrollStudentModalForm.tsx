@@ -7,8 +7,7 @@ import { toast } from 'sonner';
 
 import EnrollStudentForm, { StudentFormValues } from './EnrollStudentForm';
 
-// --- MOCK API (Replace with your actual API file import) ---
-// import { createStudent } from '@/api/students';
+// --- MOCK API ---
 const mockCreateStudent = async (data: any) =>
     new Promise((resolve) => setTimeout(resolve, 1000));
 
@@ -23,16 +22,13 @@ export default function EnrollStudenModalForm({
 
     const mutation = useMutation({
         mutationFn: async (values: StudentFormValues) => {
-            // Here we hardcode the role to your Strapi "Student" Role ID (e.g., '4')
-            // and strip out empty passwords.
             const payload = {
                 ...values,
-                role: '4', // <--- CHANGE THIS TO YOUR ACTUAL STRAPI STUDENT ROLE ID
+                role: '4', // Strapi Student Role ID
             };
 
             if (!payload.password) delete payload.password;
 
-            // return createStudent(payload);
             await mockCreateStudent(payload);
         },
         onSuccess: () => {
@@ -50,16 +46,16 @@ export default function EnrollStudenModalForm({
     };
 
     return (
-        <div className="bg-white rounded-[32px] p-6 md:p-8 shadow-2xl border border-slate-100 w-full max-h-[90vh] overflow-y-auto relative flex flex-col">
+        <div className="bg-white rounded-[2.5rem] p-6 md:p-8 shadow-2xl border border-slate-100 w-full max-h-[90vh] overflow-y-auto relative flex flex-col">
             {/* Header */}
-            <div className="mb-6 space-y-2 shrink-0">
-                <div className="inline-flex items-center justify-center p-3 bg-indigo-50 rounded-2xl mb-2 w-max">
-                    <GraduationCap className="w-6 h-6 text-indigo-600 stroke-[1.5px]" />
+            <div className="mb-8 space-y-2 shrink-0">
+                <div className="inline-flex items-center justify-center p-3.5 bg-indigo-50 rounded-[1.25rem] mb-3 shadow-inner">
+                    <GraduationCap className="w-6 h-6 text-indigo-600 stroke-[2px]" />
                 </div>
-                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                <h2 className="text-3xl font-black tracking-tight text-slate-900 leading-none">
                     Enroll New Learner
                 </h2>
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">
                     Create a new student record
                 </p>
             </div>

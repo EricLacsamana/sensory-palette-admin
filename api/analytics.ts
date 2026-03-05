@@ -1,3 +1,4 @@
+import { ENDPOINTS } from '@/constants/api';
 import api from '.';
 import qs from 'qs';
 
@@ -30,9 +31,10 @@ export const getGlobalAnalytics = async (ctx: any = {}) => {
     if (endDate) query.endDate = endDate;
 
     const queryString = qs.stringify(query, { encodeValuesOnly: true });
-    const url = `api/activity-sessions/analytics/global?${queryString}`;
 
-    const { data } = await api.get(url);
+    const { data } = await api.get(
+        `${ENDPOINTS.ACTIVITY_SESSIONS}/analytics/global?${queryString}`,
+    );
     return data?.data;
 };
 
@@ -53,5 +55,21 @@ export const getComparisonAnalytics = async (ctx: any = {}) => {
     const url = `api/activity-sessions/analytics/compare?${queryString}`;
 
     const { data } = await api.get(url);
+    return data?.data;
+};
+
+export const getStudentsAnalytics = async (
+    id: string,
+    startDate?: string,
+    endDate?: string,
+) => {
+    const queryParams = new URLSearchParams();
+    if (startDate) queryParams.append('startDate', startDate);
+    if (endDate) queryParams.append('endDate', endDate);
+
+    const { data } = await api.get(
+        `${ENDPOINTS.ACTIVITY_SESSIONS}/analytics/student/${id}?${queryParams.toString()}`,
+    );
+
     return data?.data;
 };

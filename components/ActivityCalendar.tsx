@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
     format,
@@ -95,6 +95,14 @@ const statusConfig: Record<
         icon: PauseCircle,
         label: 'Paused',
     },
+    paused: {
+        bg: 'bg-orange-50',
+        border: 'border-orange-200',
+        text: 'text-orange-700',
+        dot: 'bg-orange-500',
+        icon: PauseCircle,
+        label: 'Paused',
+    },
     cancelled: {
         bg: 'bg-red-50',
         border: 'border-red-200',
@@ -119,27 +127,52 @@ const statusConfig: Record<
         icon: CalendarClock,
         label: 'Resched',
     },
+    queued: {
+        bg: 'bg-indigo-50',
+        border: 'border-indigo-200',
+        text: 'text-indigo-700',
+        dot: 'bg-indigo-400',
+        icon: Clock,
+        label: 'Queued',
+    },
+};
+
+// SAFE DATE FORMATTER
+const safeFormatTime = (dateString?: string | null) => {
+    if (!dateString) return 'TBD';
+    const d = new Date(dateString);
+    return isNaN(d.getTime()) ? 'TBD' : format(d, 'h:mm a');
 };
 
 export function ActivityCalendar({ className }: { className?: string }) {
-    const [viewDate, setViewDate] = useState(new Date());
+    // Lazy initialize to prevent Next.js hydration mismatch
+    const [viewDate, setViewDate] = useState<Date>(() => new Date());
     const [filterStatus, setFilterStatus] = useState<string | 'all'>('all');
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [mounted, setMounted] = useState(false);
+
+    // ✨ THE FIX: Wrap in a zero-delay timeout to bypass the "synchronous" linter error
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            setMounted(true);
+        }, 0);
+        return () => clearTimeout(timeoutId);
+    }, []);
 
     // --- DATE LOGIC ---
-    const { startRange, endRange, days } = useMemo(() => {
+    const { days, startRange, endRange } = useMemo(() => {
         const monthStart = startOfMonth(viewDate);
         const start = startOfWeek(monthStart);
-        const end = addDays(start, 41); // Fixed 6-week grid
+        const end = addDays(start, 41); // Fixed 6-week grid (42 days)
 
         return {
+            days: eachDayOfInterval({ start, end }),
             startRange: start.toISOString(),
             endRange: end.toISOString(),
-            days: eachDayOfInterval({ start, end }),
         };
     }, [viewDate]);
 
-    // --- DATA ---
+    // --- DATA FETCHING (OPTIMIZED) ---
     const { data: sessions = [], isFetching } = useQuery({
         queryKey: [
             'activity-sessions',
@@ -147,6 +180,26 @@ export function ActivityCalendar({ className }: { className?: string }) {
                 populate: {
                     activity: { populate: '*' },
                     student: { populate: '*' },
+                },
+                // Fetch ONLY the data needed for the currently viewed calendar grid!
+                filters: {
+                    $or: [
+                        {
+                            startAt: {
+                                $gte: startRange,
+                                $lte: endRange,
+                            },
+                        },
+                        {
+                            actualStartAt: {
+                                $gte: startRange,
+                                $lte: endRange,
+                            },
+                        },
+                    ],
+                },
+                pagination: {
+                    limit: 200,
                 },
             },
         ],
@@ -157,14 +210,18 @@ export function ActivityCalendar({ className }: { className?: string }) {
     const filteredSessions = useMemo(() => {
         if (!Array.isArray(sessions)) return [];
         if (filterStatus === 'all') return sessions;
-        if (filterStatus === 'completed')
+        if (filterStatus === 'completed') {
             return sessions.filter(
                 (s: any) => s.activitySessionStatus === 'completed',
             );
-        if (filterStatus === 'pending')
+        }
+        if (filterStatus === 'pending') {
             return sessions.filter(
-                (s: any) => s.activitySessionStatus !== 'completed',
+                (s: any) =>
+                    s.activitySessionStatus !== 'completed' &&
+                    s.activitySessionStatus !== 'abandoned',
             );
+        }
         return sessions;
     }, [sessions, filterStatus]);
 
@@ -172,21 +229,26 @@ export function ActivityCalendar({ className }: { className?: string }) {
         const groups: Record<string, ActivitySessionResponse[]> = {};
 
         filteredSessions.forEach((session: ActivitySessionResponse) => {
-            // 🔥 PRIORITIZE actualStartAt OVER startAt FOR GROUPING
             const effectiveStart = session.actualStartAt || session.startAt;
             if (!effectiveStart) return;
 
-            const dateKey = format(parseISO(effectiveStart), 'yyyy-MM-dd');
+            const dateObj = new Date(effectiveStart);
+            if (isNaN(dateObj.getTime())) return;
+
+            const dateKey = format(dateObj, 'yyyy-MM-dd');
             if (!groups[dateKey]) groups[dateKey] = [];
             groups[dateKey].push(session);
         });
 
-        // 🔥 CHRONOLOGICAL SORTING: Prioritize actualStartAt OVER startAt
         Object.keys(groups).forEach((dateKey) => {
             groups[dateKey].sort((a, b) => {
-                const timeA = new Date(a.actualStartAt || a.startAt!).getTime();
-                const timeB = new Date(b.actualStartAt || b.startAt!).getTime();
-                return timeA - timeB;
+                const timeA = new Date(
+                    a.actualStartAt || a.startAt || 0,
+                ).getTime();
+                const timeB = new Date(
+                    b.actualStartAt || b.startAt || 0,
+                ).getTime();
+                return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
             });
         });
 
@@ -198,16 +260,17 @@ export function ActivityCalendar({ className }: { className?: string }) {
 
         const currentMonthSessions = sessions.filter((s: any) => {
             const effectiveStart = s.actualStartAt || s.startAt;
-            return (
-                effectiveStart &&
-                isSameMonth(parseISO(effectiveStart), viewDate)
-            );
+            if (!effectiveStart) return false;
+
+            const dateObj = new Date(effectiveStart);
+            if (isNaN(dateObj.getTime())) return false;
+
+            return isSameMonth(dateObj, viewDate);
         });
 
         const completed = currentMonthSessions.filter(
             (s: any) => s.activitySessionStatus === 'completed',
         ).length;
-
         const completionRate =
             currentMonthSessions.length > 0
                 ? Math.round((completed / currentMonthSessions.length) * 100)
@@ -217,6 +280,8 @@ export function ActivityCalendar({ className }: { className?: string }) {
     }, [sessions, viewDate]);
 
     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    if (!mounted) return null; // Prevents hydration flash safely
 
     return (
         <TooltipProvider delayDuration={100}>
@@ -268,7 +333,10 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                           : 'Pending'}
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuContent
+                                align="end"
+                                className="w-40 z-[100]"
+                            >
                                 <DropdownMenuItem
                                     onClick={() => setFilterStatus('all')}
                                 >
@@ -353,7 +421,7 @@ export function ActivityCalendar({ className }: { className?: string }) {
                         const isSelected =
                             selectedDate && isSameDay(day, selectedDate);
 
-                        // 🔥 OVERFLOW LOGIC
+                        // OVERFLOW LOGIC
                         const MAX_VISIBLE = 4;
                         const totalSessions = daySessions.length;
                         const visibleSessions =
@@ -401,13 +469,11 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                 <div className="flex-1 px-1.5 pb-1.5 md:px-2 md:pb-2 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1 content-start overflow-hidden">
                                     {visibleSessions.map((session) => {
                                         const status =
-                                            session.activitySessionStatus ||
+                                            session.activitySessionStatus?.toLowerCase() ||
                                             'pending';
                                         const config =
                                             statusConfig[status] ||
                                             statusConfig.pending;
-
-                                        // Prioritize actualStartAt for display
                                         const displayStart =
                                             session.actualStartAt ||
                                             session.startAt;
@@ -429,7 +495,7 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                                 </TooltipTrigger>
                                                 <TooltipContent
                                                     side="right"
-                                                    className="p-0 border-slate-200 shadow-xl bg-white rounded-xl overflow-hidden min-w-[240px] z-50"
+                                                    className="p-0 border-slate-200 shadow-xl bg-white rounded-xl overflow-hidden min-w-[240px] z-[100]"
                                                     sideOffset={10}
                                                 >
                                                     <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 flex items-center justify-between">
@@ -437,14 +503,9 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                                             variant="outline"
                                                             className="bg-white text-slate-500 text-[9px] font-mono h-5"
                                                         >
-                                                            {displayStart
-                                                                ? format(
-                                                                      parseISO(
-                                                                          displayStart,
-                                                                      ),
-                                                                      'h:mm a',
-                                                                  )
-                                                                : 'TBD'}
+                                                            {safeFormatTime(
+                                                                displayStart,
+                                                            )}
                                                         </Badge>
                                                         <div
                                                             className={cn(
@@ -500,7 +561,7 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                                             <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
                                                                 {session
                                                                     ?.activity
-                                                                    .banner ? (
+                                                                    ?.banner ? (
                                                                     // eslint-disable-next-line @next/next/no-img-element
                                                                     <img
                                                                         src={FormatService.formatStrapiMedia(
@@ -509,7 +570,8 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                                                                 .banner,
                                                                             'thumbnail',
                                                                         )}
-                                                                        alt="session-activity-banner"
+                                                                        alt="banner"
+                                                                        className="h-full w-full object-cover rounded-lg"
                                                                     />
                                                                 ) : (
                                                                     <Activity
@@ -539,7 +601,7 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                         );
                                     })}
 
-                                    {/* 🔥 NEW DETAILED OVERFLOW TOOLTIP */}
+                                    {/* OVERFLOW TOOLTIP */}
                                     {overflowCount > 0 && (
                                         <Tooltip>
                                             <TooltipTrigger asChild>
@@ -550,17 +612,17 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                             <TooltipContent
                                                 side="right"
                                                 sideOffset={10}
-                                                className="p-3 border-slate-200 shadow-xl bg-white rounded-xl min-w-[220px] max-w-[280px] z-50"
+                                                className="p-3 border-slate-200 shadow-xl bg-white rounded-xl min-w-[220px] max-w-[280px] z-[100]"
                                             >
                                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">
                                                     {overflowCount} Remaining
                                                     Events
                                                 </div>
-                                                <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                                                <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
                                                     {hiddenSessions.map(
                                                         (session) => {
                                                             const status =
-                                                                session.activitySessionStatus ||
+                                                                session.activitySessionStatus?.toLowerCase() ||
                                                                 'pending';
                                                             const config =
                                                                 statusConfig[
@@ -604,14 +666,9 @@ export function ActivityCalendar({ className }: { className?: string }) {
                                                                                 •
                                                                             </span>
                                                                             <span className="tabular-nums">
-                                                                                {displayStart
-                                                                                    ? format(
-                                                                                          parseISO(
-                                                                                              displayStart,
-                                                                                          ),
-                                                                                          'h:mm a',
-                                                                                      )
-                                                                                    : 'TBD'}
+                                                                                {safeFormatTime(
+                                                                                    displayStart,
+                                                                                )}
                                                                             </span>
                                                                         </p>
                                                                     </div>

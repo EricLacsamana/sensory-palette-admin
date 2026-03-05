@@ -1,19 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-    Circle,
-    Square,
-    Triangle,
-    Heart,
-    Star,
-    Diamond,
-    Cloud,
-    Moon,
-} from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, User, Trophy, BarChart } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-const COLORS = [
+const ALL_COLORS = [
     { name: 'Red', hex: '#F43F5E' },
     { name: 'Blue', hex: '#3B82F6' },
     { name: 'Green', hex: '#10B981' },
@@ -22,102 +15,174 @@ const COLORS = [
     { name: 'Purple', hex: '#8B5CF6' },
     { name: 'Pink', hex: '#EC4899' },
     { name: 'Teal', hex: '#06B6D4' },
+    { name: 'Indigo', hex: '#4F46E5' },
+    { name: 'Lime', hex: '#84CC16' },
 ];
 
-const SHAPES = [
-    { name: 'Circle', icon: Circle },
-    { name: 'Square', icon: Square },
-    { name: 'Triangle', icon: Triangle },
-    { name: 'Heart', icon: Heart },
-    { name: 'Star', icon: Star },
-    { name: 'Diamond', icon: Diamond },
-    { name: 'Cloud', icon: Cloud },
-    { name: 'Moon', icon: Moon },
-];
+const MAX_LEVEL = 3;
 
-export default function DiscoveryGame() {
-    const [score, setScore] = useState(0);
+interface AdaptiveGameProps {
+    studentAge?: number;
+    baseDifficulty?: 1 | 2 | 3;
+}
+
+export default function ColorMatchGame({
+    studentAge,
+    baseDifficulty,
+}: AdaptiveGameProps) {
+    const searchParams = useSearchParams();
+    const [isAdaptive, setIsAdaptive] = useState(searchParams.get('adaptive') !== 'false');
+
+    const getStartingLevel = () => {
+        const urlLevel = parseInt(searchParams.get('level') || '0', 10);
+        if (urlLevel > 0 && urlLevel <= MAX_LEVEL) return urlLevel;
+        if (baseDifficulty) return baseDifficulty;
+        if (studentAge) {
+            if (studentAge <= 4) return 1;
+            if (studentAge <= 7) return 2;
+            return 3;
+        }
+        return 1;
+    };
+
+    const [level, setLevel] = useState<number>(getStartingLevel());
+    const [streak, setStreak] = useState(0);
+    const [fails, setFails] = useState(0);
+
+    const [correctCount, setCorrectCount] = useState(0);
+    const [totalCount, setTotalCount] = useState(0);
+    const scorePercentage = totalCount === 0 ? 0 : Math.round((correctCount / totalCount) * 100);
+
     const [telemetry, setTelemetry] = useState<any[]>([]);
     const [target, setTarget] = useState<any>(null);
     const [options, setOptions] = useState<any[]>([]);
-    const [mode, setMode] = useState<'color' | 'shape'>('color');
-    const [feedback, setFeedback] = useState<'none' | 'wrong' | 'correct'>(
-        'none',
-    );
-    const [particles, setParticles] = useState<any[]>([]);
+    const [feedback, setFeedback] = useState<'none' | 'wrong' | 'correct' | 'levelup' | 'leveldown'>('none');
 
-    const timerRef = useRef(Date.now());
+    const timerRef = useRef<number>(0);
     const successSfx = useRef<HTMLAudioElement | null>(null);
     const retrySfx = useRef<HTMLAudioElement | null>(null);
 
-    useEffect(() => {
-        successSfx.current = new Audio(
-            'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
-        );
-        retrySfx.current = new Audio(
-            'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',
-        );
-        generate();
-    }, []);
+    const generate = useCallback((currentLevel: number) => {
+        const optionCount = currentLevel === 1 ? 2 : currentLevel === 2 ? 4 : 6;
+        const nextTarget = ALL_COLORS[Math.floor(Math.random() * ALL_COLORS.length)];
+        
+        const shuffled = [...ALL_COLORS]
+            .sort(() => Math.random() - 0.5)
+            .slice(0, optionCount);
+            
+        if (!shuffled.find((i) => i.name === nextTarget.name)) {
+            shuffled[0] = nextTarget;
+        }
 
-    const generate = useCallback(() => {
-        const isColor = Math.random() > 0.5;
-        setMode(isColor ? 'color' : 'shape');
-        const db = isColor ? COLORS : SHAPES;
-        const next = db[Math.floor(Math.random() * db.length)];
-        const shuffled = [...db].sort(() => Math.random() - 0.5).slice(0, 4);
-        if (!shuffled.find((i) => i.name === next.name)) shuffled[0] = next;
-
-        setTarget(next);
+        setTarget(nextTarget);
         setOptions(shuffled.sort(() => Math.random() - 0.5));
         setFeedback('none');
         timerRef.current = Date.now();
     }, []);
 
-    const triggerParticles = (color: string) => {
-        const newParticles = Array.from({ length: 12 }).map((_, i) => ({
-            id: Math.random(),
-            x: (Math.random() - 0.5) * 300,
-            y: (Math.random() - 0.5) * 300,
-            color,
-        }));
-        setParticles(newParticles);
-        setTimeout(() => setParticles([]), 1000);
-    };
+    useEffect(() => {
+        successSfx.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3');
+        retrySfx.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3');
+        generate(level);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-    const handleSelect = (opt: any) => {
+    // SYNC STATE WITH SHELL
+    useEffect(() => {
+        const handleSync = (event: MessageEvent) => {
+            if (event.data?.type === 'SYNC_STATE') {
+                if (event.data.payload.isAdaptive !== undefined) setIsAdaptive(event.data.payload.isAdaptive);
+                if (event.data.payload.level !== undefined) setLevel(event.data.payload.level);
+            }
+        };
+        window.addEventListener('message', handleSync);
+        return () => window.removeEventListener('message', handleSync);
+    }, []);
+
+    const handleSelect = (e: React.MouseEvent, opt: any) => {
         if (feedback !== 'none') return;
         const isCorrect = opt.name === target.name;
-        const latency = (Date.now() - timerRef.current) / 1000;
+        
+        const nativeEvent = e.nativeEvent as any;
+        const actionType = nativeEvent.pointerType === 'touch' ? 'tap' : 'click';
+        const responseTimeMs = Date.now() - timerRef.current;
+        
+        let nextLevel = level;
+        let levelShift: 'up' | 'down' | 'none' = 'none';
 
-        // Record telemetry (don't care what they choose, just log it)
-        const newLog = [
-            ...telemetry,
-            { target: target.name, choice: opt.name, isCorrect, latency },
-        ];
-        const newScore = isCorrect ? score + 1 : score;
-        setTelemetry(newLog);
-        if (isCorrect) setScore(newScore);
+        if (isAdaptive) {
+            if (isCorrect) {
+                setFails(0);
+                const newStreak = streak + 1;
+                if (newStreak >= 3 && level < MAX_LEVEL) {
+                    nextLevel = level + 1;
+                    setLevel(nextLevel);
+                    setStreak(0);
+                    levelShift = 'up';
+                } else {
+                    setStreak(newStreak);
+                }
+            } else {
+                setStreak(0);
+                const newFails = fails + 1;
+                if (newFails >= 2 && level > 1) {
+                    nextLevel = level - 1;
+                    setLevel(nextLevel);
+                    setFails(0);
+                    levelShift = 'down';
+                } else {
+                    setFails(newFails);
+                }
+            }
+        } else {
+            if (isCorrect) { setStreak(streak + 1); setFails(0); } 
+            else { setFails(fails + 1); setStreak(0); }
+        }
 
-        // Sync to Parent
-        window.parent.postMessage(
-            {
-                type: 'GAME_SCORE_UPDATE',
-                score: newScore,
-                rawTelemetry: newLog,
+        const newTotal = totalCount + 1;
+        const newCorrect = isCorrect ? correctCount + 1 : correctCount;
+        const newScorePercentage = Math.round((newCorrect / newTotal) * 100);
+
+        setTotalCount(newTotal);
+        if (isCorrect) setCorrectCount(newCorrect);
+
+        const logEntry = {
+            timestamp: new Date().toISOString(),
+            action: actionType,
+            targetId: opt.name,
+            isCorrect: isCorrect,
+            responseTimeMs: responseTimeMs,
+            metadata: {
+                gameType: 'color_match',
+                currentLevel: level,
+                expectedTarget: target.name,
+                levelShift: levelShift !== 'none' ? levelShift : undefined,
+                adaptiveMode: isAdaptive,
             },
-            '*',
-        );
+        };
+
+        const newLog = [...telemetry, logEntry];
+        setTelemetry(newLog);
+
+        window.parent.postMessage({
+            type: 'GAME_SCORE_UPDATE',
+            score: newScorePercentage,
+            rawTelemetry: newLog,
+        }, '*');
 
         if (isCorrect) {
-            setFeedback('correct');
+            if (levelShift === 'up') setFeedback('levelup');
+            else setFeedback('correct');
             successSfx.current?.play().catch(() => {});
-            triggerParticles(mode === 'color' ? target.hex : '#6366f1');
-            setTimeout(generate, 1000);
+            setTimeout(() => generate(nextLevel), 1200);
         } else {
-            setFeedback('wrong');
+            if (levelShift === 'down') setFeedback('leveldown');
+            else setFeedback('wrong');
             retrySfx.current?.play().catch(() => {});
-            setTimeout(() => setFeedback('none'), 600);
+            setTimeout(() => {
+                if (levelShift === 'down') generate(nextLevel);
+                else setFeedback('none');
+            }, 1000);
         }
     };
 
@@ -125,93 +190,66 @@ export default function DiscoveryGame() {
 
     return (
         <div className="w-full h-screen bg-[#fcfcfd] dark:bg-[#0a0c12] flex flex-col items-center justify-center p-8 overflow-hidden font-sans">
-            {/* Target Portal */}
-            <div className="relative mb-16">
-                <AnimatePresence>
-                    {particles.map((p) => (
-                        <motion.div
-                            key={p.id}
-                            initial={{ x: 0, y: 0, scale: 1 }}
-                            animate={{ x: p.x, y: p.y, scale: 0 }}
-                            className="absolute w-3 h-3 rounded-full z-50"
-                            style={{ backgroundColor: p.color }}
-                        />
-                    ))}
-                </AnimatePresence>
+            <div className="absolute top-6 left-0 right-0 flex justify-center gap-6 px-8 opacity-80">
+                {studentAge && (
+                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-white/10 px-4 py-2 rounded-full text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        <User size={14} /> Age {studentAge}
+                    </div>
+                )}
+                <div className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
+                    <BarChart size={14} /> Level {level}
+                </div>
+                <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/30 px-4 py-2 rounded-full text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                    <Trophy size={14} /> {scorePercentage}%
+                </div>
+            </div>
 
+            <div className="relative mb-10 mt-10">
                 <motion.div
                     key={target.name}
                     animate={
-                        feedback === 'wrong'
-                            ? { x: [-8, 8, -8, 8, 0] }
-                            : { scale: [1, 1.02, 1] }
+                        feedback === 'wrong' || feedback === 'leveldown' ? { x: [-8, 8, -8, 8, 0] } : { scale: [1, 1.02, 1] }
                     }
                     transition={
-                        feedback === 'wrong'
-                            ? { duration: 0.4 }
-                            : { repeat: Infinity, duration: 4 }
+                        feedback === 'wrong' || feedback === 'leveldown' ? { duration: 0.4 } : { repeat: Infinity, duration: 4 }
                     }
-                    className="w-52 h-52 rounded-[64px] bg-white dark:bg-white/5 border border-slate-200/60 dark:border-white/10 shadow-xl flex items-center justify-center relative backdrop-blur-sm"
+                    className="w-48 h-48 rounded-[64px] bg-white dark:bg-white/5 border border-slate-200/60 dark:border-white/10 shadow-xl flex items-center justify-center relative"
                 >
-                    {mode === 'color' ? (
-                        <div
-                            className="w-28 h-28 rounded-full shadow-inner"
-                            style={{ backgroundColor: target.hex }}
-                        />
-                    ) : (
-                        <target.icon
-                            size={90}
-                            strokeWidth={1}
-                            className="text-slate-400 dark:text-slate-200"
-                        />
-                    )}
-
+                    <div className="w-24 h-24 rounded-full shadow-inner" style={{ backgroundColor: target.hex }} />
                     <AnimatePresence>
-                        {feedback === 'correct' && (
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1.1 }}
-                                className="absolute inset-0 rounded-[64px] border-4 border-emerald-400/50 bg-emerald-400/5"
-                            />
+                        {feedback === 'levelup' && (
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute -top-12 text-emerald-500 flex flex-col items-center">
+                                <ArrowUpCircle size={32} className="animate-bounce" />
+                                <span className="text-xs font-black uppercase tracking-widest mt-1">Level Up!</span>
+                            </motion.div>
+                        )}
+                        {feedback === 'leveldown' && (
+                            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute -top-12 text-amber-500 flex flex-col items-center">
+                                <ArrowDownCircle size={32} className="animate-bounce" />
+                                <span className="text-xs font-black uppercase tracking-widest mt-1">Easier</span>
+                            </motion.div>
                         )}
                     </AnimatePresence>
                 </motion.div>
             </div>
 
-            <div className="text-center mb-12">
-                <h2 className="text-3xl font-light text-slate-800 dark:text-slate-100 tracking-tight">
-                    {feedback === 'wrong' ? (
-                        'Try again...'
-                    ) : (
-                        <>
-                            Find the{' '}
-                            <span className="font-semibold">{target.name}</span>
-                        </>
+            <div className="text-center mb-8">
+                <h2 className="text-3xl font-light text-slate-800 dark:text-slate-100 tracking-tight h-10">
+                    {feedback === 'wrong' ? 'Try again...' : feedback === 'leveldown' ? "Let's try an easier one!" : (
+                        <>Find <span className="font-semibold">{target.name}</span></>
                     )}
                 </h2>
             </div>
 
-            {/* Discovery Options */}
-            <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
+            <div className={cn('grid gap-4 w-full max-w-md', level === 1 ? 'grid-cols-2' : level === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
                 {options.map((opt) => (
                     <motion.button
                         key={opt.name}
-                        whileTap={{ scale: 0.96 }}
-                        onClick={() => handleSelect(opt)}
-                        className="h-16 rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-white/80"
+                        whileTap={{ scale: 0.94 }}
+                        onClick={(e) => handleSelect(e, opt)}
+                        className="h-16 rounded-3xl border border-slate-200/80 bg-white/50 backdrop-blur-md flex items-center justify-center text-sm font-bold text-slate-600 transition-all hover:bg-white hover:shadow-md"
                     >
-                        {mode === 'color' && (
-                            <div
-                                className="w-4 h-4 rounded-full mr-3"
-                                style={{ backgroundColor: opt.hex }}
-                            />
-                        )}
-                        {mode === 'shape' && (
-                            <opt.icon
-                                size={18}
-                                className="mr-3 text-slate-400"
-                            />
-                        )}
+                        <div className="w-5 h-5 rounded-full mr-3 shadow-inner" style={{ backgroundColor: opt.hex }} />
                         {opt.name}
                     </motion.button>
                 ))}

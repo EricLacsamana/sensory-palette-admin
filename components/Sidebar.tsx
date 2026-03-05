@@ -46,7 +46,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
     const dispatch = useDispatch();
     const pathname = usePathname();
 
-    const { data: user, isLoading } = useQuery({
+    const { data: user } = useQuery({
         queryKey: ['me'],
         queryFn: me,
     });

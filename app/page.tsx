@@ -9,7 +9,6 @@ import { me } from '@/api/users';
 
 // UI & Dashboards
 import TherapistDashboard from '@/components/TherapistDashboard';
-import StudentDashboard from '@/components/StudentDashboard';
 import AdminDashboard from '@/components/AdminDashboard';
 import ActivitySessionLauncher from '@/components/ActivitySessionLauncher';
 

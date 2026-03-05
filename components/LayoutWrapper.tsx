@@ -55,38 +55,65 @@ export default function LayoutWrapper({
         isLoading: isAuthLoading,
     } = useSelector((state: RootState) => state.auth);
 
-    // 1. IDENTITY FETCH: Gated by token to prevent Forbidden errors on mount
+    // 1. IDENTITY FETCH: Gated by token
     const { data: user, isLoading: isUserLoading } = useQuery({
         queryKey: ['me'],
         queryFn: me,
-        // 🔥 THE FIX: Gating by !!token ensures Axios has a token to read
         enabled: isAuthenticated && !!token && !isAuthLoading,
-        retry: false, // Prevents the error from looping
+        retry: false,
     });
 
     const isStudent = user?.role?.type === 'student';
 
-    // 2. CACHE SYNC: Cleanly invalidate only when the token actually changes
+    // 2. CACHE SYNC
     useEffect(() => {
         if (isAuthenticated && token) {
             queryClient.invalidateQueries({ queryKey: ['me'] });
         }
     }, [isAuthenticated, token, queryClient]);
 
-    const isAuthPage =
+    // ✨ ROUTE DEFINITIONS ✨
+    const isTherapistAuth =
         pathname.startsWith('/auth') ||
         pathname === '/login' ||
         pathname === '/register';
+    const isStudentLogin = pathname.includes('student-login');
+    const isStudentZone =
+        pathname.startsWith('/student-portal') ||
+        pathname.startsWith('/activities/play');
 
-    // 3. AUTH REDIRECT LOGIC
+    // Should we hide the sidebar? (Yes, for ALL auth pages, ALL student pages, or if the user is a student)
+    const isFullScreenRoute =
+        isTherapistAuth || isStudentLogin || isStudentZone || isStudent;
+
+    // 3. SMART AUTH REDIRECT LOGIC
     useEffect(() => {
-        if (isMounted && !isAuthLoading && !isAuthenticated && !isAuthPage) {
-            router.push('/auth/login');
+        if (isMounted && !isAuthLoading && !isAuthenticated) {
+            if (isStudentZone) {
+                // Unauthenticated user trying to access the portal -> Kick to Passcode Screen
+                router.push('/auth/student-login');
+            } else if (!isTherapistAuth && !isStudentLogin) {
+                // Unauthenticated user trying to access Therapist dashboard -> Kick to Admin Login
+                router.push('/auth/login');
+            }
         }
-    }, [isMounted, isAuthLoading, isAuthenticated, isAuthPage, router]);
+    }, [
+        isMounted,
+        isAuthLoading,
+        isAuthenticated,
+        isTherapistAuth,
+        isStudentLogin,
+        isStudentZone,
+        router,
+    ]);
 
     // Global Loading Barrier
-    if (!isMounted || ((isAuthLoading || isUserLoading) && !isAuthPage)) {
+    if (
+        !isMounted ||
+        ((isAuthLoading || isUserLoading) &&
+            !isTherapistAuth &&
+            !isStudentLogin)
+    ) {
         return (
             <div className="h-[100dvh] w-full flex items-center justify-center bg-white">
                 <Loader2 className="animate-spin text-indigo-600" size={32} />
@@ -94,41 +121,39 @@ export default function LayoutWrapper({
         );
     }
 
-    // Public / Auth Layout
-    if (isAuthPage || !isAuthenticated) {
+    // --- LAYOUT 1: FULL SCREEN (Auth, Passcode, Student Portal, or Games) ---
+    if (isFullScreenRoute) {
         return (
-            <main className="h-[100dvh] w-full overflow-y-auto bg-white">
+            <main
+                className={cn(
+                    'h-[100dvh] w-full overflow-y-auto relative',
+                    // Give login screens a dark background, portal/games a light background
+                    isStudentLogin || isTherapistAuth
+                        ? 'bg-slate-950'
+                        : 'bg-[#FDFEFE]',
+                )}
+            >
                 {children}
             </main>
         );
     }
 
+    // --- LAYOUT 2: THERAPIST DASHBOARD ---
     return (
         <div className="flex h-[100dvh] w-full overflow-hidden bg-[#F8FAFC]">
-            {/* Sidebar logic: Hidden for students */}
-            {!isStudent && (
-                <Sidebar
-                    isCollapsed={isCollapsed}
-                    setIsCollapsed={setIsCollapsed}
-                />
-            )}
+            {/* Sidebar only renders for authenticated therapists on dashboard routes */}
+            <Sidebar
+                isCollapsed={isCollapsed}
+                setIsCollapsed={setIsCollapsed}
+            />
 
             <main
                 className={cn(
                     'flex flex-col flex-1 h-full min-w-0 overflow-y-auto transition-all duration-300 relative',
-                    isStudent
-                        ? 'ml-0'
-                        : isCollapsed
-                          ? 'md:ml-[72px]'
-                          : 'md:ml-[260px]',
+                    isCollapsed ? 'md:ml-[72px]' : 'md:ml-[260px]',
                 )}
             >
-                <div
-                    className={cn(
-                        'flex flex-col flex-1 w-full h-full max-w-[1600px] mx-auto',
-                        isStudent && 'px-0',
-                    )}
-                >
+                <div className="flex flex-col flex-1 w-full h-full max-w-[1600px] mx-auto">
                     {children}
                 </div>
             </main>

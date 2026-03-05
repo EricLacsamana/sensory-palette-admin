@@ -25,6 +25,12 @@ export interface TimeLog {
     timestamp: string;
     reason?: PauseReason | string;
 }
+
+export interface BehavioralIndicator {
+    evidence: string;
+    confidence: number;
+    pattern: string;
+}
 export interface ActivitySessionResponse {
     id: number | string;
     documentId: string;
@@ -36,12 +42,19 @@ export interface ActivitySessionResponse {
     actualStartAt: string; // ISO String
     actualEndAt: string; // ISO String
     activitySessionStatus: ActivitySessionStatus;
-    teacherNotes?: string;
+    clinicalObservations?: string;
     score?: number;
     createdAt: string; // ISO String
     updatedAt: string; // ISO String
     timeLogs: TimeLog[];
     enableLearnerControls?: boolean;
+    rawTelemetry: unknown[];
+    behavioralIndicators?: BehavioralIndicator[];
+    aiRecommendation: string;
+    enableAdaptiveDifficulty: boolean;
+    isHandsFree: boolean;
+    accuracy: number;
+    aiAccuracy: number;
 }
 
 export type ActivitySessionEntry = Omit<
@@ -68,7 +81,7 @@ export type ActivitySessionEntry = Omit<
 export type CreateActivitySessionPayload = {
     startAt: string;
     endAt: string;
-    teacherNotes?: string;
+    clinicalObservations?: string;
     durationMinutes?: number;
     student: number;
     activity: string;
@@ -79,7 +92,7 @@ export type UpdatectivitySessionPayload = {
     endAt?: string;
     actualStartAt?: string | null;
     actualEndAt?: string | null;
-    teacherNotes?: string;
+    clinicalObservations?: string;
     durationMinutes?: number;
     activitySessionStatus?: ActivitySessionStatus;
     score?: number;
