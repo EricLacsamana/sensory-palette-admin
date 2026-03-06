@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link'; // Added for the student login routing
 import { useDispatch } from 'react-redux';
 import { useMutation } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
@@ -15,7 +16,7 @@ import {
 } from '@/redux/auth/authSlice';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ShieldAlert, Info } from 'lucide-react';
+import { ShieldAlert, Info, KeyRound } from 'lucide-react'; // Added KeyRound icon
 
 import LoginForm from '@/components/LoginForm';
 import { Login, LoginResponse } from '@/types';
@@ -79,6 +80,20 @@ export default function LoginPage() {
                     onSubmit={handleLoginSubmit}
                     isLoading={mutation.isPending}
                 />
+
+                {/* --- STUDENT LOGIN OPTION --- */}
+                <div className="mt-8 text-center">
+                    <p className="text-[13px] font-medium text-slate-500">
+                        Are you a student?
+                    </p>
+                    <Link
+                        href="/auth/student-login"
+                        className="mt-3 inline-flex items-center gap-2 rounded-full bg-indigo-50 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-indigo-600 transition-colors hover:bg-indigo-100 hover:text-indigo-700"
+                    >
+                        <KeyRound size={14} className="stroke-[2.5px]" />
+                        Use Student Passcode
+                    </Link>
+                </div>
 
                 {/* --- ADDITIONAL THEMED FOOTER --- */}
                 <div className="mt-12 flex items-center justify-center gap-6">
