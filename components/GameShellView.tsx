@@ -74,19 +74,43 @@ export default function GameShellView({
     // 2. INITIAL IFRAME MOUNT (Only happens once)
     const iframeSrc = useMemo(() => {
         if (!activity.activityUrl) return '';
-        const adminPort = process.env.NEXT_PUBLIC_ADMIN_PORT || '1337';
-        const baseUrl = activity.activityUrl.replace(
-            `http://localhost:${adminPort}`,
-            '',
-        );
+
+        let baseUrl = activity.activityUrl;
+
+        // Catch 'game' activity type and swap localhost with current deployment origin
+        if (activity.activityType === 'game' && typeof window !== 'undefined') {
+            try {
+                const parsedUrl = new URL(baseUrl);
+                if (
+                    parsedUrl.hostname === 'localhost' ||
+                    parsedUrl.hostname === '127.0.0.1'
+                ) {
+                    // window.location.origin provides the current "http://[IP]:[PORT]"
+                    baseUrl = `${window.location.origin}${parsedUrl.pathname}${parsedUrl.search}`;
+                }
+            } catch (e) {
+                // Fails silently if the URL is already relative, moving on using the raw string
+            }
+        } else {
+            // Original fallback behavior for non-game activities
+            const adminPort = process.env.NEXT_PUBLIC_ADMIN_PORT || '1337';
+            baseUrl = baseUrl.replace(`http://localhost:${adminPort}`, '');
+        }
+
         const separator = baseUrl.includes('?') ? '&' : '?';
 
         // Pass initial state so the game boots correctly
         const adaptiveFlag =
             session.enableAdaptiveDifficulty !== false ? 'true' : 'false';
+
+        // We append the dynamic parameters
         return `${baseUrl}${separator}adaptive=${adaptiveFlag}&level=${currentLevel}`;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activity.activityUrl]); // Notice we DO NOT put currentLevel here so it doesn't reload the iframe URL
+    }, [
+        activity.activityUrl,
+        activity.activityType,
+        session?.enableAdaptiveDifficulty,
+    ]);
 
     // 3. SILENT PUSH: Sync Source of Truth down to the iframe without reloading
     useEffect(() => {
