@@ -44,11 +44,11 @@ export const studentFormSchema = z.object({
         .min(6, 'Minimum 6 characters.')
         .optional()
         .or(z.literal('')),
-    confirmed: z.boolean().default(true),
-    blocked: z.boolean().default(false),
+    // Fixed: Removed .default() to prevent boolean | undefined mismatch with useForm
+    confirmed: z.boolean(),
+    blocked: z.boolean(),
 
     // Personal
-    // ✨ FIX: Use proper typing for File instead of z.any() to resolve the TS Control error
     profilePicture: z.custom<File>().optional().nullable(),
     firstName: z.string().min(1, 'First name is required.'),
     middleName: z.string().optional(),
@@ -119,8 +119,8 @@ export default function EnrollStudentForm({
             username: '',
             email: '',
             password: '',
-            confirmed: true,
-            blocked: false,
+            confirmed: true, // The source of truth for the default value
+            blocked: false, // The source of truth for the default value
             profilePicture: null,
             firstName: '',
             middleName: '',
