@@ -199,7 +199,7 @@ export function ActivityCalendar({ className }: { className?: string }) {
                     ],
                 },
                 pagination: {
-                    limit: 200,
+                    limit: 5000,
                 },
             },
         ],
@@ -212,15 +212,11 @@ export function ActivityCalendar({ className }: { className?: string }) {
         if (filterStatus === 'all') return sessions;
         if (filterStatus === 'completed') {
             return sessions.filter(
-                (s: any) => s.activitySessionStatus === 'completed',
+                (s) => s.activitySessionStatus === 'completed',
             );
         }
         if (filterStatus === 'pending') {
-            return sessions.filter(
-                (s: any) =>
-                    s.activitySessionStatus !== 'completed' &&
-                    s.activitySessionStatus !== 'abandoned',
-            );
+            return sessions.filter((s) => s.activitySessionStatus == 'pending');
         }
         return sessions;
     }, [sessions, filterStatus]);

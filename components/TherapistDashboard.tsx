@@ -3233,17 +3233,12 @@ function LiveSessionWidget({
                                                             updateSessionMutation.isPending
                                                         }
                                                         variant="outline"
-                                                        className="flex-1 h-10 rounded-xl border-slate-200/60 bg-white/50 text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 font-bold text-[10px] uppercase tracking-wider shadow-sm transition-all"
+                                                        className="flex-1 h-10 rounded-xl border-slate-200/60 bg-white/50 text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 font-bold text-[10px] uppercase tracking-wider shadow-sm transition-all px-2"
                                                     >
-                                                        {updateSessionMutation.isPending &&
-                                                        queuedSessions.length ===
-                                                            0 ? (
-                                                            <Loader2 className="animate-spin mr-1.5 h-3.5 w-3.5" />
-                                                        ) : (
-                                                            <Square className="mr-1.5 h-3.5 w-3.5 fill-current" />
-                                                        )}{' '}
+                                                        <Square className="mr-1.5 h-3.5 w-3.5 fill-current shrink-0" />
                                                         Cancel
                                                     </Button>
+
                                                     {queuedSessions.length >
                                                         0 && (
                                                         <Button
@@ -3256,16 +3251,32 @@ function LiveSessionWidget({
                                                             disabled={
                                                                 updateSessionMutation.isPending
                                                             }
-                                                            className="flex-1 h-10 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm transition-all border border-slate-700"
+                                                            className="flex-1 h-10 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm transition-all border border-slate-700 px-2"
                                                         >
-                                                            {updateSessionMutation.isPending ? (
-                                                                <Loader2 className="animate-spin mr-1.5 h-3.5 w-3.5" />
-                                                            ) : (
-                                                                <SkipForward className="mr-1.5 h-3.5 w-3.5 fill-current" />
-                                                            )}{' '}
+                                                            <SkipForward className="mr-1.5 h-3.5 w-3.5 fill-current shrink-0" />
                                                             Skip
                                                         </Button>
                                                     )}
+
+                                                    <Button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleStartQueued(
+                                                                e,
+                                                            );
+                                                        }}
+                                                        disabled={
+                                                            updateSessionMutation.isPending
+                                                        }
+                                                        className="flex-1 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm transition-all border border-indigo-500 shadow-indigo-600/20 px-2"
+                                                    >
+                                                        {updateSessionMutation.isPending ? (
+                                                            <Loader2 className="animate-spin mr-1.5 h-3.5 w-3.5 shrink-0" />
+                                                        ) : (
+                                                            <PlayIcon className="mr-1.5 h-3.5 w-3.5 fill-current shrink-0" />
+                                                        )}{' '}
+                                                        Start
+                                                    </Button>
                                                 </>
                                             ) : isAwaitingHandshake ? (
                                                 <>

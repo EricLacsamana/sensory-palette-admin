@@ -59,7 +59,7 @@ export default function StudentPortal() {
                 filters: {
                     student: { id: { $eq: user?.id } },
                     activitySessionStatus: {
-                        $in: ['in_progress', 'paused', 'queued', 'pending'],
+                        $in: ['in_progress', 'paused', 'queued'],
                     },
                 },
                 populate: {

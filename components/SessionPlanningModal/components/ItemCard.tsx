@@ -73,6 +73,10 @@ const STATUS_CONFIG: Record<
     interrupted: { icon: PauseCircle, label: 'Interrupted' },
     abandoned: { icon: AlertCircle, label: 'Abandoned' },
     reschedule: { icon: CalendarClock, label: 'Reschedule' },
+    queued: {
+        icon: 'symbol',
+        label: '',
+    },
 };
 
 const ItemCard = ({

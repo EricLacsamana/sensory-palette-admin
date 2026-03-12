@@ -7,10 +7,10 @@ import { ENDPOINTS } from '../constants/api';
 import qs from 'qs';
 
 export const getActivitySessionsNew = async (ctx: any = {}) => {
-    const [, query] = ctx.queryKey;
+    const [queryKey, query] = ctx.queryKey;
 
     const queryString = qs.stringify(query, { encodeValuesOnly: true });
-    console.log('queryString', queryString);
+    console.log(queryKey, queryString);
     // console.log('query', queryString);
     const url = `${ENDPOINTS.ACTIVITY_SESSIONS}?${queryString}`;
 

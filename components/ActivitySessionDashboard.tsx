@@ -52,6 +52,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
     ActivitySessionResponse,
+    ActivitySessionStatus,
     BehavioralIndicator,
 } from '@/types/activitiy-session';
 
@@ -272,6 +273,34 @@ export default function ActivitySessionDashboard({
         onError: () => toast.error('Failed to save notes. Please try again.'),
     });
 
+    const launchMutation = useMutation({
+        mutationFn: async (status: ActivitySessionStatus) => {
+            return await updateActivitySession(session.documentId, {
+                activitySessionStatus: status,
+            });
+        },
+        onSuccess: () => {
+            router.push('/');
+        },
+        onError: () => {
+            toast.error(
+                'Failed to initiate session. Please check your connection.',
+            );
+        },
+    });
+
+    const handleLaunchOrResume = (status: ActivitySessionStatus) => {
+        const toastId = toast.loading(
+            status === ActivitySessionStatus.InProgress
+                ? 'Launching activity...'
+                : 'Resuming session...',
+        );
+
+        launchMutation.mutate(status, {
+            onSettled: () => toast.dismiss(toastId),
+        });
+    };
+
     const formatOnlyDate = (dateString: string) => {
         if (!dateString) return 'Unknown Date';
         return new Date(dateString).toLocaleDateString('en-US', {
@@ -328,32 +357,48 @@ export default function ActivitySessionDashboard({
             );
         }
 
-        if (status === 'pending' || status === 'reschedule') {
+        if (
+            status === 'pending' ||
+            status === 'reschedule' ||
+            status === 'queued'
+        ) {
             return (
                 <Button
+                    disabled={launchMutation.isPending}
                     onClick={() =>
-                        router.push(
-                            `/activity-sessions/${session.documentId}/play`,
-                        )
+                        handleLaunchOrResume(ActivitySessionStatus.InProgress)
                     }
                     className="h-11 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-100 font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95"
                 >
-                    <PlayCircle className="mr-2 h-4 w-4" /> Launch Activity
+                    {launchMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <PlayCircle className="mr-2 h-4 w-4" />
+                    )}
+                    Launch Activity
                 </Button>
             );
         }
 
-        if (status === 'in_progress' || status === 'interrupted') {
+        if (
+            status === 'in_progress' ||
+            status === 'interrupted' ||
+            status === 'paused'
+        ) {
             return (
                 <Button
+                    disabled={launchMutation.isPending}
                     onClick={() =>
-                        router.push(
-                            `/activity-sessions/${session.documentId}/play`,
-                        )
+                        handleLaunchOrResume(ActivitySessionStatus.InProgress)
                     }
                     className="h-11 px-6 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-100 font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95"
                 >
-                    <RotateCcw className="mr-2 h-4 w-4" /> Resume Session
+                    {launchMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                    )}
+                    Resume Session
                 </Button>
             );
         }

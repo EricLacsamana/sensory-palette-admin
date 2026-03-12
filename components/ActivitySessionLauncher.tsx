@@ -343,5 +343,5 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         );
     }
 
-    return <StudentPortal />;
+    return null;
 }

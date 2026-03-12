@@ -6,6 +6,7 @@ export enum ActivitySessionStatus {
     Queued = 'queued',
     InProgress = 'in_progress',
     Paused = 'paused', // Added Paused Status
+    Interrupted = 'interrupted',
     Completed = 'completed',
     Cancelled = 'cancelled',
     Abandoned = 'abandoned',
@@ -31,6 +32,12 @@ export interface BehavioralIndicator {
     confidence: number;
     pattern: string;
 }
+
+export interface TelemetryAnalysis {
+    event: string;
+    timestamp: number;
+    info: string;
+}
 export interface ActivitySessionResponse {
     id: number | string;
     documentId: string;
@@ -55,6 +62,7 @@ export interface ActivitySessionResponse {
     isHandsFree: boolean;
     accuracy: number;
     aiAccuracy: number;
+    telemetryAnalysis: TelemetryAnalysis[];
 }
 
 export type ActivitySessionEntry = Omit<

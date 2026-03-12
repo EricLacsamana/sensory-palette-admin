@@ -17,6 +17,7 @@ export interface Activity {
     updatedAt: string;
     publishedAt?: string;
     banner?: StrapiMedia;
+    activityType: string;
 }
 
 // // Helper to represent just the attributes for Partial usage
