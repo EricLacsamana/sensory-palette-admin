@@ -14,7 +14,6 @@ import {
 } from '@/types/activitiy-session';
 import { useTelemetry } from '@/hooks/useTelemetry';
 import GameShellView from '@/components/GameShellView';
-import StudentPortal from '@/components/StudentPortal';
 
 interface LauncherProps {
     user: any;

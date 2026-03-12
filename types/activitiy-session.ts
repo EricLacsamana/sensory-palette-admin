@@ -63,6 +63,7 @@ export interface ActivitySessionResponse {
     accuracy: number;
     aiAccuracy: number;
     telemetryAnalysis: TelemetryAnalysis[];
+    extraTimeSeconds: number;
 }
 
 export type ActivitySessionEntry = Omit<

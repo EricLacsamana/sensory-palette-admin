@@ -48,6 +48,7 @@ export interface UserResponse {
               type: string;
           }
         | string;
+    blocked: boolean;
 }
 // types/strapi.ts
 

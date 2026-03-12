@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import {
     Activity,
     Radio,
@@ -70,12 +70,12 @@ import {
 } from '@/types/activitiy-session';
 
 // --- Animation Variants ---
-const fadeVariants = {
+const fadeVariants: Variants = {
     hidden: { opacity: 0, y: 10 },
     show: { opacity: 1, y: 0, transition: { duration: 0.3 } },
 };
 
-const modalVariants = {
+const modalVariants: Variants = {
     hidden: { opacity: 0, scale: 0.95 },
     visible: {
         opacity: 1,
@@ -85,7 +85,7 @@ const modalVariants = {
     exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } },
 };
 
-const overlayVariants = {
+const overlayVariants: Variants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1 },
     exit: { opacity: 0 },
@@ -1058,122 +1058,135 @@ export default function AppAdminDashboard() {
                                         </p>
                                     </div>
                                 ) : (
-                                    metrics.liveSessions.map((session: any) => {
-                                        const startTime = session.actualStartAt
-                                            ? new Date(
-                                                  session.actualStartAt,
-                                              ).getTime()
-                                            : Date.now();
-                                        const elapsedMins = Math.floor(
-                                            (Date.now() - startTime) / 60000,
-                                        );
+                                    metrics.liveSessions.map(
+                                        (session: ActivitySessionEntry) => {
+                                            const startTime =
+                                                session.actualStartAt
+                                                    ? new Date(
+                                                          session.actualStartAt,
+                                                      ).getTime()
+                                                    : Date.now();
+                                            const elapsedMins = Math.floor(
+                                                (Date.now() - startTime) /
+                                                    60000,
+                                            );
 
-                                        return (
-                                            <motion.div
-                                                key={session.id}
-                                                initial={{ opacity: 0, x: -10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:border-indigo-300 transition-all group"
-                                            >
-                                                {/* Top Row: User & Activity */}
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <Avatar className="h-9 w-9 rounded-lg border-2 border-slate-50 shadow-sm">
-                                                            <AvatarImage
-                                                                src={FormatService.formatStrapiMedia(
-                                                                    session
-                                                                        .student
-                                                                        ?.profilePicture,
-                                                                    'thumbnail',
-                                                                )}
-                                                            />
-                                                            <AvatarFallback className="bg-indigo-50 text-indigo-700 text-xs font-black">
-                                                                {session.student?.firstName?.charAt(
-                                                                    0,
-                                                                )}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div>
-                                                            <h4 className="font-black text-slate-900 text-[12px] leading-tight">
-                                                                {
-                                                                    session
-                                                                        .student
-                                                                        ?.firstName
-                                                                }{' '}
-                                                                {
-                                                                    session
-                                                                        .student
-                                                                        ?.lastName
-                                                                }
-                                                            </h4>
-                                                            <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
-                                                                <Stethoscope
-                                                                    size={10}
-                                                                    className="text-indigo-400"
+                                            return (
+                                                <motion.div
+                                                    key={session.id}
+                                                    initial={{
+                                                        opacity: 0,
+                                                        x: -10,
+                                                    }}
+                                                    animate={{
+                                                        opacity: 1,
+                                                        x: 0,
+                                                    }}
+                                                    className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:border-indigo-300 transition-all group"
+                                                >
+                                                    {/* Top Row: User & Activity */}
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <Avatar className="h-9 w-9 rounded-lg border-2 border-slate-50 shadow-sm">
+                                                                <AvatarImage
+                                                                    src={FormatService.formatStrapiMedia(
+                                                                        session
+                                                                            .student
+                                                                            ?.profilePicture,
+                                                                        'thumbnail',
+                                                                    )}
                                                                 />
-                                                                Therapist:{' '}
-                                                                {session
-                                                                    .therapist
-                                                                    ?.lastName ||
-                                                                    'Unassigned'}
-                                                            </p>
+                                                                <AvatarFallback className="bg-indigo-50 text-indigo-700 text-xs font-black">
+                                                                    {session.student?.firstName?.charAt(
+                                                                        0,
+                                                                    )}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div>
+                                                                <h4 className="font-black text-slate-900 text-[12px] leading-tight">
+                                                                    {
+                                                                        session
+                                                                            .student
+                                                                            ?.firstName
+                                                                    }{' '}
+                                                                    {
+                                                                        session
+                                                                            .student
+                                                                            ?.lastName
+                                                                    }
+                                                                </h4>
+                                                                <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                                                                    <Stethoscope
+                                                                        size={
+                                                                            10
+                                                                        }
+                                                                        className="text-indigo-400"
+                                                                    />
+                                                                    Therapist:{' '}
+                                                                    {session
+                                                                        .therapist
+                                                                        ?.lastName ||
+                                                                        'Unassigned'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Live Timer Badge */}
+                                                        <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100">
+                                                            <Clock
+                                                                size={10}
+                                                                className="animate-spin-slow"
+                                                            />
+                                                            <span className="text-[10px] font-mono font-black">
+                                                                {elapsedMins}m
+                                                            </span>
                                                         </div>
                                                     </div>
 
-                                                    {/* Live Timer Badge */}
-                                                    <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100">
-                                                        <Clock
-                                                            size={10}
-                                                            className="animate-spin-slow"
-                                                        />
-                                                        <span className="text-[10px] font-mono font-black">
-                                                            {elapsedMins}m
-                                                        </span>
+                                                    {/* Middle Row: Content Meta */}
+                                                    <div className="bg-slate-50 rounded-lg p-2 flex items-center justify-between mb-3 border border-slate-100">
+                                                        <div className="flex items-center gap-2 overflow-hidden">
+                                                            <LayoutGrid
+                                                                size={12}
+                                                                className="text-slate-400 shrink-0"
+                                                            />
+                                                            <span className="text-[10px] font-black text-slate-600 truncate uppercase tracking-tighter">
+                                                                {session
+                                                                    .activity
+                                                                    ?.name ||
+                                                                    'Manual Evaluation'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white rounded border border-slate-200">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                                            <span className="text-[8px] font-black text-slate-400 uppercase">
+                                                                Live
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                </div>
 
-                                                {/* Middle Row: Content Meta */}
-                                                <div className="bg-slate-50 rounded-lg p-2 flex items-center justify-between mb-3 border border-slate-100">
-                                                    <div className="flex items-center gap-2 overflow-hidden">
-                                                        <LayoutGrid
-                                                            size={12}
-                                                            className="text-slate-400 shrink-0"
-                                                        />
-                                                        <span className="text-[10px] font-black text-slate-600 truncate uppercase tracking-tighter">
-                                                            {session.activity
-                                                                ?.name ||
-                                                                'Manual Evaluation'}
-                                                        </span>
+                                                    {/* Bottom Row: Control Center */}
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            variant="outline"
+                                                            className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest gap-2 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all"
+                                                        >
+                                                            <Eye size={14} />{' '}
+                                                            Observe
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-8 w-8 shrink-0 border-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-all"
+                                                            title="Force End Session"
+                                                        >
+                                                            <Power size={14} />
+                                                        </Button>
                                                     </div>
-                                                    <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white rounded border border-slate-200">
-                                                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                                        <span className="text-[8px] font-black text-slate-400 uppercase">
-                                                            Live
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Bottom Row: Control Center */}
-                                                <div className="flex gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest gap-2 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all"
-                                                    >
-                                                        <Eye size={14} />{' '}
-                                                        Observe
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon"
-                                                        className="h-8 w-8 shrink-0 border-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-all"
-                                                        title="Force End Session"
-                                                    >
-                                                        <Power size={14} />
-                                                    </Button>
-                                                </div>
-                                            </motion.div>
-                                        );
-                                    })
+                                                </motion.div>
+                                            );
+                                        },
+                                    )
                                 )}
                             </div>
 

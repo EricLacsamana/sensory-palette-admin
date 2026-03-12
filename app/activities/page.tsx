@@ -42,7 +42,9 @@ const ActivityLibrary = () => {
         isLoading: actLoading,
         isError: actError,
     } = useActivities();
-    const { data: student, isLoading: stuLoading } = useStudent(studentId);
+    const parsedStudentId = studentId ? Number(studentId) : null;
+    const { data: student, isLoading: stuLoading } =
+        useStudent(parsedStudentId);
 
     const filteredActivities = useMemo(() => {
         return activities?.filter((activity: any) => {

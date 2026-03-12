@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 
 // ✨ IMPORT YOUR LAUNCHER COMPONENT ✨
 import ActivitySessionLauncher from '@/components/ActivitySessionLauncher';
+import { ActivitySessionResponse } from '@/types/activitiy-session';
 
 export default function StudentPortal() {
     const dispatch = useDispatch();
@@ -111,14 +112,14 @@ export default function StudentPortal() {
     }, [isSessionsFetched, sessions.length, handleLogout]);
 
     const activeSession = sessions.find(
-        (s) =>
+        (s: ActivitySessionResponse) =>
             s.activitySessionStatus === 'in_progress' ||
             s.activitySessionStatus === 'paused',
     );
     const isPaused = activeSession?.activitySessionStatus === 'paused';
 
     const upcoming = sessions.filter(
-        (s) =>
+        (s: ActivitySessionResponse) =>
             s.activitySessionStatus !== 'in_progress' &&
             s.activitySessionStatus !== 'paused',
     );
@@ -388,47 +389,52 @@ export default function StudentPortal() {
                             }
                         >
                             {carouselItems.length > 0 ? (
-                                carouselItems.map((s, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="w-[260px] md:w-[300px] rounded-2xl border border-slate-100 bg-white/50 backdrop-blur-sm p-3 flex items-center gap-4 shadow-sm hover:border-indigo-100 transition-colors"
-                                    >
-                                        <div className="h-12 w-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 grayscale opacity-40">
-                                            {s.activity?.banner && (
-                                                <img
-                                                    src={FormatService.formatStrapiMedia(
-                                                        s.activity.banner,
-                                                        'thumbnail',
-                                                    )}
-                                                    className="w-full h-full object-cover"
-                                                    alt={s.activity?.name}
-                                                />
-                                            )}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <h4 className="font-bold text-slate-900 text-[12px] truncate leading-none mb-1">
-                                                {s.activity?.name}
-                                            </h4>
-                                            <div className="flex items-center gap-1.5">
-                                                <Sparkles
-                                                    size={10}
-                                                    className={cn(
-                                                        s.activitySessionStatus ===
-                                                            'queued'
-                                                            ? 'text-amber-400'
-                                                            : 'text-slate-300',
-                                                    )}
-                                                />
-                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                                    {s.activitySessionStatus ===
-                                                    'queued'
-                                                        ? 'Upcoming'
-                                                        : 'Planned'}
-                                                </span>
+                                carouselItems.map(
+                                    (
+                                        s: ActivitySessionResponse,
+                                        idx: number,
+                                    ) => (
+                                        <div
+                                            key={idx}
+                                            className="w-[260px] md:w-[300px] rounded-2xl border border-slate-100 bg-white/50 backdrop-blur-sm p-3 flex items-center gap-4 shadow-sm hover:border-indigo-100 transition-colors"
+                                        >
+                                            <div className="h-12 w-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 grayscale opacity-40">
+                                                {s.activity?.banner && (
+                                                    <img
+                                                        src={FormatService.formatStrapiMedia(
+                                                            s.activity.banner,
+                                                            'thumbnail',
+                                                        )}
+                                                        className="w-full h-full object-cover"
+                                                        alt={s.activity?.name}
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h4 className="font-bold text-slate-900 text-[12px] truncate leading-none mb-1">
+                                                    {s.activity?.name}
+                                                </h4>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Sparkles
+                                                        size={10}
+                                                        className={cn(
+                                                            s.activitySessionStatus ===
+                                                                'queued'
+                                                                ? 'text-amber-400'
+                                                                : 'text-slate-300',
+                                                        )}
+                                                    />
+                                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                                        {s.activitySessionStatus ===
+                                                        'queued'
+                                                            ? 'Upcoming'
+                                                            : 'Planned'}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))
+                                    ),
+                                )
                             ) : (
                                 <div className="text-[10px] font-bold text-slate-200 uppercase tracking-widest ml-4">
                                     No scheduled tasks
