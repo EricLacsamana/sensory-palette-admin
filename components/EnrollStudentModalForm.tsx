@@ -45,7 +45,6 @@ export default function EnrollStudenModalForm({
             onClose();
         },
         onError: (error) => {
-            console.log('error', error.response);
             toast.error(error.message || 'Failed to enroll learner.');
         },
     });
