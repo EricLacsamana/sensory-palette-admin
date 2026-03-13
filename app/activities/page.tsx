@@ -42,9 +42,9 @@ const ActivityLibrary = () => {
         isLoading: actLoading,
         isError: actError,
     } = useActivities();
-    const { data: student, isLoading: stuLoading } = useStudent(
-        studentId || '',
-    );
+    const parsedStudentId = studentId ? Number(studentId) : null;
+    const { data: student, isLoading: stuLoading } =
+        useStudent(parsedStudentId);
 
     const filteredActivities = useMemo(() => {
         return activities?.filter((activity: any) => {
@@ -171,7 +171,7 @@ const ActivityLibrary = () => {
                                     <img
                                         src={
                                             activity.banner?.url
-                                                ? `http://localhost:1337${activity.banner.url}`
+                                                ? `${process.env.NEXT_PUBLIC_API_URL}${activity.banner.url}`
                                                 : 'https://via.placeholder.com/400x225'
                                         }
                                         alt={activity.name}

@@ -1,14 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-interface User {
-    id: string | number;
-    username: string;
-    email?: string;
-    role?: string;
-}
-
 interface AuthState {
-    user: User | null;
     token: string | null;
     isAuthenticated: boolean;
     isLoading: boolean;
@@ -16,7 +8,6 @@ interface AuthState {
 }
 
 const initialState: AuthState = {
-    user: null,
     token: null,
     isAuthenticated: false,
     isLoading: false,
@@ -24,8 +15,13 @@ const initialState: AuthState = {
 };
 
 interface LoginPayload {
-    user: User;
     jwt: string;
+}
+
+// Payload specifically for direct token injection (like our Passcode flow)
+interface CredentialsPayload {
+    token: string;
+    user?: any; // We accept the user object, but React Query handles storing it!
 }
 
 const authSlice = createSlice({
@@ -38,29 +34,37 @@ const authSlice = createSlice({
         },
         loginSuccess: (state, action: PayloadAction<LoginPayload>) => {
             state.isLoading = false;
-            state.user = action.payload.user;
             state.token = action.payload.jwt;
             state.isAuthenticated = true;
+            state.error = null;
         },
         loginFailure: (state, action: PayloadAction<string>) => {
             state.isLoading = false;
             state.error = action.payload;
-        },
-        logout: (state) => {
-            state.user = null;
             state.token = null;
             state.isAuthenticated = false;
         },
+        // ✨ NEW: Instantly injects credentials (used by the Student Passcode Login)
+        setCredentials: (state, action: PayloadAction<CredentialsPayload>) => {
+            state.token = action.payload.token;
+            state.isAuthenticated = true;
+            state.isLoading = false;
+            state.error = null;
+        },
+        // 🔥 THE SEAMLESS RESET: Return to initialState exactly
+        logout: () => initialState,
     },
 });
 
-export const { loginStart, loginSuccess, loginFailure, logout } =
-    authSlice.actions;
-
+export const {
+    loginStart,
+    loginSuccess,
+    loginFailure,
+    logout,
+    setCredentials,
+} = authSlice.actions;
 export default authSlice.reducer;
 
-import { RootState } from '../store';
-
-export const selectUser = (state: RootState) => state.auth.user;
-export const selectIsAuthenticated = (state: RootState) =>
+export const selectIsAuthenticated = (state: { auth: AuthState }) =>
     state.auth.isAuthenticated;
+export const selectToken = (state: { auth: AuthState }) => state.auth.token;

@@ -12,6 +12,9 @@ import {
     Tag,
     Activity,
     ChevronRight,
+    Layers,
+    Filter,
+    Terminal,
 } from 'lucide-react';
 import { useActivities } from '@/hooks/useActivities';
 import { useStudent } from '@/hooks/useStudents';
@@ -20,11 +23,11 @@ import { cn } from '@/lib/utils';
 const getCategoryIcon = (type: string) => {
     switch (type?.toLowerCase()) {
         case 'cognitive':
-            return <Brain className="mr-2 h-3 w-3" />;
+            return <Brain className="mr-1.5 h-3 w-3" />;
         case 'motor':
-            return <Activity className="mr-2 h-3 w-3" />;
+            return <Activity className="mr-1.5 h-3 w-3" />;
         default:
-            return <Tag className="mr-2 h-3 w-3" />;
+            return <Tag className="mr-1.5 h-3 w-3" />;
     }
 };
 
@@ -37,11 +40,7 @@ const ActivityLibrary = () => {
     const [activeCategory, setActiveCategory] = useState('All');
     const [hoveredId, setHoveredId] = useState<string | number | null>(null);
 
-    const {
-        data: activities,
-        isLoading: actLoading,
-        isError: actError,
-    } = useActivities();
+    const { data: activities, isLoading: actLoading } = useActivities();
     const { data: student, isLoading: stuLoading } = useStudent(
         Number(studentId),
     );
@@ -70,66 +69,86 @@ const ActivityLibrary = () => {
 
     if (actLoading || (studentId && stuLoading)) {
         return (
-            <div className="flex h-[70vh] items-center justify-center text-indigo-600 font-bold animate-pulse">
-                Syncing Library...
+            <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
+                <div className="h-12 w-12 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-indigo-600 animate-pulse">
+                    Initializing Registry...
+                </p>
             </div>
         );
     }
 
     return (
-        <div className="mx-auto max-w-7xl px-6 py-12">
-            {/* Header */}
-            <header className="mb-12 text-center">
-                <div className="flex items-center justify-center gap-6 mb-4">
-                    <button
-                        onClick={() => router.back()}
-                        className="p-3 rounded-2xl bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-100 transition-all active:scale-90 shadow-sm"
-                    >
-                        <ArrowLeft size={20} />
-                    </button>
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-                        {studentId
-                            ? `${student?.firstName}'s Tasks`
-                            : 'Activity Library'}
-                    </h1>
+        <div className="mx-auto max-w-[1400px] px-8 py-10">
+            {/* Header: Technical Header */}
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b border-slate-100 pb-10">
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest">
+                        <Layers size={14} /> Repository v2.4
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => router.back()}
+                            className="h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 transition-all active:scale-95 shadow-sm"
+                        >
+                            <ArrowLeft size={18} />
+                        </button>
+                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+                            {studentId ? (
+                                <>
+                                    Protocol for{' '}
+                                    <span className="text-indigo-600">
+                                        {student?.firstName}
+                                    </span>
+                                </>
+                            ) : (
+                                'Protocol Library'
+                            )}
+                        </h1>
+                    </div>
                 </div>
-                <p className="text-slate-500 font-medium italic">
-                    Select a module to initiate the session workflow.
-                </p>
+                <div className="flex items-center gap-3">
+                    <div className="text-right border-l border-slate-100 pl-4 hidden sm:block">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
+                            Modules
+                        </p>
+                        <p className="text-sm font-bold text-slate-900 tabular-nums leading-none font-mono">
+                            [{filteredActivities?.length || 0}]
+                        </p>
+                    </div>
+                </div>
             </header>
 
-            {/* Filters & Search */}
-            <div className="flex flex-col items-center gap-8 mb-16">
-                <div className="relative w-full max-w-xl group">
+            {/* Filters & Search: Integrated Module */}
+            <div className="bg-slate-50/50 border border-slate-200 p-2 rounded-2xl mb-12 flex flex-col lg:flex-row gap-2">
+                <div className="relative flex-1 group">
                     <Search
                         className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"
-                        size={18}
+                        size={16}
                     />
                     <input
                         type="text"
-                        placeholder="Search specific goals..."
-                        className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-12 pr-6 outline-none transition-all shadow-sm focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-400 font-medium"
+                        placeholder="Search system protocols..."
+                        className="w-full bg-white border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-400 text-sm font-medium transition-all"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
 
-                <div className="flex flex-wrap justify-center gap-3">
+                <div className="flex flex-wrap gap-1 p-1 bg-white border border-slate-200 rounded-xl overflow-x-auto no-scrollbar">
                     {categoryButtons.map((catName: any) => (
                         <button
                             key={catName}
                             onClick={() => setActiveCategory(catName)}
                             className={cn(
-                                'flex items-center rounded-xl px-6 py-2.5 text-xs font-black uppercase tracking-widest transition-all duration-300',
+                                'flex items-center rounded-lg px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap',
                                 activeCategory === catName
-                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 -translate-y-0.5'
-                                    : 'bg-white text-slate-500 border border-slate-200 hover:border-indigo-200 hover:text-indigo-500',
+                                    ? 'bg-slate-900 text-white shadow-sm'
+                                    : 'text-slate-500 hover:bg-slate-50',
                             )}
                         >
-                            {catName === 'All' ? (
-                                <Gamepad2 className="mr-2" size={14} />
-                            ) : (
-                                <Tag className="mr-2" size={14} />
+                            {catName === 'All' && (
+                                <Terminal size={12} className="mr-1.5" />
                             )}
                             {catName}
                         </button>
@@ -137,7 +156,7 @@ const ActivityLibrary = () => {
                 </div>
             </div>
 
-            {/* Grid Area */}
+            {/* Grid Area: Technical "Spec" Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                 {filteredActivities?.map((activity: any) => {
                     const id = activity.documentId || activity.id;
@@ -156,98 +175,121 @@ const ActivityLibrary = () => {
                                 )
                             }
                             className={cn(
-                                'group relative flex flex-col rounded-[40px] bg-white border border-slate-100 transition-all duration-500 isolate',
+                                'group relative flex flex-col rounded-[32px] bg-white border border-slate-200 transition-all duration-500 ease-out overflow-hidden',
                                 isAvailable
                                     ? 'cursor-pointer'
-                                    : 'cursor-not-allowed grayscale-[0.5]',
+                                    : 'cursor-not-allowed grayscale-[0.4]',
                                 isHovered && isAvailable
-                                    ? 'translate-y-[-12px] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.12)] border-indigo-100'
+                                    ? 'border-indigo-500 shadow-[0_32px_64px_-16px_rgba(79,70,229,0.15)] -translate-y-2'
                                     : 'shadow-sm',
                             )}
                         >
-                            {/* Image Wrapper */}
-                            <div className="relative h-56 w-full p-4">
-                                <div className="h-full w-full rounded-[32px] overflow-hidden bg-slate-50">
+                            {/* Media Section */}
+                            <div className="relative h-52 w-full overflow-hidden bg-slate-100 p-3">
+                                <div className="h-full w-full rounded-[24px] overflow-hidden relative">
                                     <img
                                         src={
                                             activity.banner?.url
-                                                ? `http://localhost:1337${activity.banner.url}`
+                                                ? `${process.env.NEXT_PUBLIC_API_URL}${activity.banner.url}`
                                                 : 'https://via.placeholder.com/400x225'
                                         }
                                         alt={activity.name}
                                         className={cn(
-                                            'h-full w-full object-cover transition-transform duration-700 ease-out',
+                                            'h-full w-full object-cover transition-transform duration-1000 ease-out',
                                             isHovered &&
                                                 isAvailable &&
                                                 'scale-110',
                                         )}
                                     />
+                                    <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                                        {activity.categories?.map(
+                                            (cat: any, idx: number) => (
+                                                <span
+                                                    key={idx}
+                                                    className="flex items-center px-2 py-1 bg-slate-900/80 backdrop-blur-md text-white border border-white/10 rounded-lg text-[9px] font-bold uppercase tracking-wider"
+                                                >
+                                                    {getCategoryIcon(cat.type)}
+                                                    {cat.name}
+                                                </span>
+                                            ),
+                                        )}
+                                    </div>
                                 </div>
+
                                 {!isAvailable && (
-                                    <div className="absolute inset-4 rounded-[32px] flex flex-col items-center justify-center bg-slate-900/60 text-white backdrop-blur-[2px]">
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-[2px] text-white">
                                         <Lock
                                             size={28}
-                                            className="mb-3 opacity-80"
+                                            className="mb-2 opacity-80"
                                         />
-                                        <span className="text-xs font-black tracking-widest uppercase">
-                                            System Locked
+                                        <span className="text-[10px] font-bold tracking-[0.3em] uppercase">
+                                            SYSTEM_LOCKED
                                         </span>
                                     </div>
                                 )}
                             </div>
 
-                            {/* Content */}
-                            <div className="flex flex-col p-8 pt-2">
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    {activity.categories?.map(
-                                        (cat: any, idx: number) => (
-                                            <span
-                                                key={idx}
-                                                className="flex items-center px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase tracking-tighter"
-                                            >
-                                                {getCategoryIcon(cat.type)}
-                                                {cat.name}
-                                            </span>
-                                        ),
-                                    )}
+                            {/* Info Section */}
+                            <div className="flex flex-col p-8 pt-4 flex-1">
+                                <div className="flex justify-between items-start mb-3">
+                                    <h3
+                                        className={cn(
+                                            'text-2xl font-bold text-slate-900 leading-tight transition-colors',
+                                            isHovered &&
+                                                isAvailable &&
+                                                'text-indigo-600',
+                                        )}
+                                    >
+                                        {activity.name}
+                                    </h3>
+                                    <ChevronRight
+                                        className={cn(
+                                            'text-slate-300 transition-transform duration-300',
+                                            isHovered &&
+                                                'translate-x-1 text-indigo-400',
+                                        )}
+                                        size={20}
+                                    />
                                 </div>
-
-                                <h3 className="text-2xl font-bold text-slate-900 mb-2 leading-tight">
-                                    {activity.name}
-                                </h3>
-                                <p className="text-sm text-slate-500 line-clamp-2 mb-8 font-medium">
+                                <p className="text-sm text-slate-500 line-clamp-2 mb-8 font-medium leading-relaxed">
                                     {activity.description ||
-                                        'No description available for this protocol.'}
+                                        'System module ready for initialization and deployment.'}
                                 </p>
 
-                                <div className="mt-auto flex items-center justify-between">
-                                    <div className="flex items-center text-slate-300">
-                                        <ChevronRight size={16} />
+                                <div className="mt-auto pt-6 border-t border-slate-50 flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
+                                            Authorization
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-900 uppercase font-mono tracking-tight">
+                                            Level_01/OPS
+                                        </span>
                                     </div>
 
                                     <div
                                         className={cn(
-                                            'flex items-center justify-center rounded-2xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-lg',
+                                            'flex items-center justify-center rounded-2xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] border',
                                             isAvailable
-                                                ? 'bg-indigo-600 shadow-indigo-100'
-                                                : 'bg-slate-200 shadow-none',
+                                                ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-100'
+                                                : 'bg-slate-100 border-slate-200 shadow-none',
                                             isHovered && isAvailable
-                                                ? 'w-36 h-12'
+                                                ? 'w-32 h-12'
                                                 : 'w-12 h-12',
                                         )}
                                     >
                                         <div className="flex items-center gap-3 text-white">
                                             <Play
-                                                size={16}
+                                                size={14}
                                                 className={cn(
+                                                    'transition-transform duration-300',
                                                     isHovered &&
                                                         isAvailable &&
-                                                        'fill-current',
+                                                        'fill-current scale-110',
                                                 )}
                                             />
                                             {isHovered && isAvailable && (
                                                 <span className="text-[11px] font-black uppercase tracking-wider animate-in fade-in slide-in-from-left-2">
-                                                    Launch
+                                                    Deploy
                                                 </span>
                                             )}
                                         </div>
@@ -261,16 +303,25 @@ const ActivityLibrary = () => {
 
             {/* Empty State */}
             {filteredActivities?.length === 0 && (
-                <div className="py-32 text-center">
-                    <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <Gamepad2 size={40} className="text-slate-200" />
+                <div className="py-32 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-[48px] bg-slate-50/50">
+                    <div className="bg-white p-6 rounded-[24px] shadow-sm border border-slate-100 mb-6">
+                        <Filter size={32} className="text-slate-300" />
                     </div>
-                    <h2 className="text-xl font-bold text-slate-400 uppercase tracking-widest">
-                        No matching activities
+                    <h2 className="text-xl font-bold text-slate-900 uppercase tracking-[0.2em]">
+                        Zero Matches Found
                     </h2>
-                    <p className="text-slate-400 text-sm mt-2">
-                        Try adjusting your search or category filters.
+                    <p className="text-slate-400 text-sm mt-2 font-medium">
+                        Re-initialize filters or clear search parameters.
                     </p>
+                    <button
+                        onClick={() => {
+                            setSearchTerm('');
+                            setActiveCategory('All');
+                        }}
+                        className="mt-8 px-6 py-2.5 rounded-xl bg-white border border-slate-200 text-[10px] font-bold text-indigo-600 uppercase tracking-widest hover:border-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"
+                    >
+                        Reset System Registry
+                    </button>
                 </div>
             )}
         </div>

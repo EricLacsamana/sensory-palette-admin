@@ -1,137 +1,396 @@
-import { useState, useMemo } from 'react';
+'use client';
 
-export interface SessionActivity {
-    id: string | number;
-    name?: string;
-    duration?: number; // Integer from backend (e.g., 15)
-    attributes?: {
-        name?: string;
-        duration?: number;
-        banner?: {
-            data?: {
-                attributes: {
-                    url: string;
-                };
-            };
-        };
-    };
-    [key: string]: any;
+import { useState, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { getActivitySessionsNew } from '@/api/acitivity-session';
+import { ActivitySessionEntry } from '@/types/activitiy-session';
+import { Activity } from '@/types/actitivity';
+import { calculateSchedule } from '@/components/SessionPlanningModal/utils/scheduler';
+import { UserResponse } from '@/types';
+
+interface SessionPlanProps {
+    startAt: string;
+    endAt: string;
+    student?: UserResponse;
 }
 
-export interface DragState {
-    draggedIndex: number | null;
-    dragOverIndex: number | null;
-    isLibraryDrag: boolean;
-}
+export const useSessionPlan = ({
+    startAt,
+    endAt,
+    student,
+}: SessionPlanProps) => {
+    const [localDraft, setLocalDraft] = useState<ActivitySessionEntry[] | null>(
+        null,
+    );
+    const [deletedDocumentIds, setDeletedDocumentIds] = useState<string[]>([]);
+    const [past, setPast] = useState<ActivitySessionEntry[][]>([]);
+    const [future, setFuture] = useState<ActivitySessionEntry[][]>([]);
+    const [prevStartAt, setPrevStartAt] = useState(startAt);
 
-export interface CapacityMetrics {
-    remainingSec: number;
-    percentUsed: number;
-}
+    if (startAt !== prevStartAt) {
+        setPrevStartAt(startAt);
+        setLocalDraft(null);
+        setDeletedDocumentIds([]);
+        setPast([]);
+        setFuture([]);
+    }
 
-export interface TimelineItem extends SessionActivity {
-    start: string;
-    end: string;
-}
+    // --- UPDATED: Date boundaries for fetching ---
+    const startOfDay = new Date(endAt);
+    startOfDay.setHours(0, 0, 0, 0);
 
-export const useSessionPlan = (
-    initialDate: string,
-    startTimeStr: string,
-    operatingEndHour: number = 18,
-) => {
-    const [plan, setPlan] = useState<SessionActivity[]>([]);
+    const endOfDay = new Date(endAt);
+    // endOfDay.setHours(23, 59, 59, 999);
 
-    const [dragState, setDragState] = useState<DragState>({
-        draggedIndex: null,
-        dragOverIndex: null,
-        isLibraryDrag: false,
+    const now = new Date();
+    const isToday =
+        startOfDay.getFullYear() === now.getFullYear() &&
+        startOfDay.getMonth() === now.getMonth() &&
+        startOfDay.getDate() === now.getDate();
+
+    // If viewing today, only fetch from this exact moment onward.
+    // If viewing a future date, fetch the whole day.
+    const queryStartBound = isToday
+        ? now.toISOString()
+        : startOfDay.toISOString();
+    // ----------------------------------------------
+
+    const { data: activitySessions, isLoading: isQueryLoading } = useQuery({
+        queryKey: [
+            'activity-sessions',
+            {
+                populate: {
+                    activity: { populate: '*' },
+                    student: { populate: '*' },
+                },
+                filters: {
+                    startAt: {
+                        $gte: queryStartBound,
+                        $lte: endOfDay.toISOString(),
+                    },
+                    actualStartAt: { $null: true },
+                    activitySessionStatus: {
+                        $in: ['pending', 'reschedule'],
+                    },
+                },
+            },
+        ],
+        queryFn: getActivitySessionsNew,
+        enabled: true,
+        staleTime: 0,
     });
 
-    // Default duration constant (15 minutes)
-    const DEFAULT_MIN = 15;
+    const currentBaseEntries = useMemo((): ActivitySessionEntry[] => {
+        if (localDraft !== null) return localDraft;
 
-    // Helper to get duration integer safely from nested or flat structure
-    const getDuration = (item: SessionActivity) => {
-        return item.duration ?? item.attributes?.duration ?? DEFAULT_MIN;
-    };
+        const rawData = Array.isArray(activitySessions)
+            ? activitySessions
+            : activitySessions?.data || [];
 
-    // 1. Total duration in seconds for progress/metrics
-    const totalDurationSeconds = useMemo(() => {
-        return plan.reduce((acc, curr) => {
-            const mins = getDuration(curr);
-            return acc + mins * 60; // Convert 15 to 900 seconds
-        }, 0);
-    }, [plan]);
+        return [...rawData]
+            .sort(
+                (a, b) =>
+                    new Date(a.startAt).getTime() -
+                    new Date(b.startAt).getTime(),
+            )
+            .map((s) => {
+                const sTime = new Date(s.startAt).getTime();
+                const eTime = new Date(s.endAt).getTime();
+                const duration = Math.max(
+                    Math.round((eTime - sTime) / 60000),
+                    0,
+                );
 
-    // 2. Capacity Metrics (Used vs Available time)
-    const capacityMetrics = useMemo((): CapacityMetrics => {
-        const [h, m] = startTimeStr.split(':').map(Number);
-        const startInSec = h * 3600 + m * 60;
-        const limitInSec = operatingEndHour * 3600;
-        const totalAvailableSec = Math.max(0, limitInSec - startInSec);
+                return {
+                    ...s,
+                    isLocked: true,
+                    type: 'activity',
+                    durationMinutes: duration,
+                    instanceId:
+                        s.documentId || s.id?.toString() || crypto.randomUUID(),
+                    student: s.student,
+                    rawTelemetry: s.rawTelemetry || [], // <-- FIX 1: Ensure API data has it
+                } as ActivitySessionEntry; // <-- Safely tell TS this matches the interface
+            });
+    }, [localDraft, activitySessions]);
 
-        const remainingSec = Math.max(
-            0,
-            totalAvailableSec - totalDurationSeconds,
+    const commitChange = useCallback(
+        (newDraft: ActivitySessionEntry[]) => {
+            setPast((prev) => [...prev, currentBaseEntries]);
+            setFuture([]);
+            setLocalDraft(newDraft);
+        },
+        [currentBaseEntries],
+    );
+
+    const undo = useCallback(() => {
+        if (past.length === 0) return;
+        const previous = past[past.length - 1];
+        setFuture((prev) => [currentBaseEntries, ...prev]);
+        setPast(past.slice(0, -1));
+        setLocalDraft(previous);
+    }, [past, currentBaseEntries]);
+
+    const redo = useCallback(() => {
+        if (future.length === 0) return;
+        const next = future[0];
+        setPast((prev) => [...prev, currentBaseEntries]);
+        setFuture(future.slice(1));
+        setLocalDraft(next);
+    }, [future, currentBaseEntries]);
+
+    const { timelineItems, draftWithTimes, capacityMetrics } = useMemo(() => {
+        const { items, totalDuration } = calculateSchedule(
+            currentBaseEntries,
+            startAt,
         );
-        const percentUsed =
-            totalAvailableSec > 0
-                ? Math.min(
-                      100,
-                      (totalDurationSeconds / totalAvailableSec) * 100,
-                  )
-                : 100;
+        const activitiesOnly = items.filter((i) => i.type === 'activity');
+        const sessionEndMs = new Date(endAt).getTime();
+        const totalAvailable = Math.max(
+            0,
+            (sessionEndMs - new Date(startAt).getTime()) / 60000,
+        );
 
-        return { remainingSec, percentUsed };
-    }, [startTimeStr, totalDurationSeconds, operatingEndHour]);
+        const validatedItems = items.map((item) => {
+            if (item.type !== 'activity') return item;
+            let hasConflict = false;
+            let conflictReason = '';
+            const itemStart = new Date(item.startAt).getTime();
+            const itemEnd = new Date(item.endAt).getTime();
 
-    // 3. Timeline Generation (Calculating start/end strings)
-    const timeline = useMemo((): TimelineItem[] => {
-        const startDateTime = new Date(`${initialDate}T${startTimeStr}`);
-        if (isNaN(startDateTime.getTime())) return [];
+            if (itemEnd > sessionEndMs) {
+                hasConflict = true;
+                conflictReason = 'Exceeds session time';
+            }
 
-        let currentPos = startDateTime.getTime();
+            if (!hasConflict) {
+                const collision = activitiesOnly.find(
+                    (other) =>
+                        other.instanceId !== item.instanceId &&
+                        other.isLocked &&
+                        itemStart < new Date(other.endAt).getTime() &&
+                        itemEnd > new Date(other.startAt).getTime(),
+                );
+                if (collision) {
+                    hasConflict = true;
+                    conflictReason = 'Overlaps locked activity';
+                }
+            }
+            return { ...item, hasConflict, conflictReason };
+        });
 
-        return plan.map((item) => {
-            const mins = getDuration(item);
+        return {
+            timelineItems: validatedItems,
+            draftWithTimes: validatedItems.filter((i) => i.type === 'activity'),
+            capacityMetrics: {
+                percentUsed:
+                    totalAvailable > 0
+                        ? Math.min((totalDuration / totalAvailable) * 100, 100)
+                        : 0,
+                totalDuration,
+                remainingMinutes: totalAvailable - totalDuration,
+                count: activitiesOnly.length,
+            },
+        };
+    }, [currentBaseEntries, startAt, endAt]);
 
-            const startStr = new Date(currentPos).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true,
+    const toggleLock = useCallback(
+        (id: string) => {
+            const itemIndex = currentBaseEntries.findIndex(
+                (i) => i.instanceId === id,
+            );
+            const item = currentBaseEntries[itemIndex];
+            if (!item) return;
+
+            const newDraft = currentBaseEntries.map((currItem) => {
+                if (currItem.instanceId !== id) return currItem;
+                const willBeLocked = !currItem.isLocked;
+                let newStart = currItem.startAt;
+                let newEnd = currItem.endAt;
+
+                if (willBeLocked) {
+                    const renderedItem = timelineItems.find(
+                        (t) => t.instanceId === id,
+                    );
+                    if (renderedItem) {
+                        newStart = renderedItem.startAt;
+                        newEnd = renderedItem.endAt;
+                    }
+                }
+
+                return {
+                    ...currItem,
+                    isLocked: willBeLocked,
+                    startAt: newStart,
+                    endAt: newEnd,
+                };
             });
+            commitChange(newDraft);
+        },
+        [currentBaseEntries, timelineItems, commitChange],
+    );
 
-            // Increment: Minutes * 60 seconds * 1000 milliseconds
-            currentPos += mins * 60 * 1000;
+    const updateActivityStartTime = useCallback(
+        (id: string, timeStr: string) => {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            const baseDate = new Date(startAt);
+            baseDate.setHours(hours, minutes, 0, 0);
 
-            const endStr = new Date(currentPos).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true,
+            const newDraft = currentBaseEntries.map((item) => {
+                if (item.instanceId !== id) return item;
+                const duration = item.durationMinutes || 30;
+                const endDate = new Date(baseDate.getTime() + duration * 60000);
+                return {
+                    ...item,
+                    isLocked: true,
+                    startAt: baseDate.toISOString(),
+                    endAt: endDate.toISOString(),
+                };
             });
+            commitChange(newDraft);
+        },
+        [currentBaseEntries, startAt, commitChange],
+    );
 
-            return {
-                ...item,
-                start: startStr,
-                end: endStr,
+    const reorderActivities = useCallback(
+        (newOrder: ActivitySessionEntry[]) => {
+            const activitiesOnly = newOrder.filter(
+                (i) => i.type === 'activity',
+            );
+            let currentCursor = new Date(startAt).getTime();
+
+            const finalDraft = activitiesOnly.map((item) => {
+                const durationMs = (item.durationMinutes || 30) * 60000;
+                let newStartIso = '';
+                let newEndIso = '';
+
+                if (item.isLocked && item.startAt) {
+                    const lockedStartTime = new Date(item.startAt).getTime();
+                    if (lockedStartTime > currentCursor)
+                        currentCursor = lockedStartTime;
+
+                    newStartIso = item.startAt;
+                    const finalEndMs = item.endAt
+                        ? new Date(item.endAt).getTime()
+                        : lockedStartTime + durationMs;
+                    newEndIso = new Date(finalEndMs).toISOString();
+                    currentCursor = finalEndMs;
+                } else {
+                    newStartIso = new Date(currentCursor).toISOString();
+                    currentCursor += durationMs;
+                    newEndIso = new Date(currentCursor).toISOString();
+                }
+
+                return {
+                    ...item,
+                    startAt: newStartIso,
+                    endAt: newEndIso,
+                };
+            });
+            commitChange(finalDraft);
+        },
+        [startAt, commitChange],
+    );
+
+    const addActivity = useCallback(
+        (activity: Activity) => {
+            const duration = activity.durationMinutes || 30;
+            let currentCursor = new Date(startAt).getTime();
+
+            if (timelineItems && timelineItems.length > 0) {
+                const latestItem = timelineItems.reduce((latest, item) => {
+                    const itemEnd = item.endAt
+                        ? new Date(item.endAt).getTime()
+                        : 0;
+                    return itemEnd > latest ? itemEnd : latest;
+                }, currentCursor);
+                currentCursor = latestItem;
+            }
+
+            const entry: ActivitySessionEntry = {
+                instanceId: crypto.randomUUID(),
+                activity,
+                durationMinutes: duration,
+                isLocked: true,
+                type: 'activity',
+                startAt: new Date(currentCursor).toISOString(),
+                endAt: new Date(currentCursor + duration * 60000).toISOString(),
+                documentId: '',
+                rawTelemetry: [],
+                ...(student ? { student } : {}),
             };
-        });
-    }, [plan, initialDate, startTimeStr]);
+            commitChange([...currentBaseEntries, entry]);
+        },
+        [currentBaseEntries, commitChange, student, startAt, timelineItems],
+    );
 
-    const resetDrag = () =>
-        setDragState({
-            draggedIndex: null,
-            dragOverIndex: null,
-            isLibraryDrag: false,
-        });
+    const insertAtGap = useCallback(
+        (gapInstanceId: string, activity: Activity) => {
+            const targetId = gapInstanceId.replace('gap-before-', '');
+            const idx = currentBaseEntries.findIndex(
+                (i) => i.instanceId === targetId,
+            );
+
+            let tempStart = startAt;
+            if (idx !== -1 && currentBaseEntries[idx].startAt) {
+                tempStart = currentBaseEntries[idx].startAt;
+            }
+
+            const duration = activity.durationMinutes || 30;
+            const entry: ActivitySessionEntry = {
+                instanceId: crypto.randomUUID(),
+                activity,
+                durationMinutes: duration,
+                isLocked: true,
+                type: 'activity',
+                startAt: tempStart,
+                endAt: new Date(
+                    new Date(tempStart).getTime() + duration * 60000,
+                ).toISOString(),
+                documentId: '',
+                rawTelemetry: [],
+            };
+
+            const copy = [...currentBaseEntries];
+            if (idx !== -1) copy.splice(idx, 0, entry);
+            else copy.push(entry);
+            commitChange(copy);
+        },
+        [currentBaseEntries, commitChange, startAt],
+    );
+
+    const removeActivity = useCallback(
+        (id: string) => {
+            const item = currentBaseEntries.find((i) => i.instanceId === id);
+            if (item?.documentId)
+                setDeletedDocumentIds((d) => [...d, item.documentId!]);
+            commitChange(currentBaseEntries.filter((i) => i.instanceId !== id));
+        },
+        [currentBaseEntries, commitChange],
+    );
 
     return {
-        plan,
-        setPlan,
-        timeline,
+        timelineItems,
+        draft: draftWithTimes,
         capacityMetrics,
-        dragState,
-        setDragState,
-        resetDrag,
+        isDirty: localDraft !== null || deletedDocumentIds.length > 0,
+        addActivity,
+        insertAtGap,
+        removeActivity,
+        toggleLock,
+        reorderActivities,
+        updateActivityStartTime,
+        reset: () => {
+            setLocalDraft(null);
+            setDeletedDocumentIds([]);
+            setPast([]);
+            setFuture([]);
+        },
+        deletedDocumentIds,
+        isLoading: isQueryLoading,
+        undo,
+        redo,
+        canUndo: past.length > 0,
+        canRedo: future.length > 0,
     };
 };

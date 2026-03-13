@@ -1,8 +1,18 @@
+export interface Role {
+    type: string;
+    name: string;
+}
 export interface User {
-    id: string | number;
+    id: number;
+    documentId: string;
     username: string;
     email?: string;
-    role?: string;
+    role?: Role;
+    firstName?: string;
+    fullName?: string;
+    lastName?: string;
+    createdAt: string;
+    profilePicture: StrapiMedia;
 }
 
 export interface Login {
@@ -15,19 +25,65 @@ export interface LoginResponse {
     jwt: string;
 }
 
-export interface Student {
+export interface UserResponse {
     id: number;
-    documentId?: string;
+    documentId: string;
     username: string;
     email: string;
     firstName?: string;
+    middleName?: string;
     lastName?: string;
-    diagnosis?: string;
+    fullName?: string;
+    dateOfBirth?: string;
+    gender?: 'male' | 'female' | undefined;
+    age?: number;
+    profilePicture?: StrapiMedia;
     createdAt: string;
     publishedAt?: string;
-    role?: {
-        id: number;
-        name: string;
-        type: string;
+    activePasscode: string;
+    diagnosis: string;
+    role?:
+        | {
+              id: number;
+              name: string;
+              type: string;
+          }
+        | string;
+    blocked: boolean;
+}
+// types/strapi.ts
+
+export interface StrapiImageFormat {
+    url: string;
+    width: number;
+    height: number;
+    size: number;
+    hash: string;
+    ext: string;
+    mime: string;
+    path: string | null;
+}
+
+export interface StrapiMedia {
+    id: number;
+    url: string;
+    alternativeText?: string;
+    caption?: string;
+    width?: number;
+    height?: number;
+    formats?: {
+        thumbnail?: StrapiImageFormat;
+        small?: StrapiImageFormat;
+        medium?: StrapiImageFormat;
+        large?: StrapiImageFormat;
     };
+}
+
+export interface StrapiResponse<T> {
+    data:
+        | {
+              id: number;
+              attributes: T;
+          }
+        | T;
 }
