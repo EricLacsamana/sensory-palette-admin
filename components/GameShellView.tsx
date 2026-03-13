@@ -93,7 +93,7 @@ export default function GameShellView({
             }
         } else {
             // Original fallback behavior for non-game activities
-            const adminPort = process.env.NEXT_PUBLIC_ADMIN_PORT || '1337';
+            const adminPort = process.env.NEXT_PUBLIC_ADMIN_PORT;
             baseUrl = baseUrl.replace(`http://localhost:${adminPort}`, '');
         }
 
