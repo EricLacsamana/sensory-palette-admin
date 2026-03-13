@@ -19,15 +19,9 @@ function getNetworkIp(): string {
 }
 
 const currentIp = getNetworkIp();
-const strapiUrl = `http://${currentIp}:1337`;
 
 const nextConfig: NextConfig = {
     /* config options here */
-
-    // 2. Inject the dynamic URL into your Next.js app
-    env: {
-        NEXT_PUBLIC_API_URL: strapiUrl,
-    },
 
     // 3. Whitelist the dynamic IP so Next.js doesn't block Strapi images
     images: {
