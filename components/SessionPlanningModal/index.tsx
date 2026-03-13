@@ -38,6 +38,7 @@ import { FormatService } from '@/utils/helpers';
 import { Input } from '@base-ui/react';
 import { UserResponse } from '@/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { ActivitySessionEntry } from '@/types/activitiy-session';
 
 // --- SINGLE SOURCE OF TRUTH FOR OPERATING HOURS ---
 export const getOperatingHoursForDate = (targetDate: Date | string) => {
@@ -214,15 +215,15 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                     endAt: session.endAt,
                 };
 
-                const targetId = session.documentId || (session as any).id;
+                const targetId = session.documentId;
 
                 if (targetId) {
                     await updateActivitySession(targetId, payload);
-                } else {
+                } else if (session.student?.id) {
                     await createActivitySession({
                         ...payload,
                         activity: session.activity?.documentId,
-                        student: session.student?.id || studentId,
+                        student: session.student?.id,
                     });
                 }
             }

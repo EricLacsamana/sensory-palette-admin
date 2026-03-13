@@ -48,7 +48,7 @@ const TimelineTrackItem = ({
     const status = item.activitySessionStatus || 'pending';
     const isCompleted = status === 'completed';
     const isInProgress = status === 'in_progress';
-    const isUpcoming = status === 'pending' || status === 'scheduled';
+    const isUpcoming = status === 'pending';
 
     // 2. Timer Logic (Only runs if active and has a start time)
     useEffect(() => {

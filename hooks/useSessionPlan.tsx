@@ -93,7 +93,7 @@ export const useSessionPlan = ({
                     new Date(a.startAt).getTime() -
                     new Date(b.startAt).getTime(),
             )
-            .map((s: any) => {
+            .map((s) => {
                 const sTime = new Date(s.startAt).getTime();
                 const eTime = new Date(s.endAt).getTime();
                 const duration = Math.max(
@@ -109,7 +109,8 @@ export const useSessionPlan = ({
                     instanceId:
                         s.documentId || s.id?.toString() || crypto.randomUUID(),
                     student: s.student,
-                };
+                    rawTelemetry: s.rawTelemetry || [], // <-- FIX 1: Ensure API data has it
+                } as ActivitySessionEntry; // <-- Safely tell TS this matches the interface
             });
     }, [localDraft, activitySessions]);
 
@@ -315,6 +316,7 @@ export const useSessionPlan = ({
                 startAt: new Date(currentCursor).toISOString(),
                 endAt: new Date(currentCursor + duration * 60000).toISOString(),
                 documentId: '',
+                rawTelemetry: [],
                 ...(student ? { student } : {}),
             };
             commitChange([...currentBaseEntries, entry]);
@@ -346,6 +348,7 @@ export const useSessionPlan = ({
                     new Date(tempStart).getTime() + duration * 60000,
                 ).toISOString(),
                 documentId: '',
+                rawTelemetry: [],
             };
 
             const copy = [...currentBaseEntries];

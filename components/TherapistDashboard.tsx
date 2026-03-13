@@ -678,7 +678,9 @@ const DashboardStatCard = ({
                 colorClass,
             )}
         >
-            {React.cloneElement(icon as React.ReactElement, { size: 90 })}
+            {React.cloneElement(icon as React.ReactElement<{ size?: number }>, {
+                size: 90,
+            })}
         </div>
         <div className="flex items-center gap-3 mb-4 relative z-10">
             <div
@@ -690,10 +692,16 @@ const DashboardStatCard = ({
                         .replace('500', '50'),
                 )}
             >
-                {React.cloneElement(icon as React.ReactElement, {
-                    size: 18,
-                    className: colorClass,
-                })}
+                {React.cloneElement(
+                    icon as React.ReactElement<{
+                        size?: number;
+                        className?: string;
+                    }>,
+                    {
+                        size: 18,
+                        className: colorClass,
+                    },
+                )}
             </div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest select-none">
                 {title}
@@ -1062,7 +1070,6 @@ export default function Dashboard() {
             });
             toast.success('Activity Activated', { id: toastId });
         } catch (error) {
-            console.log('error ror', error.response);
             toast.error('Failed to launch session. Check connection.', {
                 id: toastId,
             });
@@ -1662,7 +1669,7 @@ function LiveSessionWidget({
                     : { isHandsFree: false };
 
                 await updateActivitySession(next.documentId, {
-                    activitySessionStatus: 'in_progress',
+                    activitySessionStatus: ActivitySessionStatus.InProgress,
                     ...handsFreePayload,
                 });
 
@@ -1975,7 +1982,7 @@ function LiveSessionWidget({
                 timestamp: new Date().toISOString(),
             };
             await mutateAsync({
-                activitySessionStatus: 'in_progress',
+                activitySessionStatus: ActivitySessionStatus.InProgress,
                 timeLogs: [...(session?.timeLogs || []), newLog],
             });
             toast.success('Session Resumed', { id: 'status-toast' });
@@ -1988,7 +1995,7 @@ function LiveSessionWidget({
         if (e) e.stopPropagation();
         try {
             await mutateAsync({
-                activitySessionStatus: 'in_progress',
+                activitySessionStatus: ActivitySessionStatus.InProgress,
             });
             toast.success(`Launched ${safeActivity.name}. Awaiting learner.`);
         } catch (err: any) {
@@ -2796,26 +2803,30 @@ function LiveSessionWidget({
                                                                 Accuracy
                                                             </Badge>
                                                             {telemetryLogs.length >
-                                                                0 && (
-                                                                <span className="text-[10px] text-slate-500 font-medium truncate">
-                                                                    {telemetryLogs[
-                                                                        telemetryLogs.length -
-                                                                            1
-                                                                    ].isCorrect
-                                                                        ? '✅'
-                                                                        : '❌'}{' '}
-                                                                    Last:{' '}
-                                                                    <span className="font-bold">
-                                                                        {
-                                                                            telemetryLogs[
-                                                                                telemetryLogs.length -
-                                                                                    1
-                                                                            ]
-                                                                                .targetId
-                                                                        }
-                                                                    </span>
-                                                                </span>
-                                                            )}
+                                                                0 &&
+                                                                (() => {
+                                                                    const lastLog =
+                                                                        telemetryLogs[
+                                                                            telemetryLogs.length -
+                                                                                1
+                                                                        ] as {
+                                                                            isCorrect: boolean;
+                                                                            targetId: string;
+                                                                        };
+                                                                    return (
+                                                                        <span className="text-[10px] text-slate-500 font-medium truncate">
+                                                                            {lastLog.isCorrect
+                                                                                ? '✅'
+                                                                                : '❌'}{' '}
+                                                                            Last:{' '}
+                                                                            <span className="font-bold">
+                                                                                {
+                                                                                    lastLog.targetId
+                                                                                }
+                                                                            </span>
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                         </div>
                                                     ))}
                                             </div>

@@ -12,7 +12,7 @@ import {
 import { Card } from '@/components/ui/card';
 
 import { FormatService } from '@/utils/helpers';
-import { UserAvatar } from './UserAvata';
+import { UserAvatar } from './UserAvatar';
 import { UserResponse } from '@/types';
 import { cn } from '@/lib/utils';
 

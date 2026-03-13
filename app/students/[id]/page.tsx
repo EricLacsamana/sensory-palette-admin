@@ -49,7 +49,7 @@ import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { getStudentAnalytics } from '@/api/analytics';
 import { cn } from '@/lib/utils';
 import { FormatService } from '@/utils/helpers';
-import { UserAvatar } from '@/components/UserAvata';
+import { UserAvatar } from '@/components/UserAvatar';
 import { getStudent } from '@/api/students';
 
 const pageVariants: Variants = {

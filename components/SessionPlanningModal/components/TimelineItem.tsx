@@ -136,11 +136,12 @@ export const TimelineItem = ({
 
     const studentColor = getUserColor(data.student?.id || 0);
 
-    const isForeign =
+    const isForeign: boolean = Boolean(
         isActivity &&
         data.student &&
         currentStudentId &&
-        data.student.id !== currentStudentId;
+        data.student.id !== currentStudentId,
+    );
 
     const startTimeStr = FormatService.formatTime(data.startAt, '12h-simple');
     const endTimeStr = FormatService.formatTime(data.endAt, '12h-simple');

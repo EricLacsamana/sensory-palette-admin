@@ -13,12 +13,16 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { Student } from '@/types/index';
+import { UserResponse } from '@/types';
 
-export default function StudentsTable({ students }: { students: Student[] }) {
+export default function StudentsTable({
+    students,
+}: {
+    students: UserResponse[];
+}) {
     const router = useRouter();
 
-    const handleRowClick = (student: Student) => {
+    const handleRowClick = (student: UserResponse) => {
         router.push(`/students/${student.id}`);
     };
 

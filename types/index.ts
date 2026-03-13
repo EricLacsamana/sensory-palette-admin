@@ -41,6 +41,7 @@ export interface UserResponse {
     createdAt: string;
     publishedAt?: string;
     activePasscode: string;
+    diagnosis: string;
     role?:
         | {
               id: number;

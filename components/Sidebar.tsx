@@ -67,36 +67,42 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
             label: 'Overview',
             icon: PieChart,
             allowedRoles: ['admin', 'therapist', 'secretary'],
+            badge: null,
         },
         {
             path: '/students',
             label: 'Learners',
             icon: Users,
             allowedRoles: ['therapist', 'secretary'],
+            badge: null,
         },
         {
             path: '/activities',
             label: 'Activity Center',
             icon: Gamepad2,
             allowedRoles: ['therapist'],
+            badge: null,
         },
         {
             path: '/activity-manager',
             label: 'Activity Manager',
             icon: Gamepad2,
             allowedRoles: ['admin'],
+            badge: null,
         },
         {
             path: '/activity-sessions',
             label: 'Sessions',
             icon: Activity,
             allowedRoles: ['admin', 'therapist', 'secretary'],
+            badge: null,
         },
         {
             path: '/users',
             label: 'Users Directory',
             icon: Users2,
             allowedRoles: ['admin', 'secretary'],
+            badge: null,
         },
         // {
         //     path: '/devices',
@@ -110,6 +116,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
             label: 'Settings',
             icon: Settings,
             allowedRoles: ['admin', 'therapist', 'secretary'],
+            badge: null,
         },
     ];
 
