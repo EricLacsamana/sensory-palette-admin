@@ -5,6 +5,13 @@ export const me = () => {
     return api.get(`${ENDPOINTS.USERS}/me?populate=*`).then(({ data }) => data);
 };
 
+export const createUser = async (payload: any) => {
+    const { data } = await api.post(ENDPOINTS.USERS, payload);
+
+    console.log('data update', data);
+    return data;
+};
+
 export const getUsers = async (ctx: any) => {
     const [, query] = ctx.queryKey ?? [];
 

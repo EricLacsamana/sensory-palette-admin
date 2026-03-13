@@ -1,15 +1,14 @@
 'use client';
 
 import React from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GraduationCap } from 'lucide-react';
 import { toast } from 'sonner';
 
 import EnrollStudentForm, { StudentFormValues } from './EnrollStudentForm';
-
-// --- MOCK API ---
-const mockCreateStudent = async (data: any) =>
-    new Promise((resolve) => setTimeout(resolve, 1000));
+import { createUser, me } from '@/api/users';
+import { RootState } from '@/redux/store';
+import { useSelector } from 'react-redux';
 
 interface EnrollStudentModalProps {
     onClose: () => void;
@@ -19,17 +18,26 @@ export default function EnrollStudenModalForm({
     onClose,
 }: EnrollStudentModalProps) {
     const queryClient = useQueryClient();
+    const { token, isAuthenticated } = useSelector(
+        (state: RootState) => state.auth,
+    );
+    const { data: user } = useQuery({
+        queryKey: ['me', token],
+        queryFn: me,
+        enabled: isAuthenticated && !!token,
+    });
 
     const mutation = useMutation({
         mutationFn: async (values: StudentFormValues) => {
             const payload = {
                 ...values,
-                role: '4', // Strapi Student Role ID
+                role: '6',
+                therapist: user.id,
             };
 
             if (!payload.password) delete payload.password;
 
-            await mockCreateStudent(payload);
+            await createUser(payload);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['students'] });
