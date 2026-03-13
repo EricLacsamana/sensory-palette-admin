@@ -31,11 +31,11 @@ export default function EnrollStudenModalForm({
         mutationFn: async (values: StudentFormValues) => {
             const payload = {
                 ...values,
-                role: '6',
+                role: '3',
                 therapist: user.id,
             };
 
-            if (!payload.password) delete payload.password;
+            // if (!payload.password) delete payload.password;
 
             await createUser(payload);
         },
@@ -45,6 +45,7 @@ export default function EnrollStudenModalForm({
             onClose();
         },
         onError: (error) => {
+            console.log('error', error.response);
             toast.error(error.message || 'Failed to enroll learner.');
         },
     });
