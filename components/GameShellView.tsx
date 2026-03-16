@@ -57,19 +57,16 @@ export default function GameShellView({
     const tickSfx = useRef<HTMLAudioElement | null>(null);
     const startSfx = useRef<HTMLAudioElement | null>(null);
 
+    // ✨ FIX: Using local assets to prevent production 404s/CORS issues
     useEffect(() => {
-        tickSfx.current = new Audio(
-            'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',
-        );
-        startSfx.current = new Audio(
-            'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
-        );
+        tickSfx.current = new Audio('/sounds/tick.mp3');
+        startSfx.current = new Audio('/sounds/start.mp3');
     }, []);
 
     const shouldShowIframe =
         status === 'playing' || status === 'paused' || isInitiating;
 
-    // ✨ MEDIA PARSER FIX: Static URL ensures iframe NEVER hard reloads mid-game!
+    // ✨ FIX: Robust URL parsing to handle production paths, relative paths, and env variables
     const mediaConfig = useMemo(() => {
         let baseUrl = activity.activityUrl || '';
         const type = activity.activityType?.toLowerCase() || '';

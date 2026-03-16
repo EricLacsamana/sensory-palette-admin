@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 
 const SparkleIcon = ({ className }: { className?: string }) => (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d="M11.64 5.232c.184-.525.932-.525 1.117 0l1.458 4.152a1.2 1.2 0 00.838.838l4.152 1.458c.525.184.525.932 0 1.117l-4.152 1.458a1.2 1.2 0 00-.838.838l-1.458 4.152c-.184.525-.932.525-1.117 0l-1.458-4.152a1.2 1.2 0 00-.838-.838l-4.152-1.458c-.525-.184-.525-.932 0-1.117l4.152-1.458a1.2 1.2 0 00.838-.838l1.458-4.152z" />
+        <path d="M11.64 5.232c.184-.525.932-.525 1.117 0l1.458 4.152a1.2 1.2 0 00.838.838l4.152 1.458c.525.184.525.932 0 1.117l-4.152 1.458a1.2 1.2 0 00-.838.838l-1.458 4.152c-.184.525-.932.525-1.117 0l-1.458-4.152a1.2 1.2 0 00.838-.838l1.458-4.152z" />
     </svg>
 );
 
@@ -262,37 +262,50 @@ export default function MathGame({
                 }
             }
 
+            // --- TELEMETRY UPDATE (Aligned to Math Speed logic) ---
             const newTotal = totalCount + 1;
             const newCorrect = isCorrect ? correctCount + 1 : correctCount;
+            const newAccuracy = Math.round((newCorrect / newTotal) * 100);
+
             setTotalCount(newTotal);
             if (isCorrect) setCorrectCount(newCorrect);
 
+            const logEntry = {
+                timestamp: new Date().toISOString(),
+                action: 'voice_input',
+                targetId: finalTranscript || '[silence]',
+                isCorrect,
+                responseTimeMs: Date.now() - timerRef.current,
+                metadata: {
+                    gameType: 'math_speak',
+                    currentLevel: levelRef.current,
+                    expectedTarget: targetRef.current.answer,
+                    equation: targetRef.current.prompt,
+                    wordHeard: finalTranscript || '[silence]',
+                    resultType,
+                    levelShift:
+                        isAdaptiveRef.current && levelShift !== 'none'
+                            ? levelShift
+                            : undefined,
+                    adaptiveMode: isAdaptiveRef.current,
+                },
+            };
+
             setTelemetry((prev) => {
-                const updated = [
-                    ...prev,
-                    {
-                        timestamp: new Date().toISOString(),
-                        action: 'voice_input',
-                        targetId: targetRef.current.prompt,
-                        isCorrect,
-                        responseTimeMs: Date.now() - timerRef.current,
-                        metadata: {
-                            currentLevel: levelRef.current,
-                            wordHeard: finalTranscript || '[silence]',
-                            resultType,
-                        },
-                    },
-                ];
+                const updated = [...prev, logEntry];
                 window.parent.postMessage(
                     {
                         type: 'GAME_SCORE_UPDATE',
-                        score: Math.round((newCorrect / newTotal) * 100),
+                        score: newCorrect,
+                        rounds: newTotal,
+                        accuracy: newAccuracy,
                         rawTelemetry: updated,
                     },
                     '*',
                 );
                 return updated;
             });
+            // ---------------------------------------------------------
 
             if (levelShift === 'up')
                 sfxRef.current.levelup?.play().catch(() => {});
@@ -697,7 +710,7 @@ export default function MathGame({
                                 </span>
                             ) : feedback === 'timeout' ? (
                                 <span className="text-amber-500 font-bold">
-                                    I didn&apos;t hear you...
+                                    I didn't hear you...
                                 </span>
                             ) : (
                                 <>

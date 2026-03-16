@@ -22,6 +22,7 @@ const currentIp = getNetworkIp();
 const strapiUrl = `http://${currentIp}:1337`;
 
 const nextConfig: NextConfig = {
+    devIndicators: false,
     /* config options here */
 
     // 2. Inject the dynamic URL into your Next.js app

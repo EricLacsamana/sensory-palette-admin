@@ -233,6 +233,9 @@ export default function VoiceMatchGame({
     const [transcript, setTranscript] = useState<string>('');
     const [telemetry, setTelemetry] = useState<any[]>([]);
 
+    // ADDED: State to manage the timer animation key safely
+    const [timerKey, setTimerKey] = useState(0);
+
     // --- REFS ---
     const recognitionRef = useRef<any>(null);
     const isRoundActive = useRef(false);
@@ -351,19 +354,24 @@ export default function VoiceMatchGame({
                 nextLevel = levelRef.current;
             }
 
+            // --- TELEMETRY UPDATE ---
             const newTotal = totalCount + 1;
             const newCorrect = isCorrect ? correctCount + 1 : correctCount;
+            const newAccuracy = Math.round((newCorrect / newTotal) * 100);
+
             setTotalCount(newTotal);
             if (isCorrect) setCorrectCount(newCorrect);
 
             const logEntry = {
                 timestamp: new Date().toISOString(),
                 action: 'voice_input',
-                targetId: targetRef.current.word,
+                targetId: finalTranscript || '[silence]',
                 isCorrect,
                 responseTimeMs: Date.now() - timerRef.current,
                 metadata: {
+                    gameType: 'vocabulary_voice',
                     currentLevel: levelRef.current,
+                    expectedTarget: targetRef.current.word,
                     wordHeard: finalTranscript || '[silence]',
                     resultType,
                     levelShift:
@@ -379,13 +387,16 @@ export default function VoiceMatchGame({
                 window.parent.postMessage(
                     {
                         type: 'GAME_SCORE_UPDATE',
-                        score: Math.round((newCorrect / newTotal) * 100),
+                        score: newCorrect,
+                        rounds: newTotal,
+                        accuracy: newAccuracy,
                         rawTelemetry: updated,
                     },
                     '*',
                 );
                 return updated;
             });
+            // ---------------------------------------------------------
 
             if (isCorrect) successSfx.current?.play().catch(() => {});
 
@@ -395,8 +406,6 @@ export default function VoiceMatchGame({
 
             stopMic();
 
-            // ONLY auto-generate next word if they won.
-            // If they got it wrong, do nothing! Wait for them to tap "Try again".
             if (isCorrect || levelShift !== 'none') {
                 setTimeout(() => {
                     generate(nextLevel);
@@ -459,9 +468,7 @@ export default function VoiceMatchGame({
                             currentTranscript.includes(s.toLowerCase()),
                         );
 
-                    if (isMatch) {
-                        handleResult('correct', currentTranscript);
-                    }
+                    if (isMatch) handleResult('correct', currentTranscript);
                 }
             };
 
@@ -487,12 +494,16 @@ export default function VoiceMatchGame({
     useEffect(() => {
         if (feedback === 'preparing') {
             const t = setTimeout(() => {
-                if (prepTimer > 0) {
-                    setPrepTimer((prev) => prev - 1);
-                } else {
+                if (prepTimer > 0) setPrepTimer((prev) => prev - 1);
+                else {
                     setFeedback('none');
                     isRoundActive.current = true;
-                    timerRef.current = Date.now();
+
+                    // FIXED: Setting both the ref and the state safely
+                    const now = Date.now();
+                    timerRef.current = now;
+                    setTimerKey(now);
+
                     startMic();
                 }
             }, 1000);
@@ -528,7 +539,6 @@ export default function VoiceMatchGame({
 
     if (!target) return null;
 
-    // Helper for rendering multiple floating sparkles
     const FloatingSparkles = () => {
         const sparkleProps = [
             { top: '-10%', left: '5%', size: 40, delay: 0 },
@@ -614,7 +624,6 @@ export default function VoiceMatchGame({
                                 animate={{ opacity: 1 }}
                                 className="absolute inset-0 rounded-[40px] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/confetti.png')] opacity-20 overflow-hidden"
                             />
-                            {/* SVG Floating Sparkles Around the Card */}
                             <FloatingSparkles />
                         </>
                     )}
@@ -707,7 +716,6 @@ export default function VoiceMatchGame({
                             ) : feedback === 'correct' ||
                               feedback === 'levelup' ? (
                                 <span className="text-emerald-500 font-black flex items-center gap-2 justify-center scale-110">
-                                    {/* Inline SVG Sparkles for the Text */}
                                     <motion.div
                                         animate={{ scale: [0.8, 1.2, 0.8] }}
                                         transition={{
@@ -743,7 +751,7 @@ export default function VoiceMatchGame({
                                 </span>
                             ) : feedback === 'timeout' ? (
                                 <span className="text-amber-500 font-bold">
-                                    I didn&apos;t hear you...
+                                    I didn't hear you...
                                 </span>
                             ) : (
                                 <>
@@ -795,11 +803,15 @@ export default function VoiceMatchGame({
                                 feedback === 'timeout' ||
                                 feedback === 'almost'
                             ) {
-                                // EXACT TRY AGAIN LOGIC: Restarts the same word manually
                                 setFeedback('none');
                                 setTranscript('');
                                 isRoundActive.current = true;
-                                timerRef.current = Date.now();
+
+                                // FIXED: Update both the state and the ref safely
+                                const now = Date.now();
+                                timerRef.current = now;
+                                setTimerKey(now);
+
                                 startMic();
                             } else {
                                 generate(level);
@@ -820,9 +832,10 @@ export default function VoiceMatchGame({
                 </motion.button>
 
                 <div className="w-48 h-1.5 bg-slate-200 rounded-full mt-4 overflow-hidden">
+                    {/* FIXED: The component below now relies on `timerKey` state instead of the ref */}
                     {isListening && feedback === 'none' && (
                         <motion.div
-                            key={timerRef.current}
+                            key={timerKey}
                             initial={{ width: '100%' }}
                             animate={{ width: '0%' }}
                             transition={{ duration: 10, ease: 'linear' }}
@@ -831,7 +844,6 @@ export default function VoiceMatchGame({
                     )}
                 </div>
                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">
-                    {/* Updates label to guide user to retry manually */}
                     {isListening
                         ? 'Listening...'
                         : feedback === 'wrong' ||
