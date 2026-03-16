@@ -264,7 +264,7 @@ const CustomComposedTooltip = ({ active, payload }: any) => {
                         <span className="text-slate-400 text-xs font-medium">
                             Avg Accuracy
                         </span>
-                        <span className="text-emerald-400 text-sm font-black">
+                        <span className="text-amber-400 text-sm font-black">
                             {scoreData?.value ?? '--'}%
                         </span>
                     </div>
@@ -272,7 +272,7 @@ const CustomComposedTooltip = ({ active, payload }: any) => {
                         <span className="text-slate-400 text-xs font-medium">
                             Plays
                         </span>
-                        <span className="text-amber-400 text-sm font-black">
+                        <span className="text-emerald-400 text-sm font-black">
                             {playData?.value ?? '--'}
                         </span>
                     </div>
