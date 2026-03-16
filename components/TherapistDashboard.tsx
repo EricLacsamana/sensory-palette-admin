@@ -142,7 +142,7 @@ import {
     TimeLog,
 } from '@/types/activitiy-session';
 
-import { ScheduleQueueHacked } from '@/components/ScheduleQueueHacked';
+import { ScheduleQueue } from '@/components/ScheduleQueue';
 import ActivitySequenceLauncher from '@/components/ActivitySequenceLauncher';
 import { ActivityCalendar } from '@/components/ActivityCalendar';
 import { NotificationCenter } from './NotificationCenter';
@@ -1298,7 +1298,7 @@ export default function Dashboard() {
                                         Overview
                                     </SheetDescription>
                                 </SheetHeader>
-                                <ScheduleQueueHacked
+                                <ScheduleQueue
                                     sessions={activitySessions}
                                     onSessionClick={handleViewSession}
                                 />
