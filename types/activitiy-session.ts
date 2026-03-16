@@ -51,6 +51,8 @@ export interface ActivitySessionResponse {
     activitySessionStatus: ActivitySessionStatus;
     clinicalObservations?: string;
     score?: number;
+    accuracy: number;
+    rounds: number;
     createdAt: string; // ISO String
     updatedAt: string; // ISO String
     timeLogs: TimeLog[];
@@ -60,7 +62,6 @@ export interface ActivitySessionResponse {
     aiRecommendation: string;
     enableAdaptiveDifficulty: boolean;
     isHandsFree: boolean;
-    accuracy: number;
     aiAccuracy: number;
     telemetryAnalysis: TelemetryAnalysis[];
     extraTimeSeconds: number;

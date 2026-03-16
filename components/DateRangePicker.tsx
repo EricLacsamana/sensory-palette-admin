@@ -36,6 +36,20 @@ interface DateRangePickerProps {
     className?: string;
 }
 
+interface Preset {
+    label: string;
+    value: number | 'ytd';
+}
+
+const presets: Preset[] = [
+    { label: 'Today', value: 0 },
+    { label: 'Last 7 Days', value: 7 },
+    { label: 'Last 30 Days', value: 30 },
+    { label: 'Last 90 Days', value: 90 },
+    { label: 'Year to Date', value: 'ytd' },
+    { label: 'Last 12 Months', value: 365 },
+];
+
 export function DateRangePicker({
     value,
     onChange,
@@ -190,18 +204,10 @@ export function DateRangePicker({
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 mb-1">
                             Quick Select
                         </span>
-                        {[
-                            { label: 'Today', value: 0 },
-                            { label: 'Last 7 Days', value: 7 },
-                            { label: 'Last 30 Days', value: 30 },
-                            { label: 'Last 90 Days', value: 90 },
-                            { label: 'Year to Date', value: 'ytd' },
-                            { label: 'Last 12 Months', value: 365 },
-                        ].map((preset) => (
+                        {presets.map((preset) => (
                             <button
                                 key={preset.label}
                                 onClick={() => applyPreset(preset.value)}
-                                className="text-left px-3 py-2 rounded-xl text-[11px] font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
                             >
                                 {preset.label}
                             </button>

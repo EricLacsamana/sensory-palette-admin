@@ -185,7 +185,8 @@ const CleanRadarTick = (props: any) => {
     const isRight = x > cx + 20;
     const isLeft = x < cx - 20;
 
-    let textAnchor = 'middle';
+    let textAnchor: 'start' | 'middle' | 'end' | 'inherit' = 'middle';
+
     if (isLeft && !isTop && !isBottom) textAnchor = 'end';
     if (isRight && !isTop && !isBottom) textAnchor = 'start';
 

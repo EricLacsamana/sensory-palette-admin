@@ -392,11 +392,7 @@ export default function ActivityManager() {
                             });
                             closeModal();
                         },
-                        onError: (error) => {
-                            console.error(
-                                'Upload or save failed:',
-                                error?.response,
-                            );
+                        onError: () => {
                             toast.error('Failed to update activity', {
                                 id: 'save-activity',
                             });

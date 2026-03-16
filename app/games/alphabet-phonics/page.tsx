@@ -3,7 +3,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, BarChart, Trophy, User, Target, Activity } from 'lucide-react';
+import {
+    Mic,
+    BarChart,
+    Trophy,
+    User,
+    Target,
+    Activity,
+    ArrowDownCircle,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const SparkleIcon = ({ className }: { className?: string }) => (

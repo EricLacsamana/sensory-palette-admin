@@ -23,6 +23,8 @@ export const useGameSession = () => {
                     syncGameData({
                         score: event.data.score || 0,
                         telemetry: event.data.rawTelemetry || [],
+                        rounds: event.data.rounds || 0,
+                        accuracy: event.data.accuracy || 0,
                     }),
                 );
             }

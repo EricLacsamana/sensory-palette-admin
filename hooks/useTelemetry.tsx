@@ -39,8 +39,8 @@ export const useTelemetry = () => {
                 dispatch(
                     syncGameData({
                         score: event.data.score || 0,
-                        rounds: event.data.rounds || 0, // ✨ NEW
-                        accuracy: event.data.accuracy || 0, // ✨ NEW
+                        rounds: event.data.rounds || 0,
+                        accuracy: event.data.accuracy || 0,
                         telemetry:
                             event.data.rawTelemetry ||
                             event.data.telemetry ||
