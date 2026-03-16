@@ -14,13 +14,7 @@ import {
     Moon,
     Hexagon,
     Octagon,
-    ArrowUpCircle,
-    ArrowDownCircle,
-    User,
     Trophy,
-    BarChart,
-    Target,
-    Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -66,7 +60,7 @@ export default function ShapeMatchGame({
         const urlLevel = parseInt(searchParams.get('level') || '0', 10);
         if (urlLevel > 0 && urlLevel <= MAX_LEVEL) return urlLevel;
         if (baseDifficulty) return baseDifficulty;
-        return 1; // ✨ STRICTLY LEVEL 1
+        return 1;
     };
 
     const [level, setLevel] = useState<number>(getStartingLevel());
@@ -223,7 +217,7 @@ export default function ShapeMatchGame({
             }
             setTimeout(
                 () => generate(newLevel),
-                levelShift === 'up' ? 2500 : 1200,
+                levelShift === 'up' ? 2500 : 1500,
             );
         } else {
             if (levelShift === 'down') setFeedback('leveldown');
@@ -232,91 +226,77 @@ export default function ShapeMatchGame({
             setTimeout(() => {
                 if (levelShift === 'down') generate(newLevel);
                 else setFeedback('none');
-            }, 1000);
+            }, 1500);
         }
     };
 
     if (!target) return null;
 
-    const FloatingSparkles = () => {
-        const sparkleProps = [
-            { top: '-10%', left: '5%', size: 40, delay: 0 },
-            { top: '15%', left: '-15%', size: 28, delay: 0.2 },
-            { top: '45%', left: '105%', size: 35, delay: 0.3 },
-            { top: '85%', left: '90%', size: 45, delay: 0.25 },
-        ];
-        return (
-            <div className="absolute inset-0 pointer-events-none z-20">
-                {sparkleProps.map((s, i) => (
-                    <motion.div
-                        key={i}
-                        className="absolute text-emerald-400 drop-shadow-sm"
-                        style={{
-                            top: s.top,
-                            left: s.left,
-                            width: s.size,
-                            height: s.size,
-                        }}
-                        initial={{ scale: 0, opacity: 0, rotate: 0 }}
-                        animate={{
-                            scale: [0, 1.2, 0],
-                            opacity: [0, 1, 0],
-                            rotate: 180,
-                        }}
-                        transition={{
-                            duration: 1.5,
-                            delay: s.delay,
-                            repeat: Infinity,
-                        }}
-                    >
-                        <SparkleIcon className="w-full h-full" />
-                    </motion.div>
-                ))}
-            </div>
-        );
+    const getLevelTheme = () => {
+        switch (level) {
+            case 1:
+                return {
+                    bg: 'bg-blue-50',
+                    text: 'text-blue-600',
+                    cardBorder: 'border-blue-200',
+                };
+            case 2:
+                return {
+                    bg: 'bg-green-50',
+                    text: 'text-green-600',
+                    cardBorder: 'border-green-200',
+                };
+            case 3:
+                return {
+                    bg: 'bg-yellow-50',
+                    text: 'text-yellow-600',
+                    cardBorder: 'border-yellow-200',
+                };
+            default:
+                return {
+                    bg: 'bg-blue-50',
+                    text: 'text-blue-600',
+                    cardBorder: 'border-blue-200',
+                };
+        }
     };
+    const theme = getLevelTheme();
 
     return (
-        <div className="w-full h-[100dvh] bg-[#fcfcfd] dark:bg-[#0a0c12] flex flex-col justify-between p-4 overflow-hidden font-sans relative touch-none selection:bg-none">
-            <motion.div
-                animate={{ opacity: feedback === 'wrong' ? 1 : 0 }}
-                className="absolute inset-0 bg-rose-500/20 pointer-events-none z-0 transition-opacity duration-300"
-            />
-
-            <div className="flex flex-wrap justify-center items-center gap-2 shrink-0 z-20 h-[8dvh]">
-                {studentAge && (
-                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/10 px-3 py-1.5 rounded-full text-xs font-bold text-slate-500 uppercase tracking-widest shadow-sm">
-                        <User size={14} /> Age {studentAge}
-                    </div>
-                )}
-                <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-indigo-600 uppercase tracking-widest shadow-sm border border-indigo-100">
-                    <BarChart size={14} /> Lvl {level}
+        <div
+            className={cn(
+                'w-full h-[100dvh] flex flex-col justify-between p-4 md:p-8 overflow-hidden font-sans relative touch-none selection:bg-none transition-colors duration-1000',
+                theme.bg,
+            )}
+        >
+            <div className="flex flex-wrap justify-center items-center gap-4 shrink-0 z-20 pt-2">
+                <div className="flex items-center gap-2 bg-white px-6 py-3 rounded-2xl text-lg font-black text-slate-600 uppercase tracking-widest border-4 border-slate-100 shadow-sm">
+                    <Star size={24} className={theme.text} strokeWidth={3} />{' '}
+                    Level {level}
                 </div>
                 {showMetrics && (
-                    <>
-                        <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-600 uppercase tracking-widest shadow-sm border border-emerald-100">
-                            <Trophy size={14} /> Score {correctCount}
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-purple-600 uppercase tracking-widest shadow-sm border border-purple-100">
-                            <Activity size={14} /> Rounds {totalCount}
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-amber-600 uppercase tracking-widest shadow-sm border border-amber-100">
-                            <Target size={14} /> {accuracy}%
-                        </div>
-                    </>
+                    <div className="flex items-center gap-2 bg-white px-6 py-3 rounded-2xl text-lg font-black text-slate-600 border-4 border-slate-100 shadow-sm">
+                        <Trophy
+                            size={24}
+                            className="text-emerald-500"
+                            strokeWidth={3}
+                        />{' '}
+                        {correctCount} Stars
+                    </div>
                 )}
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col items-center justify-center w-full relative z-10 p-4">
+            {/* ✨ FIX: min-h-[200px] guarantees the whiteboard stays massive */}
+            <div className="flex-1 min-h-[200px] flex flex-col items-center justify-center w-full relative z-20 py-4">
                 <AnimatePresence>
                     {feedback === 'levelup' && (
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
-                            animate={{ opacity: 1, scale: 1.2, rotate: 0 }}
-                            exit={{ opacity: 0, scale: 2 }}
-                            className="absolute z-50 text-emerald-500 font-black text-[12vmin] uppercase tracking-widest drop-shadow-[0_0_30px_rgba(16,185,129,0.8)] whitespace-nowrap text-center flex flex-col items-center"
+                            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 1.2 }}
+                            className="absolute z-50 text-amber-500 font-black text-5xl md:text-7xl uppercase tracking-widest drop-shadow-md whitespace-nowrap text-center flex flex-col items-center bg-white/90 backdrop-blur-sm px-10 py-8 rounded-[40px] border-8 border-amber-200"
                         >
-                            <SparkleIcon className="w-16 h-16 mb-2 animate-spin-slow" />
+                            <Star className="w-20 h-20 mb-4 text-amber-400 fill-amber-400" />
                             LEVEL UP!
                         </motion.div>
                     )}
@@ -325,58 +305,70 @@ export default function ShapeMatchGame({
                 <motion.div
                     animate={
                         feedback === 'wrong' || feedback === 'leveldown'
-                            ? { x: [-15, 15, -15, 15, 0] }
+                            ? { x: [-10, 10, -10, 10, 0] }
                             : feedback === 'correct'
-                              ? { scale: [1, 1.1, 1] }
+                              ? { scale: [1, 1.05, 1], y: [0, -10, 0] }
                               : {}
                     }
                     transition={{ duration: 0.4 }}
                     className={cn(
-                        'aspect-square max-h-full max-w-full w-auto h-full min-w-[120px] rounded-[25%] bg-white dark:bg-white/5 border shadow-xl flex items-center justify-center relative transition-colors duration-500',
+                        'aspect-square min-h-[180px] max-h-[35vh] max-w-[35vh] w-auto h-full rounded-[48px] border-[12px] flex items-center justify-center relative transition-all duration-300 shadow-lg',
                         feedback === 'correct'
-                            ? 'border-emerald-400 shadow-[0_0_80px_rgba(52,211,153,0.5)]'
-                            : 'border-slate-200 dark:border-white/10',
+                            ? 'bg-green-100 border-green-400'
+                            : feedback === 'wrong' || feedback === 'leveldown'
+                              ? 'bg-orange-100 border-orange-300'
+                              : `bg-white ${theme.cardBorder}`,
                     )}
                 >
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={target.name}
-                            initial={{ opacity: 0, scale: 0.5 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.5 }}
-                            transition={{ duration: 0.3 }}
-                            className="w-full h-full flex items-center justify-center text-indigo-500"
+                            initial={{ opacity: 0, scale: 0.5, rotate: -30 }}
+                            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                            exit={{ opacity: 0, scale: 0.5, rotate: 30 }}
+                            transition={{ type: 'spring', bounce: 0.4 }}
+                            className={cn(
+                                'w-full h-full flex items-center justify-center',
+                                feedback === 'correct'
+                                    ? 'text-green-600'
+                                    : feedback === 'wrong' ||
+                                        feedback === 'leveldown'
+                                      ? 'text-orange-500'
+                                      : 'text-indigo-500',
+                            )}
                         >
                             <target.icon
-                                className="w-[50%] h-[50%] drop-shadow-sm"
-                                strokeWidth={1.5}
+                                className="w-[60%] h-[60%] drop-shadow-sm"
+                                strokeWidth={2}
                             />
                         </motion.div>
                     </AnimatePresence>
                 </motion.div>
             </div>
 
-            <div className="text-center shrink-0 w-full h-[8dvh] flex items-center justify-center z-10 px-4">
+            <div className="text-center shrink-0 w-full h-[8dvh] flex items-center justify-center z-20 px-4">
                 <h2
                     className={cn(
-                        'text-[clamp(1.5rem,5vmin,2.5rem)] font-light tracking-tight leading-tight transition-colors',
-                        feedback === 'wrong' || feedback === 'leveldown'
-                            ? 'text-rose-500 font-bold'
-                            : feedback === 'correct'
-                              ? 'text-emerald-500 font-bold'
-                              : 'text-slate-800 dark:text-slate-100',
+                        'text-2xl md:text-4xl font-black tracking-tight leading-tight transition-colors',
+                        feedback === 'wrong'
+                            ? 'text-orange-500'
+                            : feedback === 'leveldown'
+                              ? 'text-blue-500'
+                              : feedback === 'correct'
+                                ? 'text-green-500'
+                                : 'text-slate-600',
                     )}
                 >
                     {feedback === 'wrong' ? (
-                        'Try again!'
+                        "Let's try again! You can do it!"
                     ) : feedback === 'leveldown' ? (
-                        "Let's try an easier one!"
+                        "Let's practice an easier one!"
                     ) : feedback === 'correct' ? (
-                        'Great Job!'
+                        'Great Job! 🌟'
                     ) : (
                         <>
                             Find the{' '}
-                            <span className="font-semibold text-indigo-500">
+                            <span className="text-indigo-500">
                                 {target.name}
                             </span>
                         </>
@@ -384,35 +376,60 @@ export default function ShapeMatchGame({
                 </h2>
             </div>
 
-            <div className="w-full max-w-3xl mx-auto shrink-0 z-20 pb-4 px-4">
+            {/* ✨ FIX: grid-cols-3 forces maximum 2 rows so it never steals height */}
+            <div className="w-full max-w-4xl mx-auto shrink-0 z-20 pb-4 px-4">
                 <div
                     className={cn(
-                        'grid gap-3',
-                        options.length <= 4
-                            ? 'grid-cols-2'
-                            : 'grid-cols-2 md:grid-cols-3',
+                        'grid gap-4 md:gap-6',
+                        options.length <= 4 ? 'grid-cols-2' : 'grid-cols-3',
                     )}
                 >
                     <AnimatePresence mode="popLayout">
-                        {options.map((opt) => (
-                            <motion.button
-                                key={opt.name}
-                                layout
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                transition={{ duration: 0.3 }}
-                                whileTap={{ scale: 0.94 }}
-                                onClick={(e) => handleSelect(e, opt)}
-                                className="min-h-[80px] h-[12dvh] max-h-[100px] w-full rounded-[24px] border-[2px] border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md flex flex-col items-center justify-center text-[clamp(0.8rem,2.5vmin,1.2rem)] font-bold uppercase tracking-wider text-slate-500 transition-all hover:bg-white hover:text-indigo-600 hover:shadow-md hover:border-indigo-300"
-                            >
-                                <opt.icon
-                                    className="w-[clamp(1.5rem,5vmin,2.5rem)] h-[clamp(1.5rem,5vmin,2.5rem)] mb-1 shrink-0"
-                                    strokeWidth={1.5}
-                                />
-                                <span className="truncate">{opt.name}</span>
-                            </motion.button>
-                        ))}
+                        {options.map((opt, idx) => {
+                            const colors = [
+                                'bg-blue-400 hover:bg-blue-300 border-blue-500 shadow-[0_8px_0_rgb(37,99,235)]',
+                                'bg-emerald-400 hover:bg-emerald-300 border-emerald-500 shadow-[0_8px_0_rgb(22,163,74)]',
+                                'bg-purple-400 hover:bg-purple-300 border-purple-500 shadow-[0_8px_0_rgb(147,51,234)]',
+                                'bg-rose-400 hover:bg-rose-300 border-rose-500 shadow-[0_8px_0_rgb(225,29,72)]',
+                                'bg-amber-400 hover:bg-amber-300 border-amber-500 shadow-[0_8px_0_rgb(217,119,6)]',
+                                'bg-cyan-400 hover:bg-cyan-300 border-cyan-500 shadow-[0_8px_0_rgb(6,182,212)]',
+                            ];
+                            const btnColor = colors[idx % colors.length];
+
+                            return (
+                                <motion.button
+                                    key={opt.name}
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    transition={{
+                                        type: 'spring',
+                                        bounce: 0.3,
+                                        delay: idx * 0.05,
+                                    }}
+                                    whileTap={{
+                                        scale: 0.95,
+                                        y: 8,
+                                        boxShadow: '0 0px 0 rgba(0,0,0,0)',
+                                    }}
+                                    onClick={(e) => handleSelect(e, opt)}
+                                    className={cn(
+                                        'min-h-[90px] h-[12dvh] max-h-[140px] w-full rounded-[24px] md:rounded-[32px] border-4 transition-all flex flex-col items-center justify-center relative overflow-hidden focus:outline-none group text-white',
+                                        btnColor,
+                                    )}
+                                    aria-label={`Select ${opt.name}`}
+                                >
+                                    <opt.icon
+                                        className="w-8 h-8 md:w-12 md:h-12 mb-1 shrink-0 drop-shadow-md group-hover:scale-110 transition-transform"
+                                        strokeWidth={3}
+                                    />
+                                    <span className="text-sm md:text-xl font-black uppercase tracking-wider drop-shadow-sm truncate px-1">
+                                        {opt.name}
+                                    </span>
+                                </motion.button>
+                            );
+                        })}
                     </AnimatePresence>
                 </div>
             </div>

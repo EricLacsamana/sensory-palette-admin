@@ -12,12 +12,13 @@ import {
     ArrowDownCircle,
     Target,
     Activity,
+    Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const SparkleIcon = ({ className }: { className?: string }) => (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d="M11.64 5.232c.184-.525.932-.525 1.117 0l1.458 4.152a1.2 1.2 0 00.838.838l4.152 1.458c.525.184.525.932 0 1.117l-4.152 1.458a1.2 1.2 0 00-.838.838l-1.458 4.152c-.184.525-.932.525-1.117 0l-1.458-4.152a1.2 1.2 0 00-.838-.838l-4.152-1.458c-.525-.184-.525-.932 0-1.117l4.152-1.458a1.2 1.2 0 00.838-.838l1.458-4.152z" />
+        <path d="M11.64 5.232c.184-.525.932-.525 1.117 0l1.458 4.152a1.2 1.2 0 00.838.838l4.152 1.458c.525.184.525.932 0 1.117l-4.152 1.458a1.2 1.2 0 00-.838.838l-1.458 4.152c-.184.525-.932.525-1.117 0l-1.458-4.152a1.2 1.2 0 00.838-.838l1.458-4.152z" />
     </svg>
 );
 
@@ -214,7 +215,7 @@ export default function OppositesGame({
         const urlLevel = parseInt(searchParams.get('level') || '0', 10);
         if (urlLevel > 0 && urlLevel <= MAX_LEVEL) return urlLevel;
         if (baseDifficulty) return baseDifficulty;
-        return 1; // ✨ STRICTLY LEVEL 1
+        return 1;
     };
 
     const initialLevel = getStartingLevel();
@@ -587,45 +588,47 @@ export default function OppositesGame({
 
     if (!target) return null;
 
-    const FloatingSparkles = () => {
-        const sparkleProps = [
-            { top: '-10%', left: '5%', size: 40, delay: 0 },
-            { top: '15%', left: '-15%', size: 28, delay: 0.2 },
-            { top: '-15%', left: '85%', size: 50, delay: 0.1 },
-            { top: '45%', left: '105%', size: 35, delay: 0.3 },
-            { top: '100%', left: '15%', size: 30, delay: 0.4 },
-            { top: '85%', left: '90%', size: 45, delay: 0.25 },
-        ];
-        return (
-            <div className="absolute inset-0 pointer-events-none z-20">
-                {sparkleProps.map((s, i) => (
-                    <motion.div
-                        key={i}
-                        className="absolute text-emerald-400 drop-shadow-sm"
-                        style={{
-                            top: s.top,
-                            left: s.left,
-                            width: s.size,
-                            height: s.size,
-                        }}
-                        initial={{ scale: 0, opacity: 0, rotate: 0 }}
-                        animate={{
-                            scale: [0, 1.2, 0],
-                            opacity: [0, 1, 0],
-                            rotate: 180,
-                        }}
-                        transition={{
-                            duration: 1.5,
-                            delay: s.delay,
-                            repeat: Infinity,
-                        }}
-                    >
-                        <SparkleIcon className="w-full h-full" />
-                    </motion.div>
-                ))}
-            </div>
-        );
+    const getLevelTheme = () => {
+        switch (level) {
+            case 1:
+                return {
+                    bg: 'bg-indigo-50',
+                    text: 'text-indigo-600',
+                    cardBorder: 'border-indigo-200',
+                };
+            case 2:
+                return {
+                    bg: 'bg-emerald-50',
+                    text: 'text-emerald-600',
+                    cardBorder: 'border-emerald-200',
+                };
+            case 3:
+                return {
+                    bg: 'bg-amber-50',
+                    text: 'text-amber-600',
+                    cardBorder: 'border-amber-200',
+                };
+            case 4:
+                return {
+                    bg: 'bg-purple-50',
+                    text: 'text-purple-600',
+                    cardBorder: 'border-purple-200',
+                };
+            case 5:
+                return {
+                    bg: 'bg-rose-50',
+                    text: 'text-rose-600',
+                    cardBorder: 'border-rose-200',
+                };
+            default:
+                return {
+                    bg: 'bg-indigo-50',
+                    text: 'text-indigo-600',
+                    cardBorder: 'border-indigo-200',
+                };
+        }
     };
+    const theme = getLevelTheme();
 
     const isTryAgainState =
         !isListening &&
@@ -635,33 +638,26 @@ export default function OppositesGame({
     const isSuccessState = feedback === 'correct' || feedback === 'levelup';
 
     return (
-        <div className="w-full h-[100dvh] bg-[#fcfcfd] dark:bg-[#0a0c12] flex flex-col justify-between pt-[2dvh] px-4 overflow-hidden font-sans relative touch-none selection:bg-none">
-            <motion.div
-                animate={{ opacity: feedback === 'wrong' ? 1 : 0 }}
-                className="absolute inset-0 bg-rose-500/20 pointer-events-none z-0 transition-opacity duration-300"
-            />
-
-            <div className="flex flex-wrap justify-center items-center gap-2 shrink-0 z-20">
-                {studentAge && (
-                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/10 px-3 py-1.5 rounded-full text-xs font-bold text-slate-500 uppercase tracking-widest shadow-sm">
-                        <User size={14} /> Age {studentAge}
-                    </div>
-                )}
-                <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-indigo-600 uppercase tracking-widest shadow-sm border border-indigo-100">
-                    <BarChart size={14} /> Lvl {level}
+        <div
+            className={cn(
+                'w-full h-[100dvh] flex flex-col justify-between pt-[2dvh] px-4 overflow-hidden font-sans relative touch-none selection:bg-none transition-colors duration-1000',
+                theme.bg,
+            )}
+        >
+            <div className="flex flex-wrap justify-center items-center gap-4 shrink-0 z-20 pt-2">
+                <div className="flex items-center gap-2 bg-white px-6 py-3 rounded-2xl text-lg font-black text-slate-600 uppercase tracking-widest border-4 border-slate-100 shadow-sm">
+                    <Star size={24} className={theme.text} strokeWidth={3} />{' '}
+                    Level {level}
                 </div>
                 {showMetrics && (
-                    <>
-                        <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-600 uppercase tracking-widest shadow-sm border border-emerald-100">
-                            <Trophy size={14} /> Score {correctCount}
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-purple-600 uppercase tracking-widest shadow-sm border border-purple-100">
-                            <Activity size={14} /> Rounds {totalCount}
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-amber-600 uppercase tracking-widest shadow-sm border border-amber-100">
-                            <Target size={14} /> {accuracy}%
-                        </div>
-                    </>
+                    <div className="flex items-center gap-2 bg-white px-6 py-3 rounded-2xl text-lg font-black text-slate-600 border-4 border-slate-100 shadow-sm">
+                        <Trophy
+                            size={24}
+                            className="text-emerald-500"
+                            strokeWidth={3}
+                        />{' '}
+                        {correctCount} Stars
+                    </div>
                 )}
             </div>
 
@@ -675,9 +671,9 @@ export default function OppositesGame({
                             initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
                             animate={{ opacity: 1, scale: 1.2, rotate: 0 }}
                             exit={{ opacity: 0, scale: 2 }}
-                            className="absolute z-50 text-emerald-500 font-black text-[12vmin] uppercase tracking-widest drop-shadow-[0_0_30px_rgba(16,185,129,0.8)] whitespace-nowrap text-center flex flex-col items-center"
+                            className="absolute z-50 text-emerald-500 font-black text-[12vmin] uppercase tracking-widest drop-shadow-md whitespace-nowrap text-center flex flex-col items-center bg-white/90 backdrop-blur-sm px-10 py-8 rounded-[40px] border-8 border-emerald-200"
                         >
-                            <SparkleIcon className="w-16 h-16 mb-2 animate-spin-slow" />
+                            <Star className="w-20 h-20 mb-4 text-emerald-400 fill-emerald-400 animate-spin-slow" />
                             LEVEL UP!
                         </motion.div>
                     )}
@@ -688,29 +684,22 @@ export default function OppositesGame({
                         isSuccessState
                             ? { rotateY: 360, scale: [1, 1.1, 1] }
                             : feedback === 'wrong' || feedback === 'leveldown'
-                              ? { x: [-15, 15, -15, 15, 0] }
+                              ? { x: [-10, 10, -10, 10, 0] }
                               : { rotateY: 0, y: [0, -2, 0] }
                     }
                     transition={{ duration: 0.6, ease: 'easeInOut' }}
                     style={{ transformStyle: 'preserve-3d' }}
                     className={cn(
-                        'aspect-square max-h-full max-w-full w-auto h-full min-w-[150px] rounded-[25%] bg-white border shadow-xl flex flex-col items-center justify-center relative overflow-visible transition-colors duration-500',
+                        'aspect-[4/3] max-h-full max-w-2xl w-full rounded-[48px] border-[12px] shadow-lg flex flex-col items-center justify-center relative overflow-visible transition-colors duration-500',
                         isSuccessState
-                            ? 'border-emerald-400 shadow-[0_0_80px_rgba(52,211,153,0.5)]'
-                            : 'border-slate-200 dark:border-white/10',
+                            ? 'bg-green-100 border-green-400'
+                            : feedback === 'wrong' ||
+                                feedback === 'leveldown' ||
+                                feedback === 'timeout'
+                              ? 'bg-orange-100 border-orange-300'
+                              : `bg-white ${theme.cardBorder}`,
                     )}
                 >
-                    {isSuccessState && (
-                        <>
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="absolute inset-0 rounded-[40px] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/confetti.png')] opacity-20 overflow-hidden"
-                            />
-                            <FloatingSparkles />
-                        </>
-                    )}
-
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={isSuccessState ? 'answer' : 'prompt'}
@@ -720,14 +709,7 @@ export default function OppositesGame({
                             style={{ rotateY: isSuccessState ? 360 : 0 }}
                             className="flex flex-col items-center z-10"
                         >
-                            <span
-                                className={cn(
-                                    'text-[clamp(4rem,20vmin,8rem)] leading-none select-none font-black drop-shadow-sm',
-                                    isSuccessState
-                                        ? 'text-emerald-500'
-                                        : 'text-slate-800',
-                                )}
-                            >
+                            <span className="text-[clamp(6rem,22vmin,12rem)] leading-none select-none font-black drop-shadow-sm">
                                 {isSuccessState
                                     ? target.answerEmoji
                                     : target.promptEmoji}
@@ -737,35 +719,35 @@ export default function OppositesGame({
                 </motion.div>
             </div>
 
-            <div className="text-center shrink-0 w-full h-[8dvh] flex items-center justify-center z-10 px-4">
+            <div className="text-center shrink-0 w-full h-[10dvh] flex items-center justify-center z-10 px-4">
                 <AnimatePresence mode="wait">
                     <motion.h2
                         key={feedback}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
-                        className="text-[clamp(1.5rem,5vmin,2.5rem)] font-light tracking-tight leading-tight transition-colors"
+                        className="text-3xl md:text-5xl font-black tracking-tight leading-tight transition-colors"
                     >
                         {feedback === 'wrong' ? (
-                            <span className="text-rose-500 font-bold">
-                                Try again!
+                            <span className="text-orange-500">
+                                Let's try again!
                             </span>
                         ) : feedback === 'leveldown' ? (
-                            <span className="text-amber-500 font-bold">
-                                Let's try an easier one!
+                            <span className="text-blue-500">
+                                Let's practice an easier one!
                             </span>
                         ) : feedback === 'correct' ? (
-                            <span className="text-emerald-500 font-bold">
-                                Great Job!
+                            <span className="text-green-500">
+                                Great Job! 🌟
                             </span>
                         ) : feedback === 'timeout' ? (
-                            <span className="text-amber-500 font-bold">
-                                I didn't hear you...
+                            <span className="text-orange-500">
+                                Hmm, let's try again!
                             </span>
                         ) : (
-                            <span className="text-slate-800 dark:text-slate-100">
+                            <span className="text-slate-600">
                                 Opposite of{' '}
-                                <span className="font-semibold text-indigo-500">
+                                <span className={theme.text}>
                                     "{target.prompt}"
                                 </span>
                                 ?
@@ -777,13 +759,13 @@ export default function OppositesGame({
 
             <div className="h-[4dvh] flex items-center justify-center shrink-0 w-full mb-[1dvh]">
                 {transcript && (
-                    <span className="text-slate-400 italic text-[clamp(0.8rem,2.5vmin,1.2rem)] bg-slate-100 px-4 py-1 rounded-full border border-slate-200">
+                    <span className="text-slate-500 italic text-[clamp(1rem,3vmin,1.5rem)] font-bold bg-white px-6 py-2 rounded-full border-4 border-slate-100 shadow-sm">
                         "{transcript}"
                     </span>
                 )}
             </div>
 
-            <div className="w-full flex flex-col items-center shrink-0 z-20 pb-4">
+            <div className="w-full flex flex-col items-center shrink-0 z-20 pb-8">
                 <div className="h-[2dvh] flex items-end gap-1 mb-[1dvh]">
                     {isListening &&
                         [1, 2, 3, 4, 5].map((i) => (
@@ -794,7 +776,7 @@ export default function OppositesGame({
                                     repeat: Infinity,
                                     duration: 0.5 + i * 0.1,
                                 }}
-                                className="w-[clamp(4px,1vmin,6px)] bg-rose-400 rounded-full"
+                                className="w-2 bg-pink-400 rounded-full"
                             />
                         ))}
                 </div>
@@ -806,67 +788,57 @@ export default function OppositesGame({
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.5 }}
-                                className="absolute -top-[6dvh] text-rose-500 z-30"
+                                className="absolute -top-12 text-orange-400 z-30"
                             >
                                 <ArrowDownCircle
-                                    size={32}
-                                    className="animate-bounce drop-shadow-md w-[clamp(1.5rem,5vmin,2.25rem)] h-[clamp(1.5rem,5vmin,2.25rem)]"
+                                    size={36}
+                                    className="animate-bounce drop-shadow-sm"
+                                    strokeWidth={3}
                                 />
                             </motion.div>
                         )}
                     </AnimatePresence>
                     <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        animate={isTryAgainState ? { scale: [1, 1.05, 1] } : {}}
-                        transition={
-                            isTryAgainState
-                                ? {
-                                      repeat: Infinity,
-                                      duration: 1.5,
-                                      ease: 'easeInOut',
-                                  }
-                                : {}
-                        }
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{
+                            scale: 0.95,
+                            y: 8,
+                            boxShadow: '0 0px 0 rgba(0,0,0,0)',
+                        }}
                         onClick={handleMicClick}
                         className={cn(
-                            'w-[clamp(5rem,15vmin,7rem)] h-[clamp(5rem,15vmin,7rem)] rounded-full flex items-center justify-center border-[clamp(2px,0.6vmin,4px)] shadow-xl transition-all duration-500 cursor-pointer relative',
+                            'w-[120px] h-[120px] md:w-[140px] md:h-[140px] rounded-full flex items-center justify-center border-4 transition-all duration-300 cursor-pointer relative focus:outline-none focus:ring-8 focus:ring-slate-300/50',
                             isListening
-                                ? 'bg-rose-500 border-rose-300 text-white shadow-[0_0_30px_rgba(244,63,94,0.5)]'
+                                ? 'bg-pink-500 border-pink-600 text-white shadow-[0_12px_0_rgb(190,24,93)]'
                                 : isTryAgainState
-                                  ? 'bg-rose-50 border-rose-400 text-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.3)]'
-                                  : 'bg-white border-slate-200 text-rose-300 hover:border-rose-400',
+                                  ? 'bg-orange-400 border-orange-500 text-white shadow-[0_12px_0_rgb(194,65,12)]'
+                                  : 'bg-indigo-400 border-indigo-500 text-white shadow-[0_12px_0_rgb(67,56,202)]',
                         )}
+                        aria-label="Microphone Button"
                     >
                         <Mic
                             className={cn(
-                                'w-[clamp(2rem,6vmin,3rem)] h-[clamp(2rem,6vmin,3rem)]',
+                                'w-12 h-12 md:w-16 md:h-16',
                                 isListening && 'animate-pulse',
                             )}
+                            strokeWidth={3}
                         />
                     </motion.button>
                 </div>
 
-                <div className="w-[clamp(10rem,30vmin,15rem)] h-[clamp(4px,1vmin,6px)] bg-slate-200 rounded-full mt-[2dvh] overflow-hidden">
+                <div className="w-[200px] h-2 bg-slate-200 rounded-full mt-6 overflow-hidden">
                     {isListening && feedback === 'none' && (
                         <motion.div
                             key={timerKey}
                             initial={{ width: '100%' }}
                             animate={{ width: '0%' }}
                             transition={{ duration: 10, ease: 'linear' }}
-                            className="h-full bg-rose-500"
+                            className="h-full bg-pink-500"
                         />
                     )}
                 </div>
 
-                <p
-                    className={cn(
-                        'text-[clamp(0.6rem,2vmin,0.75rem)] font-black uppercase tracking-[0.2em] mt-[1dvh] transition-colors duration-300',
-                        isTryAgainState
-                            ? 'text-rose-500 animate-pulse'
-                            : 'text-slate-400',
-                    )}
-                >
+                <p className="text-sm font-black uppercase tracking-widest mt-2 text-slate-500">
                     {isListening
                         ? 'Listening...'
                         : isTryAgainState

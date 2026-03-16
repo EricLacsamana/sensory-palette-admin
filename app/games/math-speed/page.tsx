@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Trophy, BarChart, Target, Activity } from 'lucide-react';
+import { Star, Trophy, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const SparkleIcon = ({ className }: { className?: string }) => (
@@ -35,7 +35,7 @@ export default function MathSpeedGame({
         const urlLevel = parseInt(searchParams.get('level') || '0', 10);
         if (urlLevel > 0 && urlLevel <= MAX_LEVEL) return urlLevel;
         if (baseDifficulty) return baseDifficulty;
-        return 1; // ✨ STRICTLY LEVEL 1
+        return 1;
     };
 
     const [level, setLevel] = useState<number>(getStartingLevel());
@@ -251,7 +251,7 @@ export default function MathSpeedGame({
             if (navigator.vibrate) navigator.vibrate([20, 40]);
             setTimeout(
                 () => generate(nextLevel),
-                levelShift === 'up' ? 2500 : 1200,
+                levelShift === 'up' ? 2500 : 1500,
             );
         } else {
             if (levelShift === 'down') setFeedback('leveldown');
@@ -261,95 +261,89 @@ export default function MathSpeedGame({
             setTimeout(() => {
                 if (levelShift === 'down') generate(nextLevel);
                 else setFeedback('none');
-            }, 1000);
+            }, 1500);
         }
     };
 
     if (targetAnswer === null) return null;
 
-    const FloatingSparkles = () => {
-        const sparkleProps = [
-            { top: '-10%', left: '5%', size: 40, delay: 0 },
-            { top: '15%', left: '-15%', size: 28, delay: 0.2 },
-            { top: '45%', left: '105%', size: 35, delay: 0.3 },
-            { top: '85%', left: '90%', size: 45, delay: 0.25 },
-        ];
-        return (
-            <div className="absolute inset-0 pointer-events-none z-20">
-                {sparkleProps.map((s, i) => (
-                    <motion.div
-                        key={i}
-                        className="absolute text-blue-400 drop-shadow-sm"
-                        style={{
-                            top: s.top,
-                            left: s.left,
-                            width: s.size,
-                            height: s.size,
-                        }}
-                        initial={{ scale: 0, opacity: 0, rotate: 0 }}
-                        animate={{
-                            scale: [0, 1.2, 0],
-                            opacity: [0, 1, 0],
-                            rotate: 180,
-                        }}
-                        transition={{
-                            duration: 1.5,
-                            delay: s.delay,
-                            repeat: Infinity,
-                        }}
-                    >
-                        <SparkleIcon className="w-full h-full" />
-                    </motion.div>
-                ))}
-            </div>
-        );
+    const getLevelTheme = () => {
+        switch (level) {
+            case 1:
+                return {
+                    bg: 'bg-blue-50',
+                    text: 'text-blue-600',
+                    cardBorder: 'border-blue-200',
+                };
+            case 2:
+                return {
+                    bg: 'bg-green-50',
+                    text: 'text-green-600',
+                    cardBorder: 'border-green-200',
+                };
+            case 3:
+                return {
+                    bg: 'bg-yellow-50',
+                    text: 'text-yellow-600',
+                    cardBorder: 'border-yellow-200',
+                };
+            case 4:
+                return {
+                    bg: 'bg-purple-50',
+                    text: 'text-purple-600',
+                    cardBorder: 'border-purple-200',
+                };
+            case 5:
+                return {
+                    bg: 'bg-orange-50',
+                    text: 'text-orange-600',
+                    cardBorder: 'border-orange-200',
+                };
+            default:
+                return {
+                    bg: 'bg-blue-50',
+                    text: 'text-blue-600',
+                    cardBorder: 'border-blue-200',
+                };
+        }
     };
+    const theme = getLevelTheme();
 
     return (
-        <div className="w-full h-[100dvh] bg-[#02040a] flex flex-col justify-between p-4 overflow-hidden font-sans relative touch-none selection:bg-none">
-            <div className="absolute inset-0 pointer-events-none z-0 flex items-start justify-center">
-                <div className="w-[150%] h-[50%] bg-blue-600/10 blur-[100px] rounded-full" />
-            </div>
-
-            <motion.div
-                animate={{ opacity: feedback === 'wrong' ? 1 : 0 }}
-                className="absolute inset-0 bg-rose-500/20 pointer-events-none z-0 transition-opacity duration-300"
-            />
-
-            <div className="flex flex-wrap justify-center items-center gap-2 shrink-0 z-20 pt-2">
-                {studentAge && (
-                    <div className="flex items-center gap-1.5 bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-slate-300 uppercase tracking-widest border border-white/10 shadow-sm">
-                        <User size={14} /> Age {studentAge}
-                    </div>
-                )}
-                <div className="flex items-center gap-1.5 bg-blue-500/10 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-blue-400 uppercase tracking-widest border border-blue-500/20 shadow-sm">
-                    <BarChart size={14} /> Lvl {level}
+        <div
+            className={cn(
+                'w-full h-[100dvh] flex flex-col justify-between p-4 md:p-8 overflow-hidden font-sans relative touch-none selection:bg-none transition-colors duration-1000',
+                theme.bg,
+            )}
+        >
+            <div className="flex flex-wrap justify-center items-center gap-4 shrink-0 z-20 pt-2">
+                <div className="flex items-center gap-2 bg-white px-6 py-3 rounded-2xl text-lg font-black text-slate-600 uppercase tracking-widest border-4 border-slate-100 shadow-sm">
+                    <Star size={24} className={theme.text} strokeWidth={3} />{' '}
+                    Level {level}
                 </div>
                 {showMetrics && (
-                    <>
-                        <div className="flex items-center gap-1.5 bg-emerald-500/10 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-emerald-400 uppercase tracking-widest border border-emerald-500/20 shadow-sm">
-                            <Trophy size={14} /> Score {correctCount}
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-purple-500/10 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-purple-400 uppercase tracking-widest border border-purple-500/20 shadow-sm">
-                            <Activity size={14} /> Rounds {totalCount}
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-amber-500/10 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold text-amber-400 uppercase tracking-widest border border-amber-500/20 shadow-sm">
-                            <Target size={14} /> {accuracy}%
-                        </div>
-                    </>
+                    <div className="flex items-center gap-2 bg-white px-6 py-3 rounded-2xl text-lg font-black text-slate-600 border-4 border-slate-100 shadow-sm">
+                        <Trophy
+                            size={24}
+                            className="text-emerald-500"
+                            strokeWidth={3}
+                        />{' '}
+                        {correctCount} Stars
+                    </div>
                 )}
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col items-center justify-center w-full relative z-10 py-6">
+            {/* ✨ FIX: min-h-[220px] and max-h-[40vh] guarantees the whiteboard stays massive */}
+            <div className="flex-1 min-h-[220px] flex flex-col items-center justify-center w-full relative z-20 py-4">
                 <AnimatePresence>
                     {feedback === 'levelup' && (
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
-                            animate={{ opacity: 1, scale: 1.2, rotate: 0 }}
-                            exit={{ opacity: 0, scale: 2 }}
-                            className="absolute z-50 text-blue-400 font-black text-[12vmin] uppercase tracking-widest drop-shadow-[0_0_30px_rgba(96,165,250,0.8)] whitespace-nowrap text-center flex flex-col items-center"
+                            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 1.2 }}
+                            className="absolute z-50 text-amber-500 font-black text-5xl md:text-7xl uppercase tracking-widest drop-shadow-md whitespace-nowrap text-center flex flex-col items-center bg-white/90 backdrop-blur-sm px-10 py-8 rounded-[40px] border-8 border-amber-200"
                         >
-                            <SparkleIcon className="w-16 h-16 mb-2 animate-spin-slow" />
+                            <Star className="w-20 h-20 mb-4 text-amber-400 fill-amber-400" />
                             LEVEL UP!
                         </motion.div>
                     )}
@@ -358,27 +352,37 @@ export default function MathSpeedGame({
                 <motion.div
                     animate={
                         feedback === 'wrong' || feedback === 'leveldown'
-                            ? { x: [-15, 15, -15, 15, 0] }
+                            ? { x: [-10, 10, -10, 10, 0] }
                             : feedback === 'correct'
-                              ? { scale: [1, 1.05, 1] }
+                              ? { scale: [1, 1.05, 1], y: [0, -10, 0] }
                               : {}
                     }
                     transition={{ duration: 0.4 }}
                     className={cn(
-                        'w-full max-w-lg aspect-[2/1] max-h-full rounded-[clamp(24px,6vmin,48px)] bg-slate-900/80 border-[3px] flex items-center justify-center shadow-2xl backdrop-blur-md relative transition-colors duration-500',
+                        'w-full max-w-2xl aspect-[5/3] md:aspect-[2/1] min-h-[200px] max-h-[40vh] rounded-[48px] border-[12px] flex items-center justify-center shadow-lg relative transition-all duration-300',
                         feedback === 'correct'
-                            ? 'border-blue-400 shadow-[0_0_80px_rgba(96,165,250,0.5)]'
-                            : 'border-white/10',
+                            ? 'bg-green-100 border-green-400'
+                            : feedback === 'wrong' || feedback === 'leveldown'
+                              ? 'bg-orange-100 border-orange-300'
+                              : `bg-white ${theme.cardBorder}`,
                     )}
                 >
                     <AnimatePresence mode="wait">
                         <motion.span
                             key={equation}
-                            initial={{ opacity: 0, scale: 0.8 }}
+                            initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            transition={{ duration: 0.2 }}
-                            className="text-[clamp(4rem,18vmin,8rem)] font-black text-white tracking-tighter drop-shadow-md whitespace-nowrap px-4"
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            transition={{ type: 'spring', bounce: 0.3 }}
+                            className={cn(
+                                'text-[clamp(5rem,18vmin,12rem)] font-black tracking-tighter whitespace-nowrap px-8',
+                                feedback === 'correct'
+                                    ? 'text-green-600'
+                                    : feedback === 'wrong' ||
+                                        feedback === 'leveldown'
+                                      ? 'text-orange-600'
+                                      : 'text-slate-800',
+                            )}
                         >
                             {equation}
                         </motion.span>
@@ -386,64 +390,80 @@ export default function MathSpeedGame({
                 </motion.div>
             </div>
 
-            <div className="text-center shrink-0 w-full h-[8dvh] flex items-center justify-center z-10 px-4">
+            <div className="text-center shrink-0 w-full h-[8dvh] flex items-center justify-center z-20 px-4">
                 <h2
                     className={cn(
-                        'text-[clamp(1.5rem,5vmin,2.5rem)] font-light tracking-tight leading-tight transition-colors',
-                        feedback === 'wrong' || feedback === 'leveldown'
-                            ? 'text-rose-500 font-bold'
-                            : feedback === 'correct'
-                              ? 'text-emerald-500 font-bold'
-                              : 'text-slate-300',
+                        'text-2xl md:text-4xl font-black tracking-tight leading-tight transition-colors',
+                        feedback === 'wrong'
+                            ? 'text-orange-500'
+                            : feedback === 'leveldown'
+                              ? 'text-blue-500'
+                              : feedback === 'correct'
+                                ? 'text-green-500'
+                                : 'text-slate-600',
                     )}
                 >
-                    {feedback === 'wrong' ? (
-                        'Try again!'
-                    ) : feedback === 'leveldown' ? (
-                        "Let's try an easier one!"
-                    ) : feedback === 'correct' ? (
-                        'Great Job!'
-                    ) : (
-                        <>
-                            Calculate the{' '}
-                            <span className="font-semibold text-white">
-                                Answer
-                            </span>
-                        </>
-                    )}
+                    {feedback === 'wrong'
+                        ? "Let's try again! You can do it!"
+                        : feedback === 'leveldown'
+                          ? "Let's practice an easier one!"
+                          : feedback === 'correct'
+                            ? 'Great Job! 🌟'
+                            : 'Tap the right answer:'}
                 </h2>
             </div>
 
-            <div className="w-full max-w-3xl mx-auto shrink-0 z-20 pb-4 px-4">
+            {/* ✨ FIX: Tighter button sizing so it never steals height from the main stage */}
+            <div className="w-full max-w-4xl mx-auto shrink-0 z-20 pb-4 px-4">
                 <div
                     className={cn(
-                        'grid gap-3',
+                        'grid gap-4 md:gap-6',
                         options.length <= 2
                             ? 'grid-cols-2'
                             : options.length === 3
                               ? 'grid-cols-3'
-                              : 'grid-cols-2 md:grid-cols-4',
+                              : 'grid-cols-2',
                     )}
                 >
                     <AnimatePresence mode="popLayout">
-                        {options.map((opt, idx) => (
-                            <motion.button
-                                key={`${opt}-${idx}`}
-                                layout
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                transition={{ duration: 0.3 }}
-                                whileTap={{ scale: 0.94 }}
-                                onClick={(e) => handleSelect(e, opt)}
-                                className="min-h-[80px] h-[12dvh] max-h-[120px] w-full rounded-[clamp(16px,4vmin,32px)] border-[2px] border-white/10 hover:border-blue-400/50 transition-all shadow-xl flex items-center justify-center relative overflow-hidden bg-slate-800 backdrop-blur-sm group"
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <span className="relative z-10 text-white font-black text-[clamp(2.5rem,8vmin,5rem)] tracking-tighter">
-                                    {opt}
-                                </span>
-                            </motion.button>
-                        ))}
+                        {options.map((opt, idx) => {
+                            const colors = [
+                                'bg-blue-400 hover:bg-blue-300 border-blue-500 shadow-[0_8px_0_rgb(37,99,235)]',
+                                'bg-emerald-400 hover:bg-emerald-300 border-emerald-500 shadow-[0_8px_0_rgb(22,163,74)]',
+                                'bg-purple-400 hover:bg-purple-300 border-purple-500 shadow-[0_8px_0_rgb(147,51,234)]',
+                                'bg-rose-400 hover:bg-rose-300 border-rose-500 shadow-[0_8px_0_rgb(225,29,72)]',
+                            ];
+                            const btnColor = colors[idx % colors.length];
+
+                            return (
+                                <motion.button
+                                    key={`${opt}-${idx}`}
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    transition={{
+                                        type: 'spring',
+                                        bounce: 0.3,
+                                        delay: idx * 0.05,
+                                    }}
+                                    whileTap={{
+                                        scale: 0.95,
+                                        y: 8,
+                                        boxShadow: '0 0px 0 rgba(0,0,0,0)',
+                                    }}
+                                    onClick={(e) => handleSelect(e, opt)}
+                                    className={cn(
+                                        'min-h-[90px] h-[12dvh] max-h-[140px] w-full rounded-[24px] md:rounded-[32px] border-4 transition-all flex items-center justify-center relative overflow-hidden focus:outline-none',
+                                        btnColor,
+                                    )}
+                                >
+                                    <span className="relative z-10 text-white font-black text-5xl md:text-7xl drop-shadow-md">
+                                        {opt}
+                                    </span>
+                                </motion.button>
+                            );
+                        })}
                     </AnimatePresence>
                 </div>
             </div>
