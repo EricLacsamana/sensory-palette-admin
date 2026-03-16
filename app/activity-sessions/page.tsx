@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { Activity, Search, Filter, X } from 'lucide-react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { Activity, Search, Filter, X, Loader2 } from 'lucide-react';
 
 import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ export default function ActivitySessions() {
 
     const [inputValue, setInputValue] = useState(searchParams.get('q') || '');
     const [debouncedSearch, setDebouncedSearch] = useState(inputValue);
+    const observerTarget = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -42,7 +43,15 @@ export default function ActivitySessions() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [inputValue]);
 
-    const { data: activitySessions = [], isFetching } = useQuery({
+    const {
+        data,
+        isFetching,
+        isLoading,
+        isFetchingNextPage,
+        hasNextPage,
+        fetchNextPage,
+    } = useInfiniteQuery({
+        // We keep the exact 2-item array structure your API expects
         queryKey: [
             'activity-sessions',
             {
@@ -54,14 +63,61 @@ export default function ActivitySessions() {
                     },
                     student: true,
                 },
-                limit: -1,
                 sort: ['updatedAt:desc'],
+                // Add search directly into the config so the query array structure stays intact
+                ...(debouncedSearch ? { q: debouncedSearch } : {}),
             },
         ],
-        queryFn: getActivitySessionsNew,
+        queryFn: (context) => {
+            // We take the exact config object from queryKey[1]
+            const config = { ...(context.queryKey[1] as Record<string, any>) };
+
+            // Inject Strapi pagination into the config object
+            config.pagination = {
+                page: context.pageParam,
+                pageSize: 20,
+            };
+
+            // Pass the context exactly as the React Query wrapper expects it
+            return getActivitySessionsNew({
+                ...context,
+                queryKey: [context.queryKey[0], config],
+            });
+        },
+        initialPageParam: 1,
+        getNextPageParam: (lastPage, allPages) => {
+            // Assuming your fetcher returns an array directly based on your original code.
+            // If it returns exactly 20 items, trigger the next page.
+            return lastPage?.length === 20 ? allPages.length + 1 : undefined;
+        },
     });
 
-    if (isFetching) return <SessionsSkeleton />;
+    // Intersection Observer to detect when user scrolls to the bottom
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (
+                    entries[0].isIntersecting &&
+                    hasNextPage &&
+                    !isFetchingNextPage
+                ) {
+                    fetchNextPage();
+                }
+            },
+            { threshold: 1.0 },
+        );
+
+        if (observerTarget.current) {
+            observer.observe(observerTarget.current);
+        }
+
+        return () => observer.disconnect();
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+    // useInfiniteQuery returns pages of arrays. We flatten them for the table.
+    const activitySessions = data?.pages.flat() || [];
+
+    if (isLoading) return <SessionsSkeleton />;
 
     return (
         <div className="flex flex-col h-full w-full overflow-hidden bg-[#FDFDFF] p-4 md:p-6 lg:p-10 box-border">
@@ -85,7 +141,7 @@ export default function ActivitySessions() {
                         <Search
                             className={cn(
                                 'absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors',
-                                isFetching
+                                isFetching && !isFetchingNextPage
                                     ? 'text-emerald-500 animate-pulse'
                                     : 'text-slate-400',
                             )}
@@ -119,9 +175,24 @@ export default function ActivitySessions() {
                     <ScrollArea className="flex-1 h-full w-full rounded-[20px] md:rounded-[28px]">
                         <div className="min-w-[800px] w-full pb-12">
                             {activitySessions.length > 0 ? (
-                                <ActivitySessionLogsTable
-                                    data={activitySessions}
-                                />
+                                <>
+                                    <ActivitySessionLogsTable
+                                        data={activitySessions}
+                                    />
+
+                                    {/* Invisible loading marker for Intersection Observer */}
+                                    <div
+                                        ref={observerTarget}
+                                        className="w-full h-12 flex items-center justify-center mt-4"
+                                    >
+                                        {isFetchingNextPage && (
+                                            <div className="flex items-center gap-2 text-slate-400 text-sm font-medium">
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                Loading more...
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
                             ) : (
                                 !isFetching && (
                                     <div className="flex h-64 items-center justify-center">
