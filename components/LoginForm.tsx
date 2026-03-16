@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,7 +11,6 @@ import {
     Loader2Icon,
     UserIcon,
     LockIcon,
-    Sparkles,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -47,14 +47,21 @@ export default function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
         <div className="w-full max-w-[440px] animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* --- HEADER --- */}
             <div className="text-center mb-8 space-y-2">
-                <div className="inline-flex items-center justify-center p-3 bg-indigo-50 rounded-2xl mb-4">
-                    <Sparkles className="h-6 w-6 text-indigo-600 stroke-[1.5px]" />
+                <div className="inline-flex items-center justify-center mb-4">
+                    <Image
+                        src="/tlc_therapy_center_logo.png"
+                        alt="TLC Logo"
+                        width={120}
+                        height={120}
+                        priority
+                        className="object-contain"
+                    />
                 </div>
                 <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                     Welcome Back
                 </h1>
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">
-                    Sensory Palette Login
+                    TLC SPED & Therapy Center Login
                 </p>
             </div>
 
@@ -101,12 +108,12 @@ export default function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
                             >
                                 Password
                             </label>
-                            <button
+                            {/* <button
                                 type="button"
                                 className="text-[10px] font-semibold text-indigo-600 uppercase tracking-widest hover:text-indigo-700 transition-colors"
                             >
                                 Forgot?
-                            </button>
+                            </button> */}
                         </div>
                         <div className="relative group">
                             <LockIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300 group-focus-within:text-indigo-500 transition-colors stroke-[1.5px]" />
@@ -154,11 +161,6 @@ export default function LoginForm({ onSubmit, isLoading }: LoginFormProps) {
                     </Button>
                 </form>
             </div>
-
-            <p className="text-center mt-8 text-[10px] font-semibold text-slate-300 uppercase tracking-[0.2em]">
-                Secure Access •{' '}
-                <span className="text-slate-400">PulseSync v2.0</span>
-            </p>
         </div>
     );
 }
