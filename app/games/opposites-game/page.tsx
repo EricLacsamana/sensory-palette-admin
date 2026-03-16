@@ -10,17 +10,17 @@ import {
     User,
     ArrowUpCircle,
     ArrowDownCircle,
+    Target,
+    Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// --- CUSTOM SVG SPARKLE ---
 const SparkleIcon = ({ className }: { className?: string }) => (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M11.64 5.232c.184-.525.932-.525 1.117 0l1.458 4.152a1.2 1.2 0 00.838.838l4.152 1.458c.525.184.525.932 0 1.117l-4.152 1.458a1.2 1.2 0 00-.838.838l-1.458 4.152c-.184.525-.932.525-1.117 0l-1.458-4.152a1.2 1.2 0 00-.838-.838l-4.152-1.458c-.525-.184-.525-.932 0-1.117l4.152-1.458a1.2 1.2 0 00.838-.838l1.458-4.152z" />
     </svg>
 );
 
-// --- NEW DATA: OPPOSITES ---
 const ALL_OPPOSITES = [
     {
         prompt: 'Day',
@@ -67,7 +67,6 @@ const ALL_OPPOSITES = [
         soundsLike: ['town', 'frown', 'hound'],
         almostLike: ['dow'],
     },
-
     {
         prompt: 'Fast',
         promptEmoji: '🐆',
@@ -104,7 +103,6 @@ const ALL_OPPOSITES = [
         soundsLike: ['kwiet', 'diet', 'white'],
         almostLike: ['qui'],
     },
-
     {
         prompt: 'Heavy',
         promptEmoji: '🪨',
@@ -132,7 +130,6 @@ const ALL_OPPOSITES = [
         soundsLike: ['emty', 'MT', 'empty'],
         almostLike: ['emp'],
     },
-
     {
         prompt: 'Asleep',
         promptEmoji: '😴',
@@ -160,7 +157,6 @@ const ALL_OPPOSITES = [
         soundsLike: ['smoov', 'smuth', 'move'],
         almostLike: ['smoo'],
     },
-
     {
         prompt: 'Push',
         promptEmoji: '🖐️',
@@ -207,22 +203,22 @@ export default function OppositesGame({
     baseDifficulty?: 1 | 2 | 3 | 4 | 5;
 }) {
     const searchParams = useSearchParams();
-
-    // --- INITIAL STATE ---
     const [isAdaptive, setIsAdaptive] = useState(
         () => searchParams.get('adaptive') !== 'false',
+    );
+    const [showMetrics, setShowMetrics] = useState(
+        () => searchParams.get('enableLearnerControls') === 'true',
     );
 
     const getStartingLevel = () => {
         const urlLevel = parseInt(searchParams.get('level') || '0', 10);
         if (urlLevel > 0 && urlLevel <= MAX_LEVEL) return urlLevel;
         if (baseDifficulty) return baseDifficulty;
-        return studentAge && studentAge <= 4 ? 1 : 2;
+        return 1; // ✨ STRICTLY LEVEL 1
     };
 
     const initialLevel = getStartingLevel();
 
-    // --- STATE ---
     const [level, setLevel] = useState<number>(initialLevel);
     const [target, setTarget] = useState<any>(() =>
         getRandomWord(initialLevel),
@@ -236,23 +232,23 @@ export default function OppositesGame({
         | 'levelup'
         | 'leveldown'
         | 'preparing'
-    >('preparing');
-    const [prepTimer, setPrepTimer] = useState(3);
+    >('none');
+
     const [correctCount, setCorrectCount] = useState(0);
     const [totalCount, setTotalCount] = useState(0);
+    const accuracy =
+        totalCount === 0 ? 0 : Math.round((correctCount / totalCount) * 100);
+
     const [uiStreak, setUiStreak] = useState(0);
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState<string>('');
     const [telemetry, setTelemetry] = useState<any[]>([]);
     const [timerKey, setTimerKey] = useState(0);
 
-    // --- REFS ---
     const recognitionRef = useRef<any>(null);
     const isRoundActive = useRef(false);
     const timerRef = useRef<number>(0);
     const autoRecoveryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    // SOUND REFS
     const sfxRef = useRef<{ correct: any; wrong: any; levelup: any }>({
         correct: null,
         wrong: null,
@@ -268,7 +264,6 @@ export default function OppositesGame({
     const isAdaptiveRef = useRef(isAdaptive);
     const transcriptRef = useRef(transcript);
 
-    // --- SYNC REFS ---
     useEffect(() => {
         targetRef.current = target;
     }, [target]);
@@ -292,7 +287,6 @@ export default function OppositesGame({
         };
     }, []);
 
-    // --- CALLBACKS ---
     const stopMic = useCallback(() => {
         if (recognitionRef.current) {
             try {
@@ -316,11 +310,14 @@ export default function OppositesGame({
             stopMic();
             isRoundActive.current = false;
             setTarget(nextTarget);
-            setFeedback('preparing');
-            setPrepTimer(3);
             setTranscript('');
+            setFeedback('none');
+            isRoundActive.current = true;
+            timerRef.current = Date.now();
+            setTimerKey(Date.now());
+            startMic();
         },
-        [stopMic],
+        [stopMic, startMic],
     );
 
     const handleResult = useCallback(
@@ -345,7 +342,6 @@ export default function OppositesGame({
                     failsRef.current = 0;
                     streakRef.current += 1;
                     setUiStreak(streakRef.current);
-
                     if (
                         streakRef.current >= 3 &&
                         levelRef.current < MAX_LEVEL
@@ -360,7 +356,6 @@ export default function OppositesGame({
                     streakRef.current = 0;
                     setUiStreak(0);
                     failsRef.current += 1;
-
                     if (failsRef.current >= 2 && levelRef.current > 1) {
                         nextLevel = levelRef.current - 1;
                         setLevel(nextLevel);
@@ -381,33 +376,38 @@ export default function OppositesGame({
 
             const newTotal = totalCount + 1;
             const newCorrect = isCorrect ? correctCount + 1 : correctCount;
+            const newAccuracy = Math.round((newCorrect / newTotal) * 100);
+
             setTotalCount(newTotal);
             if (isCorrect) setCorrectCount(newCorrect);
 
-            const logEntry = {
-                timestamp: new Date().toISOString(),
-                action: 'voice_input',
-                targetId: targetRef.current.prompt,
-                isCorrect,
-                responseTimeMs: Date.now() - timerRef.current,
-                metadata: {
-                    currentLevel: levelRef.current,
-                    wordHeard: finalTranscript || '[silence]',
-                    resultType,
-                    levelShift:
-                        isAdaptiveRef.current && levelShift !== 'none'
-                            ? levelShift
-                            : undefined,
-                    adaptiveMode: isAdaptiveRef.current,
-                },
-            };
-
             setTelemetry((prev) => {
-                const updated = [...prev, logEntry];
+                const updated = [
+                    ...prev,
+                    {
+                        timestamp: new Date().toISOString(),
+                        action: 'voice_input',
+                        targetId: targetRef.current.prompt,
+                        isCorrect,
+                        responseTimeMs: Date.now() - timerRef.current,
+                        metadata: {
+                            currentLevel: levelRef.current,
+                            wordHeard: finalTranscript || '[silence]',
+                            resultType,
+                            levelShift:
+                                isAdaptiveRef.current && levelShift !== 'none'
+                                    ? levelShift
+                                    : undefined,
+                            adaptiveMode: isAdaptiveRef.current,
+                        },
+                    },
+                ];
                 window.parent.postMessage(
                     {
                         type: 'GAME_SCORE_UPDATE',
-                        score: Math.round((newCorrect / newTotal) * 100),
+                        score: newCorrect,
+                        rounds: newTotal,
+                        accuracy: newAccuracy,
                         rawTelemetry: updated,
                     },
                     '*',
@@ -416,26 +416,25 @@ export default function OppositesGame({
             });
 
             if (levelShift === 'up') {
+                setFeedback('levelup');
                 sfxRef.current.levelup?.play().catch(() => {});
             } else if (isCorrect) {
+                setFeedback('correct');
                 sfxRef.current.correct?.play().catch(() => {});
             } else {
+                if (levelShift === 'down') setFeedback('leveldown');
+                else setFeedback(resultType);
                 sfxRef.current.wrong?.play().catch(() => {});
             }
 
-            if (levelShift === 'up') setFeedback('levelup');
-            else if (levelShift === 'down') setFeedback('leveldown');
-            else setFeedback(resultType);
-
             stopMic();
-
             if (autoRecoveryTimeoutRef.current)
                 clearTimeout(autoRecoveryTimeoutRef.current);
 
             if (isCorrect || levelShift !== 'none') {
                 setTimeout(() => {
                     generate(nextLevel);
-                }, 3500); // Slightly longer to appreciate the flip animation
+                }, 2500);
             } else {
                 autoRecoveryTimeoutRef.current = setTimeout(() => {
                     setFeedback('none');
@@ -451,21 +450,18 @@ export default function OppositesGame({
         [totalCount, correctCount, generate, stopMic],
     );
 
-    // --- EFFECTS ---
     useEffect(() => {
         const handleSync = (event: MessageEvent) => {
             if (event.data?.type === 'SYNC_STATE') {
                 if (event.data.payload.isAdaptive !== undefined)
                     setIsAdaptive(event.data.payload.isAdaptive);
-                if (event.data.payload.level !== undefined) {
-                    setLevel(event.data.payload.level);
-                    generate(event.data.payload.level);
-                }
+                if (event.data.payload.enableLearnerControls !== undefined)
+                    setShowMetrics(event.data.payload.enableLearnerControls);
             }
         };
         window.addEventListener('message', handleSync);
         return () => window.removeEventListener('message', handleSync);
-    }, [generate]);
+    }, []);
 
     useEffect(() => {
         sfxRef.current = {
@@ -479,9 +475,6 @@ export default function OppositesGame({
                 'https://cdnjs.cloudflare.com/ajax/libs/ion-sound/3.0.7/sounds/bell_ring.mp3',
             ),
         };
-    }, []);
-
-    useEffect(() => {
         const SpeechRecognition =
             (window as any).SpeechRecognition ||
             (window as any).webkitSpeechRecognition;
@@ -489,38 +482,30 @@ export default function OppositesGame({
             const recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
-
             recognition.onstart = () => setIsListening(true);
-
             recognition.onresult = (e: any) => {
                 const currentTranscript = Array.from(e.results)
                     .map((res: any) => res[0].transcript)
-                    .join('')
+                    .join(' ')
                     .toLowerCase()
                     .trim();
-
                 setTranscript(currentTranscript);
-
                 if (
                     isRoundActive.current &&
                     feedbackRef.current === 'none' &&
                     targetRef.current
                 ) {
-                    // Check against the ANSWER, not the prompt
+                    const wordsSpoken = currentTranscript.split(/\s+/);
                     const isMatch =
-                        currentTranscript.includes(
+                        wordsSpoken.includes(
                             targetRef.current.answer.toLowerCase(),
                         ) ||
                         targetRef.current.soundsLike?.some((s: string) =>
-                            currentTranscript.includes(s.toLowerCase()),
+                            wordsSpoken.includes(s.toLowerCase()),
                         );
-
-                    if (isMatch) {
-                        handleResult('correct', currentTranscript);
-                    }
+                    if (isMatch) handleResult('correct', currentTranscript);
                 }
             };
-
             recognition.onend = () => {
                 setIsListening(false);
                 setTimeout(() => {
@@ -534,34 +519,15 @@ export default function OppositesGame({
                     }
                 }, 100);
             };
-
             recognitionRef.current = recognition;
         }
-        return () => stopMic();
-    }, [handleResult, stopMic]);
-
-    useEffect(() => {
-        if (feedback === 'preparing') {
-            const t = setTimeout(() => {
-                if (prepTimer > 0) {
-                    setPrepTimer((prev) => prev - 1);
-                } else {
-                    setFeedback('none');
-                    isRoundActive.current = true;
-                    const now = Date.now();
-                    timerRef.current = now;
-                    setTimerKey(now);
-                    startMic();
-                }
-            }, 1000);
-            return () => clearTimeout(t);
-        }
-    }, [feedback, prepTimer, startMic]);
+        generate(level);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         let t: NodeJS.Timeout;
         let gracePeriod: NodeJS.Timeout;
-
         if (isListening && feedback === 'none') {
             t = setTimeout(() => {
                 gracePeriod = setTimeout(() => {
@@ -599,14 +565,11 @@ export default function OppositesGame({
             });
             isAudioUnlocked.current = true;
         }
-
         if (autoRecoveryTimeoutRef.current)
             clearTimeout(autoRecoveryTimeoutRef.current);
-
         if (!isListening) {
-            if (feedback === 'none' || feedback === 'preparing') {
-                startMic();
-            } else if (
+            if (feedback === 'none') startMic();
+            else if (
                 feedback === 'wrong' ||
                 feedback === 'timeout' ||
                 feedback === 'almost'
@@ -618,9 +581,7 @@ export default function OppositesGame({
                 timerRef.current = now;
                 setTimerKey(now);
                 startMic();
-            } else {
-                generate(level);
-            }
+            } else generate(level);
         }
     };
 
@@ -635,7 +596,6 @@ export default function OppositesGame({
             { top: '100%', left: '15%', size: 30, delay: 0.4 },
             { top: '85%', left: '90%', size: 45, delay: 0.25 },
         ];
-
         return (
             <div className="absolute inset-0 pointer-events-none z-20">
                 {sparkleProps.map((s, i) => (
@@ -674,46 +634,70 @@ export default function OppositesGame({
             feedback === 'almost');
     const isSuccessState = feedback === 'correct' || feedback === 'levelup';
 
-    // --- UI ---
     return (
-        <div className="w-full h-screen bg-[#fcfcfd] dark:bg-[#0a0c12] flex flex-col items-center justify-between py-6 px-4 overflow-hidden font-sans relative">
-            <div className="w-full flex justify-center gap-4 opacity-80 shrink-0 z-20">
+        <div className="w-full h-[100dvh] bg-[#fcfcfd] dark:bg-[#0a0c12] flex flex-col justify-between pt-[2dvh] px-4 overflow-hidden font-sans relative touch-none selection:bg-none">
+            <motion.div
+                animate={{ opacity: feedback === 'wrong' ? 1 : 0 }}
+                className="absolute inset-0 bg-rose-500/20 pointer-events-none z-0 transition-opacity duration-300"
+            />
+
+            <div className="flex flex-wrap justify-center items-center gap-2 shrink-0 z-20">
                 {studentAge && (
-                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-white/10 px-4 py-2 rounded-full text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/10 px-3 py-1.5 rounded-full text-xs font-bold text-slate-500 uppercase tracking-widest shadow-sm">
                         <User size={14} /> Age {studentAge}
                     </div>
                 )}
-                <div className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full text-xs font-bold text-indigo-600 uppercase tracking-widest">
-                    <BarChart size={14} /> Level {level}
+                <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-indigo-600 uppercase tracking-widest shadow-sm border border-indigo-100">
+                    <BarChart size={14} /> Lvl {level}
                 </div>
-                <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/30 px-4 py-2 rounded-full text-xs font-bold text-emerald-600 uppercase tracking-widest">
-                    <Trophy size={14} />{' '}
-                    {totalCount === 0
-                        ? 0
-                        : Math.round((correctCount / totalCount) * 100)}
-                    %
-                </div>
+                {showMetrics && (
+                    <>
+                        <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-600 uppercase tracking-widest shadow-sm border border-emerald-100">
+                            <Trophy size={14} /> Score {correctCount}
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-purple-600 uppercase tracking-widest shadow-sm border border-purple-100">
+                            <Activity size={14} /> Rounds {totalCount}
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-amber-600 uppercase tracking-widest shadow-sm border border-amber-100">
+                            <Target size={14} /> {accuracy}%
+                        </div>
+                    </>
+                )}
             </div>
 
             <div
-                className="flex-1 flex flex-col items-center justify-center w-full min-h-0 relative z-10"
+                className="flex-1 min-h-0 flex flex-col items-center justify-center w-full relative z-10 py-6"
                 style={{ perspective: 1000 }}
             >
-                {/* 3D FLIPPING CARD */}
+                <AnimatePresence>
+                    {feedback === 'levelup' && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
+                            animate={{ opacity: 1, scale: 1.2, rotate: 0 }}
+                            exit={{ opacity: 0, scale: 2 }}
+                            className="absolute z-50 text-emerald-500 font-black text-[12vmin] uppercase tracking-widest drop-shadow-[0_0_30px_rgba(16,185,129,0.8)] whitespace-nowrap text-center flex flex-col items-center"
+                        >
+                            <SparkleIcon className="w-16 h-16 mb-2 animate-spin-slow" />
+                            LEVEL UP!
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
                 <motion.div
                     animate={
                         isSuccessState
-                            ? { rotateY: 180, scale: [1, 1.1, 1] }
+                            ? { rotateY: 360, scale: [1, 1.1, 1] }
                             : feedback === 'wrong' || feedback === 'leveldown'
-                              ? { x: [-10, 10, -10, 10, 0] }
+                              ? { x: [-15, 15, -15, 15, 0] }
                               : { rotateY: 0, y: [0, -2, 0] }
                     }
                     transition={{ duration: 0.6, ease: 'easeInOut' }}
                     style={{ transformStyle: 'preserve-3d' }}
                     className={cn(
-                        'aspect-square h-[30vh] max-h-[250px] rounded-[40px] bg-white border border-slate-200 shadow-xl flex flex-col items-center justify-center relative overflow-visible transition-shadow duration-500',
-                        isSuccessState &&
-                            'shadow-[0_0_50px_rgba(16,185,129,0.4)] border-emerald-200',
+                        'aspect-square max-h-full max-w-full w-auto h-full min-w-[150px] rounded-[25%] bg-white border shadow-xl flex flex-col items-center justify-center relative overflow-visible transition-colors duration-500',
+                        isSuccessState
+                            ? 'border-emerald-400 shadow-[0_0_80px_rgba(52,211,153,0.5)]'
+                            : 'border-slate-200 dark:border-white/10',
                     )}
                 >
                     {isSuccessState && (
@@ -728,156 +712,79 @@ export default function OppositesGame({
                     )}
 
                     <AnimatePresence mode="wait">
-                        {feedback !== 'preparing' ? (
-                            <motion.div
-                                key={isSuccessState ? 'answer' : 'prompt'}
-                                initial={{ opacity: 0, scale: 0.5 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 1.2 }}
-                                // Important: Counter-rotate the inner content so it's not backwards when flipped
-                                style={{ rotateY: isSuccessState ? 180 : 0 }}
-                                className="flex flex-col items-center z-10"
-                            >
-                                <span className="text-[15vh] sm:text-[120px] leading-none select-none drop-shadow-sm">
-                                    {isSuccessState
-                                        ? target.answerEmoji
-                                        : target.promptEmoji}
-                                </span>
-                            </motion.div>
-                        ) : (
-                            <motion.div
-                                key="prep"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="flex flex-col items-center justify-center z-10"
-                            >
-                                <span className="text-7xl font-black text-rose-500 animate-pulse">
-                                    {prepTimer > 0 ? prepTimer : 'GO!'}
-                                </span>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    <AnimatePresence>
-                        {feedback === 'levelup' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                style={{ rotateY: 180 }}
-                                className="absolute -top-12 text-emerald-500 flex flex-col items-center z-20"
-                            >
-                                <ArrowUpCircle
-                                    size={40}
-                                    className="animate-bounce"
-                                />
-                                <span className="text-[10px] font-black uppercase tracking-widest mt-1">
-                                    Level Up!
-                                </span>
-                            </motion.div>
-                        )}
-                        {feedback === 'leveldown' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="absolute -top-12 text-amber-500 flex flex-col items-center z-20"
-                            >
-                                <ArrowDownCircle
-                                    size={40}
-                                    className="animate-bounce"
-                                />
-                                <span className="text-[10px] font-black uppercase tracking-widest mt-1">
-                                    Easier
-                                </span>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    {level === 1 && feedback !== 'preparing' && (
-                        <motion.span
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            style={{ rotateY: isSuccessState ? 180 : 0 }}
-                            className="mt-2 text-xl font-black text-slate-300 uppercase tracking-widest relative z-10"
+                        <motion.div
+                            key={isSuccessState ? 'answer' : 'prompt'}
+                            initial={{ opacity: 0, scale: 0.5 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.5 }}
+                            style={{ rotateY: isSuccessState ? 360 : 0 }}
+                            className="flex flex-col items-center z-10"
                         >
-                            {isSuccessState ? target.answer : target.prompt}
-                        </motion.span>
-                    )}
+                            <span
+                                className={cn(
+                                    'text-[clamp(4rem,20vmin,8rem)] leading-none select-none font-black drop-shadow-sm',
+                                    isSuccessState
+                                        ? 'text-emerald-500'
+                                        : 'text-slate-800',
+                                )}
+                            >
+                                {isSuccessState
+                                    ? target.answerEmoji
+                                    : target.promptEmoji}
+                            </span>
+                        </motion.div>
+                    </AnimatePresence>
                 </motion.div>
-
-                <div className="h-[12vh] flex flex-col items-center justify-center mt-4 z-10">
-                    <AnimatePresence mode="wait">
-                        <motion.h2
-                            key={feedback}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="text-xl sm:text-2xl font-light text-slate-800 dark:text-slate-100 text-center px-4"
-                        >
-                            {feedback === 'preparing' ? (
-                                <span className="text-slate-400 font-bold">
-                                    Ready...
-                                </span>
-                            ) : isSuccessState ? (
-                                <span className="text-emerald-500 font-black flex items-center gap-2 justify-center scale-110">
-                                    <motion.div
-                                        animate={{ scale: [0.8, 1.2, 0.8] }}
-                                        transition={{
-                                            repeat: Infinity,
-                                            duration: 1.5,
-                                        }}
-                                    >
-                                        <SparkleIcon className="w-6 h-6 text-emerald-400" />
-                                    </motion.div>
-                                    YES! {target.answer.toUpperCase()}
-                                    <motion.div
-                                        animate={{ scale: [0.8, 1.2, 0.8] }}
-                                        transition={{
-                                            repeat: Infinity,
-                                            duration: 1.5,
-                                            delay: 0.3,
-                                        }}
-                                    >
-                                        <SparkleIcon className="w-6 h-6 text-emerald-400" />
-                                    </motion.div>
-                                </span>
-                            ) : feedback === 'almost' ? (
-                                <span className="text-amber-500 font-bold">
-                                    Almost there!
-                                </span>
-                            ) : feedback === 'wrong' ? (
-                                <span className="text-rose-500 font-bold">
-                                    Try again!
-                                </span>
-                            ) : feedback === 'leveldown' ? (
-                                <span className="text-amber-500 font-bold">
-                                    Let's try an easier one!
-                                </span>
-                            ) : feedback === 'timeout' ? (
-                                <span className="text-amber-500 font-bold">
-                                    I didn&apos;t hear you...
-                                </span>
-                            ) : (
-                                <>
-                                    Opposite of{' '}
-                                    <span className="font-semibold text-rose-500">
-                                        "{target.prompt}"
-                                    </span>
-                                    ?
-                                </>
-                            )}
-                        </motion.h2>
-                    </AnimatePresence>
-                    {transcript && (
-                        <span className="text-slate-400 italic text-sm mt-1 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                            "{transcript}"
-                        </span>
-                    )}
-                </div>
             </div>
 
-            <div className="w-full flex flex-col items-center gap-2 shrink-0 pb-4 z-20">
-                <div className="h-6 flex items-end gap-1 mb-2">
+            <div className="text-center shrink-0 w-full h-[8dvh] flex items-center justify-center z-10 px-4">
+                <AnimatePresence mode="wait">
+                    <motion.h2
+                        key={feedback}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="text-[clamp(1.5rem,5vmin,2.5rem)] font-light tracking-tight leading-tight transition-colors"
+                    >
+                        {feedback === 'wrong' ? (
+                            <span className="text-rose-500 font-bold">
+                                Try again!
+                            </span>
+                        ) : feedback === 'leveldown' ? (
+                            <span className="text-amber-500 font-bold">
+                                Let's try an easier one!
+                            </span>
+                        ) : feedback === 'correct' ? (
+                            <span className="text-emerald-500 font-bold">
+                                Great Job!
+                            </span>
+                        ) : feedback === 'timeout' ? (
+                            <span className="text-amber-500 font-bold">
+                                I didn't hear you...
+                            </span>
+                        ) : (
+                            <span className="text-slate-800 dark:text-slate-100">
+                                Opposite of{' '}
+                                <span className="font-semibold text-indigo-500">
+                                    "{target.prompt}"
+                                </span>
+                                ?
+                            </span>
+                        )}
+                    </motion.h2>
+                </AnimatePresence>
+            </div>
+
+            <div className="h-[4dvh] flex items-center justify-center shrink-0 w-full mb-[1dvh]">
+                {transcript && (
+                    <span className="text-slate-400 italic text-[clamp(0.8rem,2.5vmin,1.2rem)] bg-slate-100 px-4 py-1 rounded-full border border-slate-200">
+                        "{transcript}"
+                    </span>
+                )}
+            </div>
+
+            <div className="w-full flex flex-col items-center shrink-0 z-20 pb-4">
+                <div className="h-[2dvh] flex items-end gap-1 mb-[1dvh]">
                     {isListening &&
                         [1, 2, 3, 4, 5].map((i) => (
                             <motion.div
@@ -887,7 +794,7 @@ export default function OppositesGame({
                                     repeat: Infinity,
                                     duration: 0.5 + i * 0.1,
                                 }}
-                                className="w-1.5 bg-rose-400 rounded-full"
+                                className="w-[clamp(4px,1vmin,6px)] bg-rose-400 rounded-full"
                             />
                         ))}
                 </div>
@@ -899,16 +806,15 @@ export default function OppositesGame({
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.5 }}
-                                className="absolute -top-14 text-rose-500 z-30"
+                                className="absolute -top-[6dvh] text-rose-500 z-30"
                             >
                                 <ArrowDownCircle
-                                    size={36}
-                                    className="animate-bounce drop-shadow-md"
+                                    size={32}
+                                    className="animate-bounce drop-shadow-md w-[clamp(1.5rem,5vmin,2.25rem)] h-[clamp(1.5rem,5vmin,2.25rem)]"
                                 />
                             </motion.div>
                         )}
                     </AnimatePresence>
-
                     <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
@@ -924,22 +830,24 @@ export default function OppositesGame({
                         }
                         onClick={handleMicClick}
                         className={cn(
-                            'w-24 h-24 rounded-full flex items-center justify-center border-4 shadow-xl transition-all duration-500 cursor-pointer relative',
+                            'w-[clamp(5rem,15vmin,7rem)] h-[clamp(5rem,15vmin,7rem)] rounded-full flex items-center justify-center border-[clamp(2px,0.6vmin,4px)] shadow-xl transition-all duration-500 cursor-pointer relative',
                             isListening
-                                ? 'bg-rose-500 border-rose-300 text-white shadow-rose-500/40'
+                                ? 'bg-rose-500 border-rose-300 text-white shadow-[0_0_30px_rgba(244,63,94,0.5)]'
                                 : isTryAgainState
                                   ? 'bg-rose-50 border-rose-400 text-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.3)]'
                                   : 'bg-white border-slate-200 text-rose-300 hover:border-rose-400',
                         )}
                     >
                         <Mic
-                            size={40}
-                            className={cn(isListening && 'animate-pulse')}
+                            className={cn(
+                                'w-[clamp(2rem,6vmin,3rem)] h-[clamp(2rem,6vmin,3rem)]',
+                                isListening && 'animate-pulse',
+                            )}
                         />
                     </motion.button>
                 </div>
 
-                <div className="w-48 h-1.5 bg-slate-200 rounded-full mt-4 overflow-hidden">
+                <div className="w-[clamp(10rem,30vmin,15rem)] h-[clamp(4px,1vmin,6px)] bg-slate-200 rounded-full mt-[2dvh] overflow-hidden">
                     {isListening && feedback === 'none' && (
                         <motion.div
                             key={timerKey}
@@ -953,7 +861,7 @@ export default function OppositesGame({
 
                 <p
                     className={cn(
-                        'text-[11px] font-black uppercase tracking-[0.2em] mt-1 transition-colors duration-300',
+                        'text-[clamp(0.6rem,2vmin,0.75rem)] font-black uppercase tracking-[0.2em] mt-[1dvh] transition-colors duration-300',
                         isTryAgainState
                             ? 'text-rose-500 animate-pulse'
                             : 'text-slate-400',
@@ -962,7 +870,7 @@ export default function OppositesGame({
                     {isListening
                         ? 'Listening...'
                         : isTryAgainState
-                          ? 'Get ready...'
+                          ? 'Tap Mic to Try Again'
                           : 'Tap Mic to Start'}
                 </p>
             </div>

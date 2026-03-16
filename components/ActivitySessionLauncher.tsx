@@ -22,8 +22,17 @@ interface LauncherProps {
 export default function ActivitySessionLauncher({ user }: LauncherProps) {
     const queryClient = useQueryClient();
     const telemetry = useTelemetry();
-    const { status, score, rawTelemetry, pause, resume, finish, begin } =
-        telemetry;
+    const {
+        status,
+        score,
+        rounds,
+        accuracy,
+        rawTelemetry,
+        pause,
+        resume,
+        finish,
+        begin,
+    } = telemetry;
 
     const [latchedSession, setLatchedSession] =
         useState<ActivitySessionResponse>();
@@ -31,7 +40,6 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
     const [isLocalToggling, setIsLocalToggling] = useState(false);
     const isDraining = useRef(false);
 
-    // --- QUERIES ---
     const { data: activeSessions = [] } = useQuery({
         queryKey: [
             'active-session-poll',
@@ -62,12 +70,19 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         refetchInterval: 3000,
     });
 
-    // BACKGROUND DATA FLUSH
     const flushData = useCallback(
-        (docId: string, finalScore: any, finalTelemetry: any) => {
+        (
+            docId: string,
+            finalScore: number,
+            finalRounds: number,
+            finalAccuracy: number,
+            finalTelemetry: any,
+        ) => {
             if (!docId) return;
             updateActivitySession(docId, {
                 score: finalScore,
+                rounds: finalRounds,
+                accuracy: finalAccuracy,
                 rawTelemetry: finalTelemetry,
             }).catch((err) =>
                 console.error('Failed to background flush telemetry', err),
@@ -85,8 +100,10 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
                 await updateActivitySession(sessionToSave.documentId, {
                     activitySessionStatus: ActivitySessionStatus.Completed,
                     actualEndAt: new Date().toISOString(),
-                    score,
-                    rawTelemetry,
+                    score: score,
+                    rounds: rounds,
+                    accuracy: accuracy,
+                    rawTelemetry: rawTelemetry,
                 });
                 finish();
 
@@ -105,7 +122,7 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
                 isDraining.current = false;
             }
         },
-        [score, rawTelemetry, finish, queryClient, isSaving],
+        [score, rounds, accuracy, rawTelemetry, finish, queryClient, isSaving],
     );
 
     const handleStart = useCallback(
@@ -209,7 +226,6 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         }
     }, [latchedSession, resume, queryClient]);
 
-    // --- 📡 THE LIVE TELEMETRY PULSE ---
     useEffect(() => {
         if (status !== 'playing' || !latchedSession || isSaving) return;
         if (
@@ -222,14 +238,23 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         const pulseInterval = setInterval(() => {
             updateActivitySession(latchedSession.documentId, {
                 score: score,
+                rounds: rounds,
+                accuracy: accuracy,
                 rawTelemetry: rawTelemetry,
             }).catch((err) => console.error('Live pulse failed', err));
         }, 3000);
 
         return () => clearInterval(pulseInterval);
-    }, [status, latchedSession, score, rawTelemetry, isSaving]);
+    }, [
+        status,
+        latchedSession,
+        score,
+        rounds,
+        accuracy,
+        rawTelemetry,
+        isSaving,
+    ]);
 
-    // --- SYNC LIVE SETTINGS FROM THERAPIST ---
     useEffect(() => {
         if (isDraining.current || isSaving || isLocalToggling) return;
 
@@ -239,7 +264,13 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
                 latchedSession.activitySessionStatus !==
                     ActivitySessionStatus.Completed
             ) {
-                flushData(latchedSession.documentId, score, rawTelemetry);
+                flushData(
+                    latchedSession.documentId,
+                    score,
+                    rounds,
+                    accuracy,
+                    rawTelemetry,
+                );
                 setLatchedSession(undefined);
                 telemetry.reset();
             }
@@ -251,7 +282,13 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         if (!latchedSession) {
             setLatchedSession(serverSession);
         } else if (serverSession.documentId !== latchedSession.documentId) {
-            flushData(latchedSession.documentId, score, rawTelemetry);
+            flushData(
+                latchedSession.documentId,
+                score,
+                rounds,
+                accuracy,
+                rawTelemetry,
+            );
             telemetry.reset();
             setLatchedSession(serverSession);
         } else if (
@@ -274,11 +311,12 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         isLocalToggling,
         telemetry,
         score,
+        rounds,
+        accuracy,
         rawTelemetry,
         flushData,
     ]);
 
-    // --- ✨ THE FIX: SYNC STATUS WITH LATCHED SESSION (Handles Reloads) ✨ ---
     useEffect(() => {
         if (!latchedSession || isLocalToggling || isSaving) return;
         const currentStatus = latchedSession.activitySessionStatus;
@@ -298,7 +336,6 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
             status === 'idle' &&
             latchedSession.actualStartAt
         ) {
-            // ✨ IF THE STUDENT REFRESHES WHILE THE TIME IS TICKING, JUMP STRAIGHT IN ✨
             begin();
         }
     }, [
@@ -309,7 +346,8 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         pause,
         resume,
         begin,
-    ]); // <--- 7 dependencies here
+    ]);
+
     useEffect(() => {
         if (status === 'completed' && latchedSession) {
             if (

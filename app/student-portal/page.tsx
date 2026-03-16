@@ -225,19 +225,24 @@ export default function StudentPortal() {
                             >
                                 <Card className="relative w-full h-full border-none shadow-[0_40px_80px_-20px_rgba(0,0,0,0.12)] bg-slate-900 overflow-hidden rounded-[3rem]">
                                     {/* 🖼️ THE FULL-SIZE BANNER IMAGE */}
-                                    <img
-                                        src={FormatService.formatStrapiMedia(
-                                            activeSession.activity?.banner,
+                                    {activeSession.activity?.banner &&
+                                        FormatService.formatStrapiMedia(
+                                            activeSession.activity.banner,
+                                        ) && (
+                                            <img
+                                                src={FormatService.formatStrapiMedia(
+                                                    activeSession.activity
+                                                        .banner,
+                                                )}
+                                                className={cn(
+                                                    'absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] scale-110',
+                                                    isPaused
+                                                        ? 'opacity-30 grayscale blur-sm'
+                                                        : 'opacity-60 hover:scale-100',
+                                                )}
+                                                alt="Activity Banner"
+                                            />
                                         )}
-                                        className={cn(
-                                            'absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] scale-110',
-                                            isPaused
-                                                ? 'opacity-30 grayscale blur-sm'
-                                                : 'opacity-60 hover:scale-100',
-                                        )}
-                                        alt="Activity Banner"
-                                    />
-
                                     {/* Gradient Scrim for Readability */}
                                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/20 to-transparent md:bg-gradient-to-r md:from-slate-900/90 md:via-slate-900/40 md:to-transparent" />
 

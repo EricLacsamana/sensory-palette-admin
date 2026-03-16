@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { motion, Variants } from 'framer-motion';
@@ -13,6 +13,7 @@ import {
     LineChart,
     Line,
     Bar,
+    BarChart,
     Cell,
     XAxis,
     YAxis,
@@ -29,17 +30,19 @@ import {
     Loader2,
     TrendingUp,
     CheckCircle2,
-    PlayCircle,
-    AlertCircle,
-    CakeIcon,
-    MarsIcon,
-    VenusIcon,
     Clock,
     Target,
     Zap,
     History,
     Trophy,
     Sparkles,
+    Timer,
+    Gamepad2,
+    AlertTriangle,
+    RefreshCw,
+    Focus,
+    Layers,
+    BrainCircuit,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -47,10 +50,87 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
 import { getActivitySessionsNew } from '@/api/acitivity-session';
 import { getStudentAnalytics } from '@/api/analytics';
+import { getStudent } from '@/api/students';
 import { cn } from '@/lib/utils';
 import { FormatService } from '@/utils/helpers';
 import { UserAvatar } from '@/components/UserAvatar';
-import { getStudent } from '@/api/students';
+import { DateRangePicker } from '@/components/DateRangePicker';
+import { ActivitySessionResponse } from '@/types/activitiy-session';
+
+// --- ICON MAPPING ---
+const PATTERN_ICONS: Record<string, any> = {
+    'Impulsive Responding': Zap,
+    'High Distractibility': AlertTriangle,
+    'Rapid Task-Switching': RefreshCw,
+    Hyperfocus: Focus,
+    'Repetitive Interaction Patterns': Layers,
+    'Rigid Task Execution': Target,
+    'Prolonged Processing Time': Timer,
+    'Inconsistent Accuracy': Activity,
+    'Sustained Attention': BrainCircuit,
+};
+
+// --- GENDER ICONS ---
+const MarsIcon = ({ size, className }: any) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+    >
+        <path d="M16 3h5v5" />
+        <path d="m21 3-6.75 6.75" />
+        <circle cx="10" cy="14" r="6" />
+    </svg>
+);
+const VenusIcon = ({ size, className }: any) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+    >
+        <line x1="12" x2="12" y1="15" y2="22" />
+        <line x1="9" x2="15" y1="19" y2="19" />
+        <circle cx="12" cy="9" r="6" />
+    </svg>
+);
+const CakeIcon = ({ size, className }: any) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+    >
+        <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8" />
+        <path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1" />
+        <path d="M2 21h20" />
+        <path d="M7 8v3" />
+        <path d="M12 8v3" />
+        <path d="M17 8v3" />
+        <path d="M7 4h.01" />
+        <path d="M12 4h.01" />
+        <path d="M17 4h.01" />
+    </svg>
+);
 
 const pageVariants: Variants = {
     hidden: { opacity: 0 },
@@ -94,7 +174,8 @@ const EmptyWidgetState = ({
     </div>
 );
 
-// --- Custom Line Tooltip (Performance Timeline) ---
+// --- 🛠️ REHAULED TOOLTIPS ---
+
 const CustomLineTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         return (
@@ -129,22 +210,39 @@ const CustomLineTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-// --- Custom Radar Tooltip (Aggregated View) ---
+// Tooltip now relies completely on Recharts passing the correct active payload
 const CustomRadarTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
+        const Icon = PATTERN_ICONS[data.pattern] || BrainCircuit;
+
         return (
-            <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-xl max-w-[250px] z-50">
-                <p className="text-indigo-400 font-bold text-[10px] uppercase tracking-widest mb-1">
-                    {data.pattern}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                    <span className="text-slate-300 text-xs font-medium">
-                        Avg Intensity:
+            <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-2xl min-w-[220px] pointer-events-none">
+                <div className="flex items-center gap-2.5 mb-4 border-b border-slate-700 pb-3">
+                    <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400 shrink-0">
+                        <Icon size={16} strokeWidth={2.5} />
+                    </div>
+                    <span className="text-white font-bold text-[11px] uppercase tracking-[0.15em] leading-tight">
+                        {data.pattern}
                     </span>
-                    <span className="text-indigo-400 text-sm font-black">
-                        {data.intensityScore}%
-                    </span>
+                </div>
+                <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                        <span className="text-slate-400 text-[10px] font-bold uppercase tracking-tight">
+                            Intensity
+                        </span>
+                        <span className="text-indigo-400 text-xs font-black">
+                            {data.intensityScore}%
+                        </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${data.intensityScore}%` }}
+                            transition={{ duration: 0.5, ease: 'easeOut' }}
+                            className="h-full bg-indigo-500 rounded-full"
+                        />
+                    </div>
                 </div>
             </div>
         );
@@ -152,12 +250,9 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
     return null;
 };
 
-// --- Custom Composed Chart Tooltip for Top Activities ---
 const CustomComposedTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
-        const scoreData = payload.find(
-            (p: any) => p.dataKey === 'avgStudentScore',
-        );
+        const scoreData = payload.find((p: any) => p.dataKey === 'avgAccuracy');
         const playData = payload.find((p: any) => p.dataKey === 'usageCount');
         const data = scoreData?.payload || playData?.payload;
 
@@ -169,7 +264,7 @@ const CustomComposedTooltip = ({ active, payload }: any) => {
                 <div className="flex flex-col gap-2">
                     <div className="flex justify-between items-center gap-6">
                         <span className="text-slate-400 text-xs font-medium">
-                            Avg Score
+                            Avg Accuracy
                         </span>
                         <span className="text-emerald-400 text-sm font-black">
                             {scoreData?.value ?? '--'}%
@@ -183,19 +278,89 @@ const CustomComposedTooltip = ({ active, payload }: any) => {
                             {playData?.value ?? '--'}
                         </span>
                     </div>
-                    <div className="flex justify-between items-center gap-6">
-                        <span className="text-slate-400 text-xs font-medium">
-                            Type
-                        </span>
-                        <span className="text-slate-300 text-[10px] font-bold uppercase tracking-wider">
-                            {data.activityType || 'N/A'}
-                        </span>
-                    </div>
                 </div>
             </div>
         );
     }
     return null;
+};
+
+// --- 🛠️ REHAULED RADAR TICK ---
+// Completely decoupled from React State. Uses pure SVG positioning.
+const CleanRadarTick = (props: any) => {
+    const { payload, x, y, cx, cy } = props;
+    const patternName = payload.value;
+    const Icon = PATTERN_ICONS[patternName] || BrainCircuit;
+
+    // Detect quadrant for anchoring
+    const isTop = y < cy - 20;
+    const isBottom = y > cy + 20;
+    const isRight = x > cx + 20;
+    const isLeft = x < cx - 20;
+
+    let textAnchor = 'middle';
+    if (isLeft && !isTop && !isBottom) textAnchor = 'end';
+    if (isRight && !isTop && !isBottom) textAnchor = 'start';
+
+    // Calculate vectors to push labels outward
+    const radius = Math.sqrt(Math.pow(x - cx, 2) + Math.pow(y - cy, 2));
+    const unitX = (x - cx) / radius;
+    const unitY = (y - cy) / radius;
+
+    const offsetIcon = 16;
+    const offsetText = 36;
+
+    const iconX = x + unitX * offsetIcon;
+    const iconY = y + unitY * offsetIcon;
+    const textX = x + unitX * offsetText;
+    const textY = y + unitY * offsetText;
+
+    let dyShift = 3;
+    if (isTop) dyShift = -2;
+    if (isBottom) dyShift = 10;
+
+    return (
+        <g className="recharts-radar-tick">
+            {/* The Icon */}
+            <foreignObject
+                x={iconX - 10}
+                y={iconY - 10}
+                width="20"
+                height="20"
+                style={{ pointerEvents: 'none' }}
+            >
+                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                    <Icon size={14} strokeWidth={2} />
+                </div>
+            </foreignObject>
+
+            {/* The Text - Note: pointerEvents='none' prevents it from blocking Recharts Tooltip hover detection */}
+            <text
+                x={textX}
+                y={textY}
+                textAnchor={textAnchor}
+                fill="#64748B"
+                fontSize="8px"
+                fontWeight="700"
+                className="uppercase tracking-tight"
+                dy={dyShift}
+                style={{ pointerEvents: 'none' }}
+            >
+                {patternName.length > 14 ? (
+                    <>
+                        <tspan x={textX} dy="0">
+                            {patternName.split(' ').slice(0, 2).join(' ')}
+                        </tspan>
+                        <tspan x={textX} dy="10">
+                            {patternName.split(' ').slice(2).join(' ')}
+                        </tspan>
+                    </>
+                ) : (
+                    patternName
+                )}
+            </text>
+        </g>
+    );
 };
 
 export default function StudentDashboard() {
@@ -204,21 +369,15 @@ export default function StudentDashboard() {
     const router = useRouter();
     const historyScrollRef = useRef<HTMLDivElement>(null);
 
-    const [rangeType, setRangeType] = useState('all');
-
-    const dateRange = useMemo(() => {
+    const [dateRange, setDateRange] = useState(() => {
         const end = new Date();
         const start = new Date();
-        if (rangeType === '7d') start.setDate(end.getDate() - 7);
-        else if (rangeType === '30d') start.setDate(end.getDate() - 30);
-        else if (rangeType === '1y') start.setFullYear(end.getFullYear() - 1);
-        else return { startDate: '2020-01-01', endDate: '2026-12-31' };
-
+        start.setDate(end.getDate() - 30);
         return {
-            startDate: start.toISOString().split('T')[0],
-            endDate: end.toISOString().split('T')[0],
+            from: start.toISOString().split('T')[0],
+            to: end.toISOString().split('T')[0],
         };
-    }, [rangeType]);
+    });
 
     const { data: student, isLoading: isLoadingStudent } = useQuery({
         queryKey: ['student', studentId],
@@ -228,11 +387,23 @@ export default function StudentDashboard() {
     });
 
     const { data: analytics, isLoading: isLoadingAnalytics } = useQuery({
-        queryKey: ['student-analytics', { studentId, ...dateRange }],
+        queryKey: [
+            'student-analytics',
+            { studentId, startDate: dateRange.from, endDate: dateRange.to },
+        ],
         queryFn: getStudentAnalytics,
         enabled: !!studentId,
         placeholderData: keepPreviousData,
     });
+
+    const localStartIso = useMemo(
+        () => new Date(`${dateRange.from}T00:00:00`).toISOString(),
+        [dateRange.from],
+    );
+    const localEndIso = useMemo(
+        () => new Date(`${dateRange.to}T23:59:59.999`).toISOString(),
+        [dateRange.to],
+    );
 
     const { data: activitySessions = [], isSuccess } = useQuery({
         queryKey: [
@@ -244,6 +415,8 @@ export default function StudentDashboard() {
                     $and: [
                         { actualStartAt: { $notNull: true } },
                         { actualEndAt: { $notNull: true } },
+                        { actualStartAt: { $gte: localStartIso } },
+                        { actualStartAt: { $lte: localEndIso } },
                     ],
                 },
                 populate: { activity: { populate: '*' } },
@@ -274,6 +447,15 @@ export default function StudentDashboard() {
         });
     };
 
+    const calculateDuration = (start?: string, end?: string) => {
+        if (!start || !end) return '--';
+        const diffMs = new Date(end).getTime() - new Date(start).getTime();
+        if (diffMs <= 0) return '0s';
+        const mins = Math.floor(diffMs / 60000);
+        const secs = Math.floor((diffMs % 60000) / 1000);
+        return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    };
+
     if (isLoadingStudent || isLoadingAnalytics) {
         return (
             <div className="h-screen w-full flex items-center justify-center bg-[#F8FAFC]">
@@ -283,24 +465,23 @@ export default function StudentDashboard() {
     }
 
     const { overviewMetrics, charts } = analytics || {};
-
     const displayRadarData = charts?.behavioralRadar || [];
     const displayLineData = charts?.performanceTimeline || [];
 
     const summaryMetrics = [
-        {
-            label: 'Avg Score',
-            value: `${overviewMetrics?.averageScore || 0}%`,
-            icon: Trophy,
-            color: 'text-indigo-500',
-            bg: 'bg-indigo-50',
-        },
         {
             label: 'Avg Accuracy',
             value: `${overviewMetrics?.averageAccuracy || 0}%`,
             icon: Target,
             color: 'text-emerald-500',
             bg: 'bg-emerald-50',
+        },
+        {
+            label: 'Avg Score',
+            value: overviewMetrics?.averageScore || 0,
+            icon: Trophy,
+            color: 'text-indigo-500',
+            bg: 'bg-indigo-50',
         },
         {
             label: 'Therapy Time',
@@ -414,22 +595,10 @@ export default function StudentDashboard() {
                     </div>
 
                     <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 w-full xl:w-auto justify-between xl:justify-end">
-                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-1 transition-opacity">
-                            {['7d', '30d', '1y', 'all'].map((range) => (
-                                <button
-                                    key={range}
-                                    onClick={() => setRangeType(range)}
-                                    className={cn(
-                                        'px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all',
-                                        rangeType === range
-                                            ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
-                                            : 'text-slate-400 hover:text-slate-600',
-                                    )}
-                                >
-                                    {range}
-                                </button>
-                            ))}
-                        </div>
+                        <DateRangePicker
+                            value={dateRange}
+                            onChange={setDateRange}
+                        />
                         <Button
                             variant="outline"
                             className="rounded-2xl border-slate-200 h-11 w-11 flex items-center justify-center text-slate-500 hover:text-indigo-600 shrink-0 hidden sm:flex"
@@ -439,7 +608,6 @@ export default function StudentDashboard() {
                     </div>
                 </motion.header>
 
-                {/* --- METRICS WIDGETS --- */}
                 <motion.div
                     variants={itemVariants}
                     className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6"
@@ -468,12 +636,12 @@ export default function StudentDashboard() {
                     ))}
                 </motion.div>
 
-                {/* --- CHARTS WIDGETS --- */}
+                {/* --- ROW 1: PERFORMANCE WIDGETS --- */}
                 <motion.div
                     variants={itemVariants}
                     className="grid grid-cols-1 xl:grid-cols-5 gap-6"
                 >
-                    {/* Performance Line Chart */}
+                    {/* LINE CHART */}
                     <Card className="col-span-1 xl:col-span-3 rounded-[32px] border-slate-200 shadow-sm bg-white h-[420px] flex flex-col relative overflow-hidden">
                         <CardHeader className="py-5 px-8 border-b border-slate-50 flex flex-row items-center justify-between shrink-0">
                             <div className="flex items-center gap-2">
@@ -482,7 +650,7 @@ export default function StudentDashboard() {
                                     className="text-indigo-500"
                                 />
                                 <TechnicalLabel>
-                                    Overall Performance Progress
+                                    Accuracy Progress Over Time
                                 </TechnicalLabel>
                             </div>
                         </CardHeader>
@@ -504,7 +672,7 @@ export default function StudentDashboard() {
                                                     dx="0"
                                                     dy="4"
                                                     stdDeviation="4"
-                                                    floodColor="#6366f1"
+                                                    floodColor="#10b981"
                                                     floodOpacity="0.2"
                                                 />
                                             </filter>
@@ -551,28 +719,9 @@ export default function StudentDashboard() {
                                             }}
                                         />
                                         <Line
-                                            name="Avg Score"
+                                            name="Current Accuracy"
                                             type="monotone"
-                                            dataKey="avgScore"
-                                            stroke="#6366f1"
-                                            strokeWidth={3}
-                                            dot={{
-                                                r: 4,
-                                                strokeWidth: 2,
-                                                fill: '#fff',
-                                            }}
-                                            activeDot={{
-                                                r: 6,
-                                                stroke: '#6366f1',
-                                                strokeWidth: 2,
-                                                fill: '#fff',
-                                            }}
-                                            filter="url(#shadow)"
-                                        />
-                                        <Line
-                                            name="Avg Accuracy"
-                                            type="monotone"
-                                            dataKey="avgAccuracy"
+                                            dataKey="currentAccuracy"
                                             stroke="#10b981"
                                             strokeWidth={3}
                                             dot={{
@@ -583,6 +732,26 @@ export default function StudentDashboard() {
                                             activeDot={{
                                                 r: 6,
                                                 stroke: '#10b981',
+                                                strokeWidth: 2,
+                                                fill: '#fff',
+                                            }}
+                                            filter="url(#shadow)"
+                                        />
+                                        <Line
+                                            name="Previous Accuracy"
+                                            type="monotone"
+                                            dataKey="prevAccuracy"
+                                            stroke="#94a3b8"
+                                            strokeWidth={3}
+                                            strokeDasharray="5 5"
+                                            dot={{
+                                                r: 4,
+                                                strokeWidth: 2,
+                                                fill: '#fff',
+                                            }}
+                                            activeDot={{
+                                                r: 6,
+                                                stroke: '#94a3b8',
                                                 strokeWidth: 2,
                                                 fill: '#fff',
                                             }}
@@ -598,64 +767,8 @@ export default function StudentDashboard() {
                         </CardContent>
                     </Card>
 
-                    {/* Cognitive Radar Chart */}
-                    <Card className="col-span-1 xl:col-span-2 rounded-[32px] border-slate-200 shadow-sm bg-white h-[420px] flex flex-col">
-                        <CardHeader className="py-5 px-8 border-b border-slate-50 shrink-0 flex flex-row items-center justify-between">
-                            <div className="flex flex-row items-center gap-2">
-                                <Target size={16} className="text-amber-500" />
-                                <TechnicalLabel>
-                                    Cognitive Intensity
-                                </TechnicalLabel>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-4 flex-1 min-h-0">
-                            {displayRadarData.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <RadarChart
-                                        cx="50%"
-                                        cy="50%"
-                                        outerRadius="65%"
-                                        data={displayRadarData}
-                                    >
-                                        <PolarGrid stroke="#e2e8f0" />
-                                        <PolarAngleAxis
-                                            dataKey="pattern"
-                                            tick={{
-                                                fill: '#64748b',
-                                                fontSize: 11,
-                                                fontWeight: 600,
-                                            }}
-                                        />
-                                        <RechartsTooltip
-                                            content={<CustomRadarTooltip />}
-                                        />
-                                        <Radar
-                                            name="Intensity"
-                                            dataKey="intensityScore"
-                                            stroke="#8b5cf6"
-                                            strokeWidth={2}
-                                            fill="#8b5cf6"
-                                            fillOpacity={0.4}
-                                        />
-                                    </RadarChart>
-                                </ResponsiveContainer>
-                            ) : (
-                                <EmptyWidgetState
-                                    icon={Target}
-                                    message="No cognitive data logged"
-                                />
-                            )}
-                        </CardContent>
-                    </Card>
-                </motion.div>
-
-                {/* --- HISTORY & ACTIVITIES WIDGETS --- */}
-                <motion.div
-                    variants={itemVariants}
-                    className="grid grid-cols-1 xl:grid-cols-5 gap-6"
-                >
-                    {/* Top Activities Ranking (Composed Chart: Bar + Line) - LEFT */}
-                    <Card className="col-span-1 xl:col-span-3 h-[500px] rounded-[32px] border-slate-200 shadow-sm bg-white flex flex-col overflow-hidden">
+                    {/* BAR CHART */}
+                    <Card className="col-span-1 xl:col-span-2 h-[420px] rounded-[32px] border-slate-200 shadow-sm bg-white flex flex-col overflow-hidden">
                         <CardHeader className="py-5 px-8 border-b border-slate-50 flex flex-row items-center gap-2 shrink-0">
                             <Trophy size={16} className="text-amber-500" />
                             <TechnicalLabel>
@@ -691,8 +804,8 @@ export default function StudentDashboard() {
                                             }}
                                             tickFormatter={(val) =>
                                                 val
-                                                    ? val.length > 15
-                                                        ? val.substring(0, 15) +
+                                                    ? val.length > 12
+                                                        ? val.substring(0, 12) +
                                                           '...'
                                                         : val
                                                     : 'Unknown'
@@ -726,8 +839,8 @@ export default function StudentDashboard() {
                                         />
                                         <Bar
                                             yAxisId="left"
-                                            dataKey="avgStudentScore"
-                                            barSize={40}
+                                            dataKey="usageCount"
+                                            barSize={35}
                                             radius={[6, 6, 0, 0]}
                                             animationDuration={1500}
                                         >
@@ -747,7 +860,7 @@ export default function StudentDashboard() {
                                         <Line
                                             yAxisId="right"
                                             type="monotone"
-                                            dataKey="usageCount"
+                                            dataKey="avgAccuracy"
                                             stroke="#f59e0b"
                                             strokeWidth={3}
                                             dot={{
@@ -769,9 +882,90 @@ export default function StudentDashboard() {
                             )}
                         </CardContent>
                     </Card>
+                </motion.div>
 
-                    {/* Interaction Timeline - RIGHT */}
-                    <Card className="col-span-1 xl:col-span-2 h-[500px] flex flex-col bg-white rounded-[32px] border-slate-200 shadow-sm overflow-hidden relative">
+                {/* --- ROW 2: BEHAVIORAL WEB & HISTORY --- */}
+                <motion.div
+                    variants={itemVariants}
+                    className="grid grid-cols-1 xl:grid-cols-5 gap-6"
+                >
+                    {/* RADAR CHART WIDGET */}
+                    <Card className="col-span-1 xl:col-span-3 rounded-[32px] border-slate-200 shadow-sm bg-white h-[500px] flex flex-col overflow-hidden">
+                        <CardHeader className="py-5 px-8 border-b border-slate-50 shrink-0 flex flex-row items-center justify-between">
+                            <div className="flex flex-row items-center gap-2">
+                                <Target size={16} className="text-amber-500" />
+                                <TechnicalLabel>
+                                    Cognitive Intensity Profile
+                                </TechnicalLabel>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="p-2 flex-1 min-h-0 relative">
+                            {displayRadarData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <RadarChart
+                                        cx="50%"
+                                        cy="50%"
+                                        outerRadius="60%"
+                                        data={displayRadarData}
+                                        margin={{
+                                            top: 50,
+                                            bottom: 50,
+                                            left: 50,
+                                            right: 50,
+                                        }}
+                                    >
+                                        <PolarGrid
+                                            stroke="#e2e8f0"
+                                            strokeDasharray="4 4"
+                                        />
+                                        <PolarAngleAxis
+                                            dataKey="pattern"
+                                            tick={<CleanRadarTick />}
+                                        />
+                                        <PolarRadiusAxis
+                                            domain={[0, 100]}
+                                            tick={false}
+                                            axisLine={false}
+                                        />
+
+                                        <Radar
+                                            dataKey="intensityScore"
+                                            stroke="#8b5cf6"
+                                            strokeWidth={2}
+                                            fill="#8b5cf6"
+                                            fillOpacity={0.12}
+                                            // Recharts handles dot hovering automatically without React State
+                                            activeDot={{
+                                                r: 6,
+                                                fill: '#4F46E5',
+                                                stroke: '#FFF',
+                                                strokeWidth: 2,
+                                            }}
+                                            dot={{
+                                                r: 3,
+                                                fill: '#8B5CF6',
+                                                strokeWidth: 0,
+                                            }}
+                                        />
+                                        {/* Recharts native Voronoi tooltip trigger */}
+                                        <RechartsTooltip
+                                            cursor={false}
+                                            content={<CustomRadarTooltip />}
+                                        />
+                                    </RadarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <EmptyWidgetState
+                                    icon={Target}
+                                    message="No AI data found"
+                                />
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* INTERACTION HISTORY WIDGET */}
+                    <Card className="col-span-1 xl:col-span-2 h-[500px] flex flex-col bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden relative">
                         <CardHeader className="py-5 px-8 border-b border-slate-50 flex flex-row items-center gap-2 shrink-0">
                             <History size={16} className="text-slate-400" />
                             <TechnicalLabel>Interaction History</TechnicalLabel>
@@ -782,79 +976,154 @@ export default function StudentDashboard() {
                         >
                             {isSuccess && activitySessions.length > 0 ? (
                                 <div className="relative border-l-2 border-slate-100 ml-3 pl-6 space-y-6 pb-6">
-                                    {activitySessions.map((session: any) => (
-                                        <div
-                                            key={session.documentId}
-                                            className="relative group cursor-pointer"
-                                            onClick={() =>
-                                                router.push(
-                                                    `/activity-sessions/${session.documentId}`,
-                                                )
-                                            }
-                                        >
-                                            <div
-                                                className={cn(
-                                                    'absolute -left-[33px] top-1.5 h-4 w-4 rounded-full border-[3px] border-white shadow-sm transition-transform group-hover:scale-125 z-10',
-                                                    session.activitySessionStatus ===
-                                                        'completed'
-                                                        ? 'bg-emerald-500'
-                                                        : 'bg-amber-400',
-                                                )}
-                                            />
-                                            <div className="flex flex-col gap-2 bg-slate-50/50 p-4 rounded-2xl border border-transparent group-hover:border-slate-100 group-hover:bg-white transition-all">
-                                                <div className="flex flex-col gap-1 items-start justify-between">
-                                                    <div className="flex items-center gap-2 w-full">
-                                                        <span
-                                                            className={cn(
-                                                                'text-xs font-black uppercase tracking-tight group-hover:text-indigo-600 transition-colors truncate',
-                                                                !session
-                                                                    .activity
-                                                                    ?.name
-                                                                    ? 'text-slate-400 italic'
-                                                                    : 'text-slate-900',
-                                                            )}
-                                                        >
-                                                            {session.activity
-                                                                ?.name ||
-                                                                'Unlinked Activity'}
-                                                        </span>
-                                                        {session.activitySessionStatus ===
-                                                            'completed' && (
-                                                            <CheckCircle2
-                                                                size={14}
-                                                                className="text-emerald-500 ml-auto shrink-0"
-                                                            />
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-2 mt-1">
-                                                    {session.aiRecommendation && (
-                                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 rounded-md border border-purple-100 text-[10px] font-bold text-purple-600 shadow-sm">
-                                                            <Sparkles
-                                                                size={10}
-                                                            />{' '}
-                                                            AI
-                                                        </div>
-                                                    )}
-                                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white rounded-md border border-slate-100 text-[10px] font-bold text-indigo-600 shadow-sm">
-                                                        <Activity size={10} />
-                                                        {session.score !==
-                                                            null &&
-                                                        session.score !==
-                                                            undefined
-                                                            ? `${session.score}%`
-                                                            : 'N/A'}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 mt-1">
-                                                    <Clock size={10} />{' '}
-                                                    {formatFullDate(
+                                    {activitySessions
+                                        .slice()
+                                        .sort(
+                                            (
+                                                a: ActivitySessionResponse,
+                                                b: ActivitySessionResponse,
+                                            ) =>
+                                                new Date(
+                                                    a.actualStartAt || 0,
+                                                ).getTime() -
+                                                new Date(
+                                                    b.actualStartAt || 0,
+                                                ).getTime(),
+                                        )
+                                        .map(
+                                            (
+                                                session: ActivitySessionResponse,
+                                            ) => {
+                                                const isGameActivity =
+                                                    session.activity?.activityType?.toLowerCase() ===
+                                                    'game';
+                                                const timeDuration =
+                                                    calculateDuration(
                                                         session.actualStartAt,
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
+                                                        session.actualEndAt,
+                                                    );
+
+                                                return (
+                                                    <div
+                                                        key={session.documentId}
+                                                        className="relative group cursor-pointer"
+                                                        onClick={() =>
+                                                            router.push(
+                                                                `/activity-sessions/${session.documentId}`,
+                                                            )
+                                                        }
+                                                    >
+                                                        <div
+                                                            className={cn(
+                                                                'absolute -left-[33px] top-15.5 h-4 w-4 rounded-full border-[3px] border-white shadow-sm transition-transform group-hover:scale-125 z-10',
+                                                                session.activitySessionStatus ===
+                                                                    'completed'
+                                                                    ? 'bg-emerald-500'
+                                                                    : 'bg-amber-400',
+                                                            )}
+                                                        />
+                                                        <div className="flex flex-col gap-3 bg-slate-50/50 p-4 rounded-2xl border border-transparent group-hover:border-slate-100 group-hover:bg-white transition-all shadow-sm group-hover:shadow-md">
+                                                            <div className="flex flex-col gap-1 items-start justify-between">
+                                                                <div className="flex items-center gap-2 w-full">
+                                                                    <span
+                                                                        className={cn(
+                                                                            'text-sm font-black uppercase tracking-tight group-hover:text-indigo-600 transition-colors truncate',
+                                                                            !session
+                                                                                .activity
+                                                                                ?.name
+                                                                                ? 'text-slate-400 italic'
+                                                                                : 'text-slate-900',
+                                                                        )}
+                                                                    >
+                                                                        {session
+                                                                            .activity
+                                                                            ?.name ||
+                                                                            'Unlinked Activity'}
+                                                                    </span>
+                                                                    {session.activitySessionStatus ===
+                                                                        'completed' && (
+                                                                        <CheckCircle2
+                                                                            size={
+                                                                                16
+                                                                            }
+                                                                            className="text-emerald-500 ml-auto shrink-0"
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                                {session.aiRecommendation && (
+                                                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-50 rounded-lg border border-purple-100 text-[10px] font-bold text-purple-600 shadow-sm">
+                                                                        <Sparkles
+                                                                            size={
+                                                                                12
+                                                                            }
+                                                                        />{' '}
+                                                                        AI
+                                                                    </div>
+                                                                )}
+                                                                {isGameActivity && (
+                                                                    <>
+                                                                        <div
+                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 rounded-lg border border-emerald-100 text-[10px] font-bold text-emerald-700 shadow-sm"
+                                                                            title="Accuracy"
+                                                                        >
+                                                                            <Target
+                                                                                size={
+                                                                                    12
+                                                                                }
+                                                                                className="text-emerald-500"
+                                                                            />
+                                                                            {session.accuracy ??
+                                                                                0}
+                                                                            %
+                                                                        </div>
+                                                                        <div
+                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 rounded-lg border border-indigo-100 text-[10px] font-bold text-indigo-700 shadow-sm"
+                                                                            title="Score / Total Rounds"
+                                                                        >
+                                                                            <Trophy
+                                                                                size={
+                                                                                    12
+                                                                                }
+                                                                                className="text-indigo-500"
+                                                                            />
+                                                                            {session.score ??
+                                                                                0}{' '}
+                                                                            /{' '}
+                                                                            {session.rounds ??
+                                                                                0}
+                                                                        </div>
+                                                                        <div
+                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 rounded-lg border border-amber-100 text-[10px] font-bold text-amber-700 shadow-sm"
+                                                                            title="Time Duration"
+                                                                        >
+                                                                            <Timer
+                                                                                size={
+                                                                                    12
+                                                                                }
+                                                                                className="text-amber-500"
+                                                                            />
+                                                                            {
+                                                                                timeDuration
+                                                                            }
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 mt-2 pt-2 border-t border-slate-100">
+                                                                <Clock
+                                                                    size={12}
+                                                                />{' '}
+                                                                {formatFullDate(
+                                                                    session.actualStartAt,
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            },
+                                        )}
                                 </div>
                             ) : (
                                 <EmptyWidgetState

@@ -5,6 +5,8 @@ export interface GameSessionState {
     gameId: string | null;
     status: 'idle' | 'playing' | 'paused' | 'completed';
     score: number;
+    rounds: number; // ✨ NEW
+    accuracy: number; // ✨ NEW
     streak: number;
     rawTelemetry: unknown[];
 }
@@ -14,6 +16,8 @@ const initialState: GameSessionState = {
     gameId: null,
     status: 'idle',
     score: 0,
+    rounds: 0, // ✨ NEW
+    accuracy: 0, // ✨ NEW
     streak: 0,
     rawTelemetry: [],
 };
@@ -39,9 +43,16 @@ export const gameSessionSlice = createSlice({
         },
         syncGameData: (
             state,
-            action: PayloadAction<{ score: number; telemetry: any[] }>,
+            action: PayloadAction<{
+                score: number;
+                rounds: number; // ✨ NEW
+                accuracy: number; // ✨ NEW
+                telemetry: any[];
+            }>,
         ) => {
             state.score = action.payload.score;
+            state.rounds = action.payload.rounds; // ✨ NEW
+            state.accuracy = action.payload.accuracy; // ✨ NEW
             state.rawTelemetry = action.payload.telemetry;
         },
         completeSession: (state) => {

@@ -35,6 +35,9 @@ import {
     CheckCircle2,
     Clock,
     Radar as RadarIcon,
+    Trophy,
+    Timer,
+    Gamepad2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -56,18 +59,15 @@ import {
     BehavioralIndicator,
 } from '@/types/activitiy-session';
 
-// --- ANIMATION CONFIG ---
 const containerVariants: Variants = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.1 } },
 };
-
 const itemVariants: Variants = {
     hidden: { y: 20, opacity: 0 },
     show: { y: 0, opacity: 1, transition: { duration: 0.4, ease: 'easeOut' } },
 };
 
-// --- SUB-COMPONENTS ---
 const TechnicalLabel = ({
     children,
     className,
@@ -101,7 +101,6 @@ const AnalysisStat = ({
         >
             <Icon size={80} />
         </div>
-
         <div className="flex items-center gap-3 mb-4 relative z-10">
             <div
                 className={cn(
@@ -116,7 +115,6 @@ const AnalysisStat = ({
             </div>
             <TechnicalLabel>{label}</TechnicalLabel>
         </div>
-
         <div className="relative z-10">
             <div className="text-3xl font-black text-slate-900 tracking-tight tabular-nums capitalize">
                 {value}
@@ -198,7 +196,6 @@ const DramaticAIGeneration = () => {
     );
 };
 
-// --- CUSTOM RECHARTS TOOLTIP ---
 const CustomRadarTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
@@ -234,7 +231,88 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
     return null;
 };
 
-// --- MAIN DASHBOARD VIEW ---
+interface SessionMetricsProps {
+    score?: number;
+    rounds?: number;
+    accuracy?: number;
+    startTime?: string;
+    endTime?: string;
+}
+function SessionMetricsSummary({
+    score = 0,
+    rounds = 0,
+    accuracy = 0,
+    startTime,
+    endTime,
+}: SessionMetricsProps) {
+    const calculateDuration = () => {
+        if (!startTime || !endTime) return '--';
+        const diffMs =
+            new Date(endTime).getTime() - new Date(startTime).getTime();
+        if (diffMs <= 0) return '0s';
+        const mins = Math.floor(diffMs / 60000);
+        const secs = Math.floor((diffMs % 60000) / 1000);
+        return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    };
+
+    return (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+            <Card className="rounded-[24px] border-emerald-100 bg-emerald-50/50 shadow-sm transition-all hover:border-emerald-200">
+                <CardContent className="p-5 flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-emerald-600 mb-2">
+                        <Target size={16} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                            Accuracy
+                        </span>
+                    </div>
+                    <span className="text-3xl font-black text-emerald-700">
+                        {accuracy}%
+                    </span>
+                </CardContent>
+            </Card>
+            <Card className="rounded-[24px] border-indigo-100 bg-indigo-50/50 shadow-sm transition-all hover:border-indigo-200">
+                <CardContent className="p-5 flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-indigo-600 mb-2">
+                        <Trophy size={16} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                            Correct Score
+                        </span>
+                    </div>
+                    <span className="text-3xl font-black text-indigo-700">
+                        {score}
+                    </span>
+                </CardContent>
+            </Card>
+            <Card className="rounded-[24px] border-purple-100 bg-purple-50/50 shadow-sm transition-all hover:border-purple-200">
+                <CardContent className="p-5 flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-purple-600 mb-2">
+                        <Gamepad2 size={16} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                            Total Rounds
+                        </span>
+                    </div>
+                    <span className="text-3xl font-black text-purple-700">
+                        {rounds}
+                    </span>
+                </CardContent>
+            </Card>
+            <Card className="rounded-[24px] border-amber-100 bg-amber-50/50 shadow-sm transition-all hover:border-amber-200">
+                <CardContent className="p-5 flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-amber-600 mb-2">
+                        <Timer size={16} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                            Time Elapsed
+                        </span>
+                    </div>
+                    <span className="text-3xl font-black text-amber-700">
+                        {calculateDuration()}
+                    </span>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
 export default function ActivitySessionDashboard({
     session,
 }: {
@@ -247,6 +325,9 @@ export default function ActivitySessionDashboard({
     const [notesContent, setNotesContent] = useState(
         session.clinicalObservations || '',
     );
+
+    const isGameActivity =
+        session.activity?.activityType?.toLowerCase() === 'game';
 
     const aiMutation = useMutation({
         mutationFn: triggerActivitySessionRecommendation,
@@ -295,7 +376,6 @@ export default function ActivitySessionDashboard({
                 ? 'Launching activity...'
                 : 'Resuming session...',
         );
-
         launchMutation.mutate(status, {
             onSettled: () => toast.dismiss(toastId),
         });
@@ -310,7 +390,6 @@ export default function ActivitySessionDashboard({
         });
     };
 
-    // --- DATA MAPPING FOR RECHARTS ---
     const radarData = useMemo(() => {
         if (
             !session.behavioralIndicators ||
@@ -322,7 +401,6 @@ export default function ActivitySessionDashboard({
             Medium: 60,
             Low: 30,
         };
-
         return session.behavioralIndicators.map(
             (indicator: BehavioralIndicator) => ({
                 pattern: indicator.pattern,
@@ -336,7 +414,6 @@ export default function ActivitySessionDashboard({
 
     const renderPrimaryAction = () => {
         const status = session.activitySessionStatus;
-
         if (status === 'completed') {
             return (
                 <Button
@@ -356,7 +433,6 @@ export default function ActivitySessionDashboard({
                 </Button>
             );
         }
-
         if (
             status === 'pending' ||
             status === 'reschedule' ||
@@ -374,12 +450,11 @@ export default function ActivitySessionDashboard({
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                         <PlayCircle className="mr-2 h-4 w-4" />
-                    )}
+                    )}{' '}
                     Launch Activity
                 </Button>
             );
         }
-
         if (
             status === 'in_progress' ||
             status === 'interrupted' ||
@@ -397,12 +472,11 @@ export default function ActivitySessionDashboard({
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                         <RotateCcw className="mr-2 h-4 w-4" />
-                    )}
+                    )}{' '}
                     Resume Session
                 </Button>
             );
         }
-
         return (
             <Badge
                 variant="secondary"
@@ -415,7 +489,6 @@ export default function ActivitySessionDashboard({
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900">
-            {/* Subtle Grid Background */}
             <div
                 className="fixed inset-0 pointer-events-none opacity-[0.2]"
                 style={{
@@ -433,7 +506,6 @@ export default function ActivitySessionDashboard({
                 animate="show"
                 className="max-w-[1600px] mx-auto p-6 lg:p-12 relative z-10 flex flex-col gap-10"
             >
-                {/* --- HEADER --- */}
                 <motion.header
                     variants={itemVariants}
                     className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm"
@@ -449,7 +521,6 @@ export default function ActivitySessionDashboard({
                             Directory
                         </Button>
                         <div className="flex items-center gap-4">
-                            {/* FALLBACK: Handles Null Activities */}
                             <h1
                                 className={cn(
                                     'text-3xl md:text-4xl font-black tracking-tight leading-none',
@@ -503,30 +574,34 @@ export default function ActivitySessionDashboard({
                     </div>
                 </motion.header>
 
-                {/* --- CORE METRICS GRID --- */}
                 <motion.div
                     variants={itemVariants}
                     className="grid grid-cols-1 md:grid-cols-4 gap-6"
                 >
                     <AnalysisStat
-                        label="Session Score"
+                        label={
+                            isGameActivity ? 'Game Accuracy' : 'Completion Rate'
+                        }
                         value={
-                            session.score !== null &&
-                            session.score !== undefined
-                                ? `${session.score}%`
-                                : '---'
+                            session.accuracy !== null &&
+                            session.accuracy !== undefined
+                                ? `${session.accuracy}%`
+                                : session.score !== null &&
+                                    session.score !== undefined
+                                  ? `${session.score}%`
+                                  : '---'
                         }
                         subtitle={
-                            session.score !== null &&
-                            session.score !== undefined
-                                ? 'Performance Rating'
+                            session.accuracy !== null &&
+                            session.accuracy !== undefined
+                                ? 'Overall Precision'
                                 : 'Awaiting Data'
                         }
                         icon={Target}
                         colorClass="group-hover:text-emerald-500"
                     />
                     <AnalysisStat
-                        label="AI Accuracy"
+                        label="AI Diagnostics"
                         value={
                             session.aiAccuracy !== undefined &&
                             session.aiAccuracy !== null
@@ -535,7 +610,7 @@ export default function ActivitySessionDashboard({
                         }
                         subtitle={
                             session.aiAccuracy
-                                ? 'Diagnostic Assessment'
+                                ? 'Confidence Rating'
                                 : 'Awaiting Analysis'
                         }
                         icon={BrainCircuit}
@@ -573,14 +648,24 @@ export default function ActivitySessionDashboard({
                     />
                 </motion.div>
 
-                {/* --- MAIN CONTENT GRID --- */}
+                {isGameActivity &&
+                    session.activitySessionStatus === 'completed' && (
+                        <motion.div variants={itemVariants}>
+                            <SessionMetricsSummary
+                                score={session.score}
+                                rounds={session.rounds}
+                                accuracy={session.accuracy}
+                                startTime={session.actualStartAt}
+                                endTime={session.actualEndAt}
+                            />
+                        </motion.div>
+                    )}
+
                 <div className="grid grid-cols-12 gap-8 items-start">
-                    {/* LEFT: INSIGHTS & TELEMETRY (8/12) */}
                     <motion.div
                         variants={itemVariants}
                         className="col-span-12 lg:col-span-8 space-y-8"
                     >
-                        {/* THE DRAMATIC AI CARD */}
                         {session.activitySessionStatus === 'completed' && (
                             <AnimatePresence mode="wait">
                                 {aiMutation.isPending ? (
@@ -610,7 +695,6 @@ export default function ActivitySessionDashboard({
                                                 size={100}
                                                 className="absolute -right-6 -top-6 opacity-[0.04] rotate-12 group-hover:rotate-0 transition-transform duration-1000"
                                             />
-
                                             <CardContent className="p-8 flex flex-col md:flex-row gap-6 relative z-10">
                                                 <div className="h-16 w-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 shrink-0 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
                                                     <BrainCircuit size={32} />
@@ -659,7 +743,7 @@ export default function ActivitySessionDashboard({
                                                     Generate an AI-driven
                                                     clinical recommendation
                                                     based on the learner's
-                                                    telemetry and score.
+                                                    telemetry and data.
                                                 </p>
                                                 <Button
                                                     onClick={() =>
@@ -678,7 +762,6 @@ export default function ActivitySessionDashboard({
                             </AnimatePresence>
                         )}
 
-                        {/* BEHAVIORAL PROFILE CHART */}
                         {radarData.length > 0 && (
                             <motion.div
                                 initial={{ opacity: 0, y: 15 }}
@@ -750,7 +833,6 @@ export default function ActivitySessionDashboard({
                             </motion.div>
                         )}
 
-                        {/* TELEMETRY DIAGNOSTIC LIST */}
                         <Card className="rounded-[32px] border border-slate-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)] bg-white overflow-hidden flex flex-col">
                             <CardHeader className="p-8 border-b border-slate-50 flex flex-row items-center justify-between shrink-0">
                                 <div className="space-y-1">
@@ -848,12 +930,10 @@ export default function ActivitySessionDashboard({
                         </Card>
                     </motion.div>
 
-                    {/* RIGHT: EDITABLE NOTES & METADATA (4/12) */}
                     <motion.aside
                         variants={itemVariants}
                         className="col-span-12 lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-8"
                     >
-                        {/* EDITABLE CLINICIAN NOTES */}
                         <Card className="rounded-[32px] border border-slate-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)] bg-white overflow-hidden flex flex-col">
                             <CardHeader className="bg-slate-50/50 p-6 border-b border-slate-100 flex flex-row items-center justify-between">
                                 <div className="flex items-center gap-2.5">
@@ -923,7 +1003,7 @@ export default function ActivitySessionDashboard({
                                                     <Loader2 className="animate-spin mr-1.5 h-3.5 w-3.5" />
                                                 ) : (
                                                     <Save className="mr-1.5 h-3.5 w-3.5" />
-                                                )}
+                                                )}{' '}
                                                 Save
                                             </Button>
                                         </div>
@@ -944,22 +1024,38 @@ export default function ActivitySessionDashboard({
                                         <div className="flex flex-col gap-3">
                                             <div className="flex justify-between items-center">
                                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                                    Score Progress
+                                                    {isGameActivity
+                                                        ? 'Accuracy Progress'
+                                                        : 'Score Progress'}
                                                 </span>
                                                 <span className="text-xs font-black text-slate-900">
-                                                    {session.score !== null &&
-                                                    session.score !== undefined
-                                                        ? `${session.score}%`
-                                                        : '---'}
+                                                    {session.accuracy !==
+                                                        null &&
+                                                    session.accuracy !==
+                                                        undefined
+                                                        ? `${session.accuracy}%`
+                                                        : session.score !==
+                                                                null &&
+                                                            session.score !==
+                                                                undefined
+                                                          ? `${session.score}%`
+                                                          : '---'}
                                                 </span>
                                             </div>
                                             <Progress
-                                                value={session.score ?? 0}
+                                                value={
+                                                    session.accuracy ??
+                                                    session.score ??
+                                                    0
+                                                }
                                                 className="h-2 bg-slate-100"
                                                 indicatorClassName={cn(
-                                                    (session.score ?? 0) >= 80
+                                                    (session.accuracy ??
+                                                        session.score ??
+                                                        0) >= 80
                                                         ? 'bg-emerald-500'
-                                                        : (session.score ??
+                                                        : (session.accuracy ??
+                                                                session.score ??
                                                                 0) >= 50
                                                           ? 'bg-amber-500'
                                                           : 'bg-slate-400',
@@ -971,7 +1067,6 @@ export default function ActivitySessionDashboard({
                             </CardContent>
                         </Card>
 
-                        {/* CLEAN METADATA CARD */}
                         <div className="bg-white rounded-[32px] border border-slate-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)] p-8 space-y-6">
                             <div className="flex items-center gap-2.5">
                                 <div className="p-1.5 bg-slate-50 rounded-lg text-slate-400">
@@ -1017,7 +1112,6 @@ export default function ActivitySessionDashboard({
                         </div>
                     </motion.aside>
                 </div>
-
                 <footer className="h-16 w-full shrink-0" aria-hidden="true" />
             </motion.div>
         </div>

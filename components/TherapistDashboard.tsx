@@ -76,6 +76,11 @@ import {
     Copy,
     Info,
     TowerControlIcon,
+    Activity,
+    AlertTriangle,
+    Layers,
+    Timer,
+    Focus,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -141,44 +146,105 @@ import { ScheduleQueue } from '@/components/ScheduleQueue';
 import ActivitySequenceLauncher from '@/components/ActivitySequenceLauncher';
 import { ActivityCalendar } from '@/components/ActivityCalendar';
 import { NotificationCenter } from './NotificationCenter';
+import { DateRangePicker } from './DateRangePicker';
+import { UserResponse } from '@/types';
+
+const PATTERN_ICONS: Record<string, any> = {
+    'Impulsive Responding': Zap,
+    'High Distractibility': AlertTriangle,
+    'Rapid Task-Switching': RefreshCw,
+    Hyperfocus: Focus,
+    'Repetitive Interaction Patterns': Layers,
+    'Rigid Task Execution': Target,
+    'Prolonged Processing Time': Timer,
+    'Inconsistent Accuracy': Activity,
+    'Sustained Attention': BrainCircuit,
+};
+
+const CHART_COLORS = [
+    '#6366f1',
+    '#10b981',
+    '#f43f5e',
+    '#f59e0b',
+    '#a855f7',
+    '#0ea5e9',
+    '#ec4899',
+    '#14b8a6',
+];
 
 // ============================================================================
-// --- SUB-COMPONENT: CUSTOM RADAR TICK (TEXT WRAPPER) ---
+// --- UNIFIED ZERO-JERK RADAR TICK (USED IN BOTH PANELS) ---
 // ============================================================================
-// ✨ FIX: This safely wraps long AI pattern names into 2 lines so they don't overlap!
-const renderRadarTick = (props: any) => {
-    const { payload, x, y, textAnchor, stroke, radius } = props;
+const CleanRadarTick = (props: any) => {
+    const { payload, x, y, cx, cy } = props;
+    const patternName = payload.value;
+    const Icon = PATTERN_ICONS[patternName] || BrainCircuit;
 
-    // Split the label into two relatively even lines if it's long
-    const words = payload.value.split(' ');
-    let line1 = payload.value;
-    let line2 = '';
+    const isTop = y < cy - 20;
+    const isBottom = y > cy + 20;
+    const isRight = x > cx + 20;
+    const isLeft = x < cx - 20;
 
-    if (words.length > 1) {
-        const mid = Math.ceil(words.length / 2);
-        line1 = words.slice(0, mid).join(' ');
-        line2 = words.slice(mid).join(' ');
-    }
+    let textAnchor = 'middle';
+    if (isLeft && !isTop && !isBottom) textAnchor = 'end';
+    if (isRight && !isTop && !isBottom) textAnchor = 'start';
+
+    const radius = Math.sqrt(Math.pow(x - cx, 2) + Math.pow(y - cy, 2));
+    const unitX = (x - cx) / radius;
+    const unitY = (y - cy) / radius;
+
+    const offsetIcon = 18;
+    const offsetText = 40;
+
+    const iconX = x + unitX * offsetIcon;
+    const iconY = y + unitY * offsetIcon;
+    const textX = x + unitX * offsetText;
+    const textY = y + unitY * offsetText;
+
+    let dyShift = 3;
+    if (isTop) dyShift = -2;
+    if (isBottom) dyShift = 10;
 
     return (
-        <g className="recharts-layer recharts-polar-angle-axis-tick">
-            <text
-                radius={radius}
-                stroke={stroke}
-                x={x}
-                y={y}
-                textAnchor={textAnchor}
-                fill="#64748b"
-                fontSize={9}
-                fontWeight={700}
+        <g className="recharts-radar-tick outline-none">
+            {/* Invisible hitbox block to stop resizing */}
+            <circle cx={iconX} cy={iconY} r={16} fill="transparent" />
+
+            <foreignObject
+                x={iconX - 9}
+                y={iconY - 9}
+                width="18"
+                height="18"
+                style={{ pointerEvents: 'none' }}
+                className="overflow-visible"
             >
-                <tspan x={x} dy={0}>
-                    {line1}
-                </tspan>
-                {line2 && (
-                    <tspan x={x} dy={12}>
-                        {line2}
-                    </tspan>
+                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                    <Icon size={14} strokeWidth={2.5} />
+                </div>
+            </foreignObject>
+
+            <text
+                x={textX}
+                y={textY}
+                textAnchor={textAnchor}
+                fill="#64748B"
+                fontSize="8px"
+                fontWeight="800"
+                className="uppercase tracking-tight select-none outline-none"
+                dy={dyShift}
+                style={{ pointerEvents: 'none' }}
+            >
+                {patternName.length > 14 ? (
+                    <>
+                        <tspan x={textX} dy="0">
+                            {patternName.split(' ').slice(0, 2).join(' ')}
+                        </tspan>
+                        <tspan x={textX} dy="10">
+                            {patternName.split(' ').slice(2).join(' ')}
+                        </tspan>
+                    </>
+                ) : (
+                    patternName
                 )}
             </text>
         </g>
@@ -189,36 +255,123 @@ const renderRadarTick = (props: any) => {
 // --- SUB-COMPONENT: ADVANCED STUDENT COMPARISON CHART ---
 // ============================================================================
 
-const CHART_COLORS = [
-    '#6366f1', // Indigo
-    '#10b981', // Emerald
-    '#f43f5e', // Rose
-    '#f59e0b', // Amber
-    '#a855f7', // Purple
-    '#0ea5e9', // Sky Blue
-    '#ec4899', // Pink
-    '#14b8a6', // Teal
-];
+const CustomComparisonTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-2xl min-w-[220px] z-[100] pointer-events-none">
+                <div className="flex items-center gap-2 mb-3 border-b border-slate-700 pb-2">
+                    <CalendarClock size={14} className="text-indigo-400" />
+                    <span className="text-white font-bold text-xs uppercase tracking-widest">
+                        {label}
+                    </span>
+                </div>
+                <div className="flex flex-col gap-2.5">
+                    {payload.map((entry: any, index: number) => (
+                        <div
+                            key={index}
+                            className="flex justify-between items-center group"
+                        >
+                            <div className="flex items-center gap-2.5">
+                                <div
+                                    className="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]"
+                                    style={{ backgroundColor: entry.color }}
+                                />
+                                <span className="text-slate-400 text-[11px] font-bold uppercase tracking-tight">
+                                    {entry.name}
+                                </span>
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-white text-sm font-black tabular-nums">
+                                    {entry.value}
+                                </span>
+                                <span className="text-slate-500 text-[9px] font-bold">
+                                    %
+                                </span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-800 flex items-center gap-1.5 text-slate-500">
+                    <Activity size={10} />
+                    <span className="text-[9px] font-bold uppercase tracking-tighter">
+                        Avg Accuracy per session
+                    </span>
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
+
+const CustomRadarTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+        const patternName = payload[0].payload.pattern;
+        const Icon = PATTERN_ICONS[patternName] || BrainCircuit;
+
+        return (
+            <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-2xl min-w-[240px] z-[110] pointer-events-none">
+                <div className="flex items-center gap-2.5 mb-4 border-b border-slate-700 pb-3">
+                    <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400">
+                        <Icon size={16} strokeWidth={2.5} />
+                    </div>
+                    <span className="text-white font-bold text-[11px] uppercase tracking-[0.15em] leading-tight">
+                        {patternName}
+                    </span>
+                </div>
+                <div className="flex flex-col gap-3">
+                    {payload.map((entry: any, index: number) => (
+                        <div key={index} className="flex flex-col gap-1.5">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <div
+                                        className="w-2 h-2 rounded-full"
+                                        style={{ backgroundColor: entry.color }}
+                                    />
+                                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-tight">
+                                        {entry.name}
+                                    </span>
+                                </div>
+                                <span className="text-white text-xs font-black">
+                                    {entry.value}%
+                                </span>
+                            </div>
+                            <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${entry.value}%` }}
+                                    className="h-full rounded-full"
+                                    style={{ backgroundColor: entry.color }}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
 
 const StudentComparisonPanel = ({
     uniqueStudents,
-    dateRange,
 }: {
     uniqueStudents: any[];
-    dateRange: any;
 }) => {
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
-    const [lookbackDays, setLookbackDays] = useState<number>(30);
-
-    const dynamicDateRange = useMemo(() => {
+    const [dateRange, setDateRange] = useState(() => {
         const end = new Date();
         const start = new Date();
-        start.setDate(end.getDate() - lookbackDays);
+        start.setDate(end.getDate() - 30);
         return {
-            startDate: start.toISOString().split('T')[0],
-            endDate: end.toISOString().split('T')[0],
+            from: start.toISOString().split('T')[0],
+            to: end.toISOString().split('T')[0],
         };
-    }, [lookbackDays]);
+    });
+
+    const dynamicDateRange = useMemo(
+        () => ({ startDate: dateRange.from, endDate: dateRange.to }),
+        [dateRange],
+    );
 
     const toggleStudent = (id: number) => {
         setSelectedIds((prev) => {
@@ -244,10 +397,7 @@ const StudentComparisonPanel = ({
         queries: selectedIds.map((id) => ({
             queryKey: [
                 'student-analytics',
-                {
-                    studentId: id,
-                    ...dynamicDateRange,
-                },
+                { studentId: id, ...dynamicDateRange },
             ],
             queryFn: getStudentAnalytics,
             staleTime: 5 * 60 * 1000,
@@ -256,41 +406,29 @@ const StudentComparisonPanel = ({
 
     const isLoading = studentQueries.some((q) => q.isLoading);
 
-    // ✨ FIX: Chronologically sorted Timeline Data
     const mergedTimelineData = useMemo(() => {
         const rawDates = new Set<string>();
-
-        // 1. Collect every single date where ANY selected student played
         studentQueries.forEach((q) => {
             if (!q.data?.charts?.performanceTimeline) return;
-            q.data.charts.performanceTimeline.forEach((entry: any) => {
-                rawDates.add(entry.date); // e.g. "2026-03-01"
-            });
+            q.data.charts.performanceTimeline.forEach((entry: any) =>
+                rawDates.add(entry.date),
+            );
         });
-
-        // 2. Sort the dates chronologically (Oldest to Newest)
         const sortedDates = Array.from(rawDates).sort(
             (a, b) => new Date(a).getTime() - new Date(b).getTime(),
         );
-
-        // 3. Map the sorted dates to the students' scores
         return sortedDates.map((dateStr) => {
-            const formattedDate = format(new Date(dateStr), 'MMM dd');
-            const row: any = { date: formattedDate };
-
+            const row: any = { date: dateStr };
             studentQueries.forEach((q, idx) => {
                 if (!q.data?.charts?.performanceTimeline) return;
                 const student = uniqueStudents.find(
                     (s) => s.id === selectedIds[idx],
                 );
                 const name = student?.firstName || `Student ${idx + 1}`;
-
                 const studentEntry = q.data.charts.performanceTimeline.find(
                     (e: any) => e.date === dateStr,
                 );
-                if (studentEntry) {
-                    row[name] = studentEntry.avgAccuracy;
-                }
+                row[name] = studentEntry ? studentEntry.currentAccuracy : 0;
             });
             return row;
         });
@@ -304,7 +442,6 @@ const StudentComparisonPanel = ({
                 (s) => s.id === selectedIds[idx],
             );
             const name = student?.firstName || `Student ${idx + 1}`;
-
             q.data.charts.behavioralRadar.forEach((entry: any) => {
                 if (!patternMap.has(entry.pattern))
                     patternMap.set(entry.pattern, { pattern: entry.pattern });
@@ -312,24 +449,19 @@ const StudentComparisonPanel = ({
                 existing[name] = entry.intensityScore;
             });
         });
-
         const result = Array.from(patternMap.values());
-
         const defaultPatterns = [
             'Sustained Attention',
             'Task Execution',
             'Processing Speed',
         ];
         let padIndex = 0;
-
         while (result.length > 0 && result.length < 3) {
             const patName = defaultPatterns[padIndex % defaultPatterns.length];
-            if (!result.find((r) => r.pattern === patName)) {
+            if (!result.find((r) => r.pattern === patName))
                 result.push({ pattern: patName });
-            }
             padIndex++;
         }
-
         return result;
     }, [studentQueries, selectedIds, uniqueStudents]);
 
@@ -346,25 +478,11 @@ const StudentComparisonPanel = ({
                             Compare cognitive and behavioral trends
                         </p>
                     </div>
-
                     <div className="flex flex-col items-end gap-4">
-                        <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 px-4 py-2 rounded-2xl w-full md:w-auto">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest shrink-0 w-24 text-right">
-                                Last {lookbackDays} Days
-                            </span>
-                            <input
-                                type="range"
-                                min="7"
-                                max="90"
-                                step="1"
-                                value={lookbackDays}
-                                onChange={(e) =>
-                                    setLookbackDays(Number(e.target.value))
-                                }
-                                className="w-32 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                            />
-                        </div>
-
+                        <DateRangePicker
+                            value={dateRange}
+                            onChange={setDateRange}
+                        />
                         <div className="flex items-center gap-3">
                             <div className="flex items-center gap-1.5 mr-2">
                                 {selectedIds.map((id) => {
@@ -373,7 +491,6 @@ const StudentComparisonPanel = ({
                                     );
                                     if (!student) return null;
                                     const studentColor = getStudentColor(id);
-
                                     return (
                                         <Badge
                                             key={id}
@@ -404,7 +521,6 @@ const StudentComparisonPanel = ({
                                     );
                                 })}
                             </div>
-
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -423,38 +539,30 @@ const StudentComparisonPanel = ({
                                         Select Students
                                     </div>
                                     <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
-                                        {uniqueStudents.length === 0 ? (
-                                            <div className="p-3 text-xs text-slate-500 text-center">
-                                                No learners found
-                                            </div>
-                                        ) : (
-                                            uniqueStudents.map((student) => (
-                                                <DropdownMenuCheckboxItem
-                                                    key={student.id}
-                                                    checked={selectedIds.includes(
-                                                        student.id,
-                                                    )}
-                                                    onCheckedChange={() =>
-                                                        toggleStudent(
-                                                            student.id,
-                                                        )
-                                                    }
-                                                    className="rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
-                                                >
-                                                    <div
-                                                        className="w-2 h-2 rounded-full mr-2"
-                                                        style={{
-                                                            backgroundColor:
-                                                                getStudentColor(
-                                                                    student.id,
-                                                                ),
-                                                        }}
-                                                    />
-                                                    {student.firstName}{' '}
-                                                    {student.lastName}
-                                                </DropdownMenuCheckboxItem>
-                                            ))
-                                        )}
+                                        {uniqueStudents.map((student) => (
+                                            <DropdownMenuCheckboxItem
+                                                key={student.id}
+                                                checked={selectedIds.includes(
+                                                    student.id,
+                                                )}
+                                                onCheckedChange={() =>
+                                                    toggleStudent(student.id)
+                                                }
+                                                className="rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
+                                            >
+                                                <div
+                                                    className="w-2 h-2 rounded-full mr-2"
+                                                    style={{
+                                                        backgroundColor:
+                                                            getStudentColor(
+                                                                student.id,
+                                                            ),
+                                                    }}
+                                                />
+                                                {student.firstName}{' '}
+                                                {student.lastName}
+                                            </DropdownMenuCheckboxItem>
+                                        ))}
                                     </div>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -483,7 +591,6 @@ const StudentComparisonPanel = ({
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                        {/* LINE CHART: Performance Over Time */}
                         <div className="col-span-1 lg:col-span-8 h-[350px]">
                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
                                 Accuracy Trends Over Time
@@ -526,22 +633,11 @@ const StudentComparisonPanel = ({
                                         tickFormatter={(val) => `${val}%`}
                                     />
                                     <RechartsTooltip
-                                        contentStyle={{
-                                            borderRadius: '16px',
-                                            border: 'none',
-                                            boxShadow:
-                                                '0 10px 25px -5px rgba(0,0,0,0.1)',
-                                        }}
-                                        itemStyle={{
-                                            fontSize: '12px',
-                                            fontWeight: 700,
-                                        }}
-                                        labelStyle={{
-                                            fontSize: '10px',
-                                            color: '#94a3b8',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.1em',
-                                            marginBottom: '4px',
+                                        content={<CustomComparisonTooltip />}
+                                        cursor={{
+                                            stroke: '#6366f1',
+                                            strokeWidth: 1,
+                                            strokeDasharray: '4 4',
                                         }}
                                     />
                                     <Legend
@@ -557,17 +653,13 @@ const StudentComparisonPanel = ({
                                             (s) => s.id === id,
                                         );
                                         if (!student) return null;
-                                        const studentColor =
-                                            getStudentColor(id);
-
                                         return (
                                             <Line
                                                 key={id}
                                                 type="monotone"
                                                 dataKey={student.firstName}
-                                                stroke={studentColor}
+                                                stroke={getStudentColor(id)}
                                                 strokeWidth={3}
-                                                // ✨ FIX: connectNulls ensures the line bridges empty days smoothly!
                                                 connectNulls={true}
                                                 dot={{
                                                     r: 4,
@@ -585,7 +677,6 @@ const StudentComparisonPanel = ({
                             </ResponsiveContainer>
                         </div>
 
-                        {/* RADAR CHART: Behavioral Profile */}
                         <div className="col-span-1 lg:col-span-4 h-[350px] flex flex-col items-center">
                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 w-full text-left">
                                 Behavioral Overlap
@@ -596,18 +687,26 @@ const StudentComparisonPanel = ({
                                         width="100%"
                                         height="100%"
                                     >
-                                        {/* ✨ FIX: Shrunk outerRadius from 70% to 55% so text labels have room to render */}
+                                        {/* ✨ GLITCH-FREE RADAR IMPLEMENTATION ✨ */}
                                         <RadarChart
                                             cx="50%"
                                             cy="50%"
-                                            outerRadius="55%"
+                                            outerRadius="58%"
                                             data={mergedRadarData}
+                                            margin={{
+                                                top: 40,
+                                                bottom: 40,
+                                                left: 40,
+                                                right: 40,
+                                            }}
                                         >
-                                            <PolarGrid stroke="#e2e8f0" />
-                                            {/* ✨ FIX: Used our new custom tick component to text-wrap the labels */}
+                                            <PolarGrid
+                                                stroke="#e2e8f0"
+                                                strokeDasharray="4 4"
+                                            />
                                             <PolarAngleAxis
                                                 dataKey="pattern"
-                                                tick={renderRadarTick}
+                                                tick={<CleanRadarTick />}
                                             />
                                             <PolarRadiusAxis
                                                 angle={30}
@@ -616,12 +715,8 @@ const StudentComparisonPanel = ({
                                                 axisLine={false}
                                             />
                                             <RechartsTooltip
-                                                contentStyle={{
-                                                    borderRadius: '12px',
-                                                    border: 'none',
-                                                    boxShadow:
-                                                        '0 4px 15px rgba(0,0,0,0.1)',
-                                                }}
+                                                content={<CustomRadarTooltip />}
+                                                cursor={false}
                                             />
                                             {selectedIds.map((id) => {
                                                 const student =
@@ -631,7 +726,6 @@ const StudentComparisonPanel = ({
                                                 if (!student) return null;
                                                 const studentColor =
                                                     getStudentColor(id);
-
                                                 return (
                                                     <Radar
                                                         key={id}
@@ -641,8 +735,20 @@ const StudentComparisonPanel = ({
                                                         }
                                                         stroke={studentColor}
                                                         fill={studentColor}
-                                                        fillOpacity={0.15}
-                                                        strokeWidth={2}
+                                                        fillOpacity={0.1}
+                                                        strokeWidth={3}
+                                                        animationDuration={1500}
+                                                        activeDot={{
+                                                            r: 5,
+                                                            fill: studentColor,
+                                                            stroke: '#FFF',
+                                                            strokeWidth: 2,
+                                                        }}
+                                                        dot={{
+                                                            r: 3,
+                                                            fill: studentColor,
+                                                            strokeWidth: 0,
+                                                        }}
                                                     />
                                                 );
                                             })}
@@ -697,10 +803,7 @@ const DashboardStatCard = ({
                         size?: number;
                         className?: string;
                     }>,
-                    {
-                        size: 18,
-                        className: colorClass,
-                    },
+                    { size: 18, className: colorClass },
                 )}
             </div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest select-none">
@@ -838,7 +941,6 @@ const RecentLogItem = ({ session }: { session: ActivitySessionResponse }) => {
     const status = session.activitySessionStatus?.toLowerCase();
     const isCompleted = status === 'completed';
     const isAbandoned = status === 'abandoned' || status === 'cancelled';
-
     const effectiveDate =
         session.actualEndAt || session.updatedAt || session.actualStartAt;
     const timeAgo =
@@ -887,7 +989,6 @@ const RecentLogItem = ({ session }: { session: ActivitySessionResponse }) => {
                         </div>
                     </div>
                 </div>
-
                 <div className="flex flex-col items-end shrink-0 gap-1.5">
                     {session.aiRecommendation ? (
                         <Badge
@@ -921,7 +1022,6 @@ export default function Dashboard() {
         primary: ActivitySessionResponse;
         allDay: ActivitySessionResponse[];
     } | null>(null);
-
     const [visibleLogsCount, setVisibleLogsCount] = useState(5);
 
     const { data: user } = useQuery({ queryKey: ['me'], queryFn: me });
@@ -955,7 +1055,6 @@ export default function Dashboard() {
         queryFn: getGlobalAnalytics,
     });
 
-    // ✨ FIX: Extract Unique Students strictly by Integer ID
     const uniqueStudents = useMemo(() => {
         const map = new Map();
         activitySessions.forEach((s: any) => {
@@ -1175,8 +1274,8 @@ export default function Dashboard() {
                                     variant="outline"
                                     className="relative h-12 rounded-2xl border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 font-bold text-[10px] uppercase tracking-widest px-6 transition-all shadow-sm"
                                 >
-                                    <CalendarDays className="mr-2 h-4 w-4" />
-                                    My Activities
+                                    <CalendarDays className="mr-2 h-4 w-4" /> My
+                                    Activities
                                     {pendingQueue.length > 0 && (
                                         <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 ring-2 ring-white shadow-sm">
                                             <span className="relative inline-flex rounded-full text-[9px] font-black text-white">
@@ -1392,10 +1491,7 @@ export default function Dashboard() {
                 </section>
 
                 <section>
-                    <StudentComparisonPanel
-                        uniqueStudents={uniqueStudents}
-                        dateRange={dateRange}
-                    />
+                    <StudentComparisonPanel uniqueStudents={uniqueStudents} />
                 </section>
 
                 <div className="h-24 w-full shrink-0" aria-hidden="true" />
@@ -1446,10 +1542,7 @@ function LiveSessionWidget({
     const [sidebarView, setSidebarView] = useState<
         'queue' | 'telemetry' | 'settings'
     >('queue');
-
-    // ✨ PIN Toggle State
     const [showBigPin, setShowBigPin] = useState(false);
-
     const [isNotesOpen, setIsNotesOpen] = useState(false);
     const [clinicalNotes, setClinicalNotes] = useState(
         session?.clinicalObservations || '',
@@ -1474,28 +1567,21 @@ function LiveSessionWidget({
     const y = useMotionValue(0);
     const isDragging = useRef(false);
 
-    // ✨ ANTI-CRASH SAFETY: Fallbacks so the widget survives the 500ms unmount animation
     const safeStudent = session?.student || {};
     const safeActivity = session?.activity || {};
     const passcode = safeStudent.activePasscode || '------';
-
-    // Safely enforce telemetry as an array to prevent .filter() crashes
     const telemetryLogs = Array.isArray(session?.rawTelemetry)
         ? session.rawTelemetry
         : [];
 
-    // ✨ STATE MACHINE LOGIC ✨
     const isPreLaunch = ['pending', 'queued', 'reschedule'].includes(
         session?.activitySessionStatus,
     );
     const isPaused = session?.activitySessionStatus === 'paused';
     const isUnstarted = !session?.actualStartAt;
     const isAwaitingHandshake = !isPreLaunch && isUnstarted;
-
-    // Always show PIN if unstarted. If active, obey the toggle button.
     const shouldDisplayPin = isUnstarted || showBigPin;
 
-    // ✨ AUTO-REVERT PIN: Security timer to hide PIN after 10 seconds of viewing
     useEffect(() => {
         let timer: NodeJS.Timeout;
         if (showBigPin && !isUnstarted) {
@@ -1540,16 +1626,13 @@ function LiveSessionWidget({
 
     const { mutateAsync } = updateSessionMutation;
 
-    // ✨ RENEW PIN MUTATION ✨
     const renewPinMutation = useMutation({
         mutationFn: async () => {
             if (!safeStudent.id) throw new Error('Student ID missing');
             const newPin = Math.floor(
                 100000 + Math.random() * 900000,
             ).toString();
-
             await updateStudentPasscode(safeStudent.id, newPin);
-
             return newPin;
         },
         onSuccess: async () => {
@@ -1568,7 +1651,6 @@ function LiveSessionWidget({
         },
     });
 
-    // ✨ AUTO-GENERATE PIN IF MISSING ✨
     useEffect(() => {
         if (
             isUnstarted &&
@@ -1585,7 +1667,6 @@ function LiveSessionWidget({
         renewPinMutation,
     ]);
 
-    // ✨ COPY PIN HANDLER ✨
     const handleCopyPin = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (passcode && passcode !== '------') {
@@ -1609,14 +1690,12 @@ function LiveSessionWidget({
         | null;
     const [confirmType, setConfirmType] = useState<ConfirmType>(null);
 
-    // ✨ EMERGENCY STOP ALL SESSIONS ✨
     const handleStopAll = async () => {
         const toastId = toast.loading('Cancelling all sessions...');
         try {
             await updateActivitySession(session.documentId, {
                 activitySessionStatus: ActivitySessionStatus.Cancelled,
             });
-
             if (queuedSessions.length > 0) {
                 await Promise.all(
                     queuedSessions.map((qs) =>
@@ -1627,14 +1706,12 @@ function LiveSessionWidget({
                     ),
                 );
             }
-
             await queryClient.invalidateQueries({
                 queryKey: ['live-activity-sessions'],
             });
             await queryClient.invalidateQueries({
                 queryKey: ['activity-sessions'],
             });
-
             toast.success('Emergency Stop: All sessions cancelled.', {
                 id: toastId,
             });
@@ -1644,7 +1721,6 @@ function LiveSessionWidget({
         }
     };
 
-    // ✨ SEQUENTIAL SKIP LOGIC (Handles both PreLaunch and Active) ✨
     const executeSkipCurrent = async (isAuto = false) => {
         const toastId = toast.loading(
             isAuto
@@ -1652,7 +1728,6 @@ function LiveSessionWidget({
                 : 'Skipping to next activity...',
         );
         try {
-            // 1. Resolve the current session explicitly first
             const resolveStatus = isUnstarted
                 ? ActivitySessionStatus.Cancelled
                 : ActivitySessionStatus.Completed;
@@ -1661,18 +1736,15 @@ function LiveSessionWidget({
                 actualEndAt: new Date().toISOString(),
             });
 
-            // 2. Start the next session if it exists
             if (queuedSessions.length > 0) {
                 const next = queuedSessions[0];
                 const handsFreePayload = isHandsFree
                     ? { isHandsFree: true }
                     : { isHandsFree: false };
-
                 await updateActivitySession(next.documentId, {
                     activitySessionStatus: ActivitySessionStatus.InProgress,
                     ...handsFreePayload,
                 });
-
                 toast.success(
                     `Launched Next Activity: ${next.activity?.name}`,
                     { id: toastId },
@@ -1698,7 +1770,6 @@ function LiveSessionWidget({
         }
     };
 
-    // ✨ RESOLVE UNSTARTED SESSIONS ✨
     const resolveUnstarted = async (choice: 'reschedule' | 'cancelled') => {
         setConfirmType(null);
         const newStatus = choice === 'reschedule' ? 'reschedule' : 'cancelled';
@@ -1821,9 +1892,7 @@ function LiveSessionWidget({
 
     const [dragOverLive, setDragOverLive] = useState(false);
     const [dragOverQueueId, setDragOverQueueId] = useState<string | null>(null);
-
     const constraintsRef = useRef<HTMLDivElement>(null);
-
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const [localExtraTime, setLocalExtraTime] = useState(
         session?.extraTimeSeconds || 0,
@@ -2209,7 +2278,6 @@ function LiveSessionWidget({
                             }}
                             className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col gap-6"
                         >
-                            {/* --- SKIP CONFIRMATION MODAL --- */}
                             {confirmType === 'confirm_skip' && (
                                 <>
                                     <div className="flex flex-col items-center text-center gap-4">
@@ -2252,8 +2320,6 @@ function LiveSessionWidget({
                                     </div>
                                 </>
                             )}
-
-                            {/* --- EMERGENCY STOP ALL MODAL --- */}
                             {confirmType === 'stop_all' && (
                                 <>
                                     <div className="flex flex-col items-center text-center gap-4">
@@ -2581,7 +2647,6 @@ function LiveSessionWidget({
                                                       )
                                                 : 'Ready'}
                                         </span>
-
                                         {isHandsFree && (
                                             <div className="flex items-center">
                                                 <Badge
@@ -2686,14 +2751,14 @@ function LiveSessionWidget({
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                                    onPointerDown={(e) => e.stopPropagation()}
+                                    className="h-8 w-8 text-slate-500 hover:text-slate-900 hover:bg-white rounded-full transition-colors"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setIsMinimized(false);
+                                        setIsMinimized(true);
                                     }}
+                                    onPointerDown={(e) => e.stopPropagation()}
                                 >
-                                    <Maximize2 size={14} />
+                                    <Minimize2 size={15} />
                                 </Button>
                             </div>
                         </motion.div>
@@ -2944,7 +3009,6 @@ function LiveSessionWidget({
                                                 >
                                                     {/* ✨ NEW SECURE PIN CARD DESIGN ✨ */}
                                                     <div className="bg-white border border-slate-200/60 rounded-[24px] p-5 shadow-sm w-full max-w-[280px] relative transition-all group">
-                                                        {/* Top Right Tool Actions */}
                                                         <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <Button
                                                                 variant="ghost"
@@ -2990,8 +3054,6 @@ function LiveSessionWidget({
                                                                 />
                                                             </Button>
                                                         </div>
-
-                                                        {/* Header & Info */}
                                                         <div className="flex items-center gap-1.5 mb-4 text-indigo-400">
                                                             <Lock
                                                                 size={14}
@@ -3016,17 +3078,12 @@ function LiveSessionWidget({
                                                                     enter it on
                                                                     their device
                                                                     to connect.
-                                                                    {/* Little triangle arrow pointing down */}
                                                                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
                                                                 </div>
                                                             </div>
                                                         </div>
-
-                                                        {/* The PIN Block (Fully Selectable) */}
                                                         <div className="flex items-center justify-center w-full bg-slate-50 rounded-[14px] py-4 border border-slate-100/50 relative overflow-hidden">
-                                                            {/* Subtle shine effect */}
                                                             <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white to-transparent" />
-
                                                             <span
                                                                 title="Double click to copy"
                                                                 className={cn(
@@ -3040,7 +3097,6 @@ function LiveSessionWidget({
                                                             </span>
                                                         </div>
                                                     </div>
-
                                                     {!isUnstarted ? (
                                                         <Button
                                                             variant="ghost"
@@ -3104,7 +3160,6 @@ function LiveSessionWidget({
                                                         ) : (
                                                             <div className="w-10" />
                                                         )}
-
                                                         <div className="flex flex-col items-center justify-center min-w-[150px]">
                                                             <span
                                                                 className={cn(
@@ -3123,7 +3178,6 @@ function LiveSessionWidget({
                                                                 )}
                                                             </span>
                                                         </div>
-
                                                         {hasTimer ? (
                                                             <Button
                                                                 variant="outline"
@@ -3150,7 +3204,6 @@ function LiveSessionWidget({
                                                             <div className="w-10" />
                                                         )}
                                                     </div>
-
                                                     {safeStudent.activePasscode && (
                                                         <Button
                                                             variant="ghost"
@@ -3249,7 +3302,6 @@ function LiveSessionWidget({
                                                         <Square className="mr-1.5 h-3.5 w-3.5 fill-current shrink-0" />
                                                         Cancel
                                                     </Button>
-
                                                     {queuedSessions.length >
                                                         0 && (
                                                         <Button
@@ -3268,7 +3320,6 @@ function LiveSessionWidget({
                                                             Skip
                                                         </Button>
                                                     )}
-
                                                     <Button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -3325,14 +3376,21 @@ function LiveSessionWidget({
                                                             disabled={
                                                                 updateSessionMutation.isPending
                                                             }
-                                                            className="flex-1 h-10 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm transition-all border border-slate-700"
+                                                            className={cn(
+                                                                'flex-1 h-10 rounded-xl font-bold text-[10px] uppercase tracking-wider shadow-sm transition-all border',
+                                                                isHandsFree
+                                                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-emerald-600/20'
+                                                                    : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500 shadow-indigo-600/20',
+                                                            )}
                                                         >
                                                             {updateSessionMutation.isPending ? (
                                                                 <Loader2 className="animate-spin mr-1.5 h-3.5 w-3.5" />
                                                             ) : (
                                                                 <SkipForward className="mr-1.5 h-3.5 w-3.5 fill-current" />
                                                             )}{' '}
-                                                            Skip
+                                                            {isHandsFree
+                                                                ? 'Auto-Next'
+                                                                : 'Next'}
                                                         </Button>
                                                     )}
                                                 </>
@@ -4125,6 +4183,7 @@ function LiveSessionWidget({
                                                         </span>
                                                     </div>
                                                 </label>
+
                                                 <div className="p-4 rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors space-y-1 hover:border-indigo-200">
                                                     <div className="flex items-center justify-between mb-2">
                                                         <span className="text-xs font-bold text-slate-900">
@@ -4146,6 +4205,7 @@ function LiveSessionWidget({
                                                         incorrect answers.
                                                     </span>
                                                 </div>
+
                                                 <div className="p-4 rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors space-y-1 hover:border-indigo-200">
                                                     <div className="flex items-center justify-between mb-2">
                                                         <span className="text-xs font-bold text-slate-900">
@@ -4166,6 +4226,7 @@ function LiveSessionWidget({
                                                         next queued session.
                                                     </span>
                                                 </div>
+
                                                 <div
                                                     className={cn(
                                                         'p-4 rounded-2xl border shadow-sm transition-colors space-y-1 hover:border-emerald-300',
@@ -4196,7 +4257,6 @@ function LiveSessionWidget({
                                                     </span>
                                                 </div>
 
-                                                {/* ✨ EMERGENCY STOP SECTION ✨ */}
                                                 <div className="pt-4 mt-4 border-t border-slate-200/60">
                                                     <Button
                                                         variant="outline"
@@ -4211,7 +4271,7 @@ function LiveSessionWidget({
                                                         <AlertOctagon
                                                             size={14}
                                                             className="mr-2"
-                                                        />
+                                                        />{' '}
                                                         Cancel All Activities
                                                     </Button>
                                                     <p className="text-[9px] text-slate-400 text-center mt-2 leading-tight px-2">

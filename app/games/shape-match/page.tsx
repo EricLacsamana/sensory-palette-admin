@@ -19,8 +19,16 @@ import {
     User,
     Trophy,
     BarChart,
+    Target,
+    Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const SparkleIcon = ({ className }: { className?: string }) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M11.64 5.232c.184-.525.932-.525 1.117 0l1.458 4.152a1.2 1.2 0 00.838.838l4.152 1.458c.525.184.525.932 0 1.117l-4.152 1.458a1.2 1.2 0 00-.838.838l-1.458 4.152c-.184.525-.932.525-1.117 0l-1.458-4.152a1.2 1.2 0 00.838-.838l1.458-4.152z" />
+    </svg>
+);
 
 const ALL_SHAPES = [
     { name: 'Circle', icon: Circle },
@@ -35,6 +43,8 @@ const ALL_SHAPES = [
     { name: 'Octagon', icon: Octagon },
 ];
 
+const MAX_LEVEL = 3;
+
 interface AdaptiveGameProps {
     studentAge?: number;
     baseDifficulty?: 1 | 2 | 3;
@@ -46,24 +56,28 @@ export default function ShapeMatchGame({
 }: AdaptiveGameProps) {
     const searchParams = useSearchParams();
     const [isAdaptive, setIsAdaptive] = useState(
-        searchParams.get('adaptive') !== 'false',
+        () => searchParams.get('adaptive') !== 'false',
+    );
+    const [showMetrics, setShowMetrics] = useState(
+        () => searchParams.get('enableLearnerControls') === 'true',
     );
 
     const getStartingLevel = () => {
+        const urlLevel = parseInt(searchParams.get('level') || '0', 10);
+        if (urlLevel > 0 && urlLevel <= MAX_LEVEL) return urlLevel;
         if (baseDifficulty) return baseDifficulty;
-        if (studentAge) {
-            if (studentAge <= 4) return 1;
-            if (studentAge <= 7) return 2;
-            return 3;
-        }
-        return 1;
+        return 1; // ✨ STRICTLY LEVEL 1
     };
 
     const [level, setLevel] = useState<number>(getStartingLevel());
     const [streak, setStreak] = useState(0);
     const [fails, setFails] = useState(0);
 
-    const [score, setScore] = useState(0);
+    const [correctCount, setCorrectCount] = useState(0);
+    const [totalCount, setTotalCount] = useState(0);
+    const accuracy =
+        totalCount === 0 ? 0 : Math.round((correctCount / totalCount) * 100);
+
     const [telemetry, setTelemetry] = useState<any[]>([]);
     const [target, setTarget] = useState<any>(null);
     const [options, setOptions] = useState<any[]>([]);
@@ -74,25 +88,7 @@ export default function ShapeMatchGame({
     const timerRef = useRef(Date.now());
     const successSfx = useRef<HTMLAudioElement | null>(null);
     const retrySfx = useRef<HTMLAudioElement | null>(null);
-
-    useEffect(() => {
-        successSfx.current = new Audio(
-            'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
-        );
-        retrySfx.current = new Audio(
-            'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',
-        );
-        generate(level);
-    }, []);
-
-    useEffect(() => {
-        const handleLiveMessage = (event: MessageEvent) => {
-            if (event.data?.type === 'TOGGLE_ADAPTIVE')
-                setIsAdaptive(event.data.value);
-        };
-        window.addEventListener('message', handleLiveMessage);
-        return () => window.removeEventListener('message', handleLiveMessage);
-    }, []);
+    const levelUpSfx = useRef<HTMLAudioElement | null>(null);
 
     const generate = useCallback((currentLevel: number) => {
         const optionCount = currentLevel === 1 ? 2 : currentLevel === 2 ? 4 : 6;
@@ -112,14 +108,40 @@ export default function ShapeMatchGame({
         timerRef.current = Date.now();
     }, []);
 
+    useEffect(() => {
+        successSfx.current = new Audio(
+            'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
+        );
+        retrySfx.current = new Audio(
+            'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3',
+        );
+        levelUpSfx.current = new Audio(
+            'https://cdnjs.cloudflare.com/ajax/libs/ion-sound/3.0.7/sounds/bell_ring.mp3',
+        );
+        generate(level);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        const handleLiveMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'SYNC_STATE') {
+                if (event.data.payload.isAdaptive !== undefined)
+                    setIsAdaptive(event.data.payload.isAdaptive);
+                if (event.data.payload.enableLearnerControls !== undefined)
+                    setShowMetrics(event.data.payload.enableLearnerControls);
+            }
+        };
+        window.addEventListener('message', handleLiveMessage);
+        return () => window.removeEventListener('message', handleLiveMessage);
+    }, []);
+
     const handleSelect = (e: React.MouseEvent, opt: any) => {
         if (feedback !== 'none') return;
         const isCorrect = opt.name === target.name;
-
-        const nativeEvent = e.nativeEvent as any;
         const actionType =
-            nativeEvent.pointerType === 'touch' ? 'tap' : 'click';
+            (e.nativeEvent as any).pointerType === 'touch' ? 'tap' : 'click';
         const responseTimeMs = Date.now() - timerRef.current;
+
         let newLevel = level;
         let levelShift = 'none';
 
@@ -155,12 +177,19 @@ export default function ShapeMatchGame({
             }
         }
 
+        const newTotal = totalCount + 1;
+        const newCorrect = isCorrect ? correctCount + 1 : correctCount;
+        const newAccuracy = Math.round((newCorrect / newTotal) * 100);
+
+        setTotalCount(newTotal);
+        if (isCorrect) setCorrectCount(newCorrect);
+
         const logEntry = {
             timestamp: new Date().toISOString(),
             action: actionType,
             targetId: opt.name,
-            isCorrect: isCorrect,
-            responseTimeMs: responseTimeMs,
+            isCorrect,
+            responseTimeMs,
             metadata: {
                 gameType: 'shape_match',
                 currentLevel: level,
@@ -171,24 +200,31 @@ export default function ShapeMatchGame({
         };
 
         const newLog = [...telemetry, logEntry];
-        const newScore = isCorrect ? score + 1 : score;
         setTelemetry(newLog);
-        if (isCorrect) setScore(newScore);
 
         window.parent.postMessage(
             {
                 type: 'GAME_SCORE_UPDATE',
-                score: newScore,
+                score: newCorrect,
+                rounds: newTotal,
+                accuracy: newAccuracy,
                 rawTelemetry: newLog,
             },
             '*',
         );
 
         if (isCorrect) {
-            if (levelShift === 'up') setFeedback('levelup');
-            else setFeedback('correct');
-            successSfx.current?.play().catch(() => {});
-            setTimeout(() => generate(newLevel), 1200);
+            if (levelShift === 'up') {
+                setFeedback('levelup');
+                levelUpSfx.current?.play().catch(() => {});
+            } else {
+                setFeedback('correct');
+                successSfx.current?.play().catch(() => {});
+            }
+            setTimeout(
+                () => generate(newLevel),
+                levelShift === 'up' ? 2500 : 1200,
+            );
         } else {
             if (levelShift === 'down') setFeedback('leveldown');
             else setFeedback('wrong');
@@ -202,115 +238,183 @@ export default function ShapeMatchGame({
 
     if (!target) return null;
 
+    const FloatingSparkles = () => {
+        const sparkleProps = [
+            { top: '-10%', left: '5%', size: 40, delay: 0 },
+            { top: '15%', left: '-15%', size: 28, delay: 0.2 },
+            { top: '45%', left: '105%', size: 35, delay: 0.3 },
+            { top: '85%', left: '90%', size: 45, delay: 0.25 },
+        ];
+        return (
+            <div className="absolute inset-0 pointer-events-none z-20">
+                {sparkleProps.map((s, i) => (
+                    <motion.div
+                        key={i}
+                        className="absolute text-emerald-400 drop-shadow-sm"
+                        style={{
+                            top: s.top,
+                            left: s.left,
+                            width: s.size,
+                            height: s.size,
+                        }}
+                        initial={{ scale: 0, opacity: 0, rotate: 0 }}
+                        animate={{
+                            scale: [0, 1.2, 0],
+                            opacity: [0, 1, 0],
+                            rotate: 180,
+                        }}
+                        transition={{
+                            duration: 1.5,
+                            delay: s.delay,
+                            repeat: Infinity,
+                        }}
+                    >
+                        <SparkleIcon className="w-full h-full" />
+                    </motion.div>
+                ))}
+            </div>
+        );
+    };
+
     return (
-        <div className="w-full h-screen bg-[#fcfcfd] dark:bg-[#0a0c12] flex flex-col items-center justify-center p-8 overflow-hidden font-sans">
-            <div className="absolute top-6 left-0 right-0 flex justify-center gap-6 px-8 opacity-80">
+        <div className="w-full h-[100dvh] bg-[#fcfcfd] dark:bg-[#0a0c12] flex flex-col justify-between p-4 overflow-hidden font-sans relative touch-none selection:bg-none">
+            <motion.div
+                animate={{ opacity: feedback === 'wrong' ? 1 : 0 }}
+                className="absolute inset-0 bg-rose-500/20 pointer-events-none z-0 transition-opacity duration-300"
+            />
+
+            <div className="flex flex-wrap justify-center items-center gap-2 shrink-0 z-20 h-[8dvh]">
                 {studentAge && (
-                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-white/10 px-4 py-2 rounded-full text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/10 px-3 py-1.5 rounded-full text-xs font-bold text-slate-500 uppercase tracking-widest shadow-sm">
                         <User size={14} /> Age {studentAge}
                     </div>
                 )}
-                <div className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
-                    <BarChart size={14} /> Level {level}
+                <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-indigo-600 uppercase tracking-widest shadow-sm border border-indigo-100">
+                    <BarChart size={14} /> Lvl {level}
                 </div>
-                <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/30 px-4 py-2 rounded-full text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-                    <Trophy size={14} /> Score {score}
-                </div>
+                {showMetrics && (
+                    <>
+                        <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-600 uppercase tracking-widest shadow-sm border border-emerald-100">
+                            <Trophy size={14} /> Score {correctCount}
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-purple-600 uppercase tracking-widest shadow-sm border border-purple-100">
+                            <Activity size={14} /> Rounds {totalCount}
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-amber-600 uppercase tracking-widest shadow-sm border border-amber-100">
+                            <Target size={14} /> {accuracy}%
+                        </div>
+                    </>
+                )}
             </div>
 
-            <div className="relative mb-10 mt-10">
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center w-full relative z-10 p-4">
+                <AnimatePresence>
+                    {feedback === 'levelup' && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
+                            animate={{ opacity: 1, scale: 1.2, rotate: 0 }}
+                            exit={{ opacity: 0, scale: 2 }}
+                            className="absolute z-50 text-emerald-500 font-black text-[12vmin] uppercase tracking-widest drop-shadow-[0_0_30px_rgba(16,185,129,0.8)] whitespace-nowrap text-center flex flex-col items-center"
+                        >
+                            <SparkleIcon className="w-16 h-16 mb-2 animate-spin-slow" />
+                            LEVEL UP!
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
                 <motion.div
-                    key={target.name}
                     animate={
                         feedback === 'wrong' || feedback === 'leveldown'
-                            ? { x: [-8, 8, -8, 8, 0] }
-                            : { scale: [1, 1.02, 1] }
+                            ? { x: [-15, 15, -15, 15, 0] }
+                            : feedback === 'correct'
+                              ? { scale: [1, 1.1, 1] }
+                              : {}
                     }
-                    transition={
-                        feedback === 'wrong' || feedback === 'leveldown'
-                            ? { duration: 0.4 }
-                            : { repeat: Infinity, duration: 4 }
-                    }
-                    className="w-48 h-48 rounded-[64px] bg-white dark:bg-white/5 border border-slate-200/60 dark:border-white/10 shadow-xl flex items-center justify-center relative"
+                    transition={{ duration: 0.4 }}
+                    className={cn(
+                        'aspect-square max-h-full max-w-full w-auto h-full min-w-[120px] rounded-[25%] bg-white dark:bg-white/5 border shadow-xl flex items-center justify-center relative transition-colors duration-500',
+                        feedback === 'correct'
+                            ? 'border-emerald-400 shadow-[0_0_80px_rgba(52,211,153,0.5)]'
+                            : 'border-slate-200 dark:border-white/10',
+                    )}
                 >
-                    <target.icon
-                        size={90}
-                        strokeWidth={1.5}
-                        className="text-indigo-500"
-                    />
-                    <AnimatePresence>
-                        {feedback === 'levelup' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0 }}
-                                className="absolute -top-12 text-emerald-500 flex flex-col items-center"
-                            >
-                                <ArrowUpCircle
-                                    size={32}
-                                    className="animate-bounce"
-                                />
-                                <span className="text-xs font-black uppercase tracking-widest mt-1">
-                                    Level Up!
-                                </span>
-                            </motion.div>
-                        )}
-                        {feedback === 'leveldown' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0 }}
-                                className="absolute -top-12 text-amber-500 flex flex-col items-center"
-                            >
-                                <ArrowDownCircle
-                                    size={32}
-                                    className="animate-bounce"
-                                />
-                                <span className="text-xs font-black uppercase tracking-widest mt-1">
-                                    Easier
-                                </span>
-                            </motion.div>
-                        )}
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={target.name}
+                            initial={{ opacity: 0, scale: 0.5 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.5 }}
+                            transition={{ duration: 0.3 }}
+                            className="w-full h-full flex items-center justify-center text-indigo-500"
+                        >
+                            <target.icon
+                                className="w-[50%] h-[50%] drop-shadow-sm"
+                                strokeWidth={1.5}
+                            />
+                        </motion.div>
                     </AnimatePresence>
                 </motion.div>
             </div>
 
-            <div className="text-center mb-8">
-                <h2 className="text-3xl font-light text-slate-800 dark:text-slate-100 tracking-tight h-10">
+            <div className="text-center shrink-0 w-full h-[8dvh] flex items-center justify-center z-10 px-4">
+                <h2
+                    className={cn(
+                        'text-[clamp(1.5rem,5vmin,2.5rem)] font-light tracking-tight leading-tight transition-colors',
+                        feedback === 'wrong' || feedback === 'leveldown'
+                            ? 'text-rose-500 font-bold'
+                            : feedback === 'correct'
+                              ? 'text-emerald-500 font-bold'
+                              : 'text-slate-800 dark:text-slate-100',
+                    )}
+                >
                     {feedback === 'wrong' ? (
-                        'Try again...'
+                        'Try again!'
                     ) : feedback === 'leveldown' ? (
                         "Let's try an easier one!"
+                    ) : feedback === 'correct' ? (
+                        'Great Job!'
                     ) : (
                         <>
                             Find the{' '}
-                            <span className="font-semibold">{target.name}</span>
+                            <span className="font-semibold text-indigo-500">
+                                {target.name}
+                            </span>
                         </>
                     )}
                 </h2>
             </div>
 
-            <div
-                className={cn(
-                    'grid gap-4 w-full max-w-md',
-                    level === 1
-                        ? 'grid-cols-2'
-                        : level === 2
-                          ? 'grid-cols-2'
-                          : 'grid-cols-3',
-                )}
-            >
-                {options.map((opt) => (
-                    <motion.button
-                        key={opt.name}
-                        whileTap={{ scale: 0.94 }}
-                        onClick={(e) => handleSelect(e, opt)}
-                        className="h-20 rounded-3xl border border-slate-200/80 bg-white/50 flex flex-col items-center justify-center text-[11px] font-bold uppercase tracking-wider text-slate-500 transition-all hover:bg-white hover:text-indigo-600 hover:shadow-md"
-                    >
-                        <opt.icon size={24} className="mb-1.5" />
-                        {opt.name}
-                    </motion.button>
-                ))}
+            <div className="w-full max-w-3xl mx-auto shrink-0 z-20 pb-4 px-4">
+                <div
+                    className={cn(
+                        'grid gap-3',
+                        options.length <= 4
+                            ? 'grid-cols-2'
+                            : 'grid-cols-2 md:grid-cols-3',
+                    )}
+                >
+                    <AnimatePresence mode="popLayout">
+                        {options.map((opt) => (
+                            <motion.button
+                                key={opt.name}
+                                layout
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                                transition={{ duration: 0.3 }}
+                                whileTap={{ scale: 0.94 }}
+                                onClick={(e) => handleSelect(e, opt)}
+                                className="min-h-[80px] h-[12dvh] max-h-[100px] w-full rounded-[24px] border-[2px] border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md flex flex-col items-center justify-center text-[clamp(0.8rem,2.5vmin,1.2rem)] font-bold uppercase tracking-wider text-slate-500 transition-all hover:bg-white hover:text-indigo-600 hover:shadow-md hover:border-indigo-300"
+                            >
+                                <opt.icon
+                                    className="w-[clamp(1.5rem,5vmin,2.5rem)] h-[clamp(1.5rem,5vmin,2.5rem)] mb-1 shrink-0"
+                                    strokeWidth={1.5}
+                                />
+                                <span className="truncate">{opt.name}</span>
+                            </motion.button>
+                        ))}
+                    </AnimatePresence>
+                </div>
             </div>
         </div>
     );

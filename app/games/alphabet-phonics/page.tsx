@@ -3,14 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-    Mic,
-    BarChart,
-    Trophy,
-    User,
-    ArrowUpCircle,
-    ArrowDownCircle,
-} from 'lucide-react';
+import { Mic, BarChart, Trophy, User, Target, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const SparkleIcon = ({ className }: { className?: string }) => (
@@ -147,20 +140,19 @@ export default function AlphabetGame({
     const [isAdaptive, setIsAdaptive] = useState(
         () => searchParams.get('adaptive') !== 'false',
     );
+    const [showMetrics, setShowMetrics] = useState(
+        () => searchParams.get('enableLearnerControls') === 'true',
+    );
 
     const getStartingLevel = () => {
         const urlLevel = parseInt(searchParams.get('level') || '0', 10);
         if (urlLevel > 0 && urlLevel <= MAX_LEVEL) return urlLevel;
         if (baseDifficulty) return baseDifficulty;
-        return studentAge && studentAge <= 4 ? 1 : 2;
+        return 1; // ✨ STRICTLY LEVEL 1
     };
 
-    const initialLevel = getStartingLevel();
-
-    const [level, setLevel] = useState<number>(initialLevel);
-    const [target, setTarget] = useState<any>(() =>
-        getRandomItem(initialLevel),
-    );
+    const [level, setLevel] = useState<number>(getStartingLevel());
+    const [target, setTarget] = useState<any>(() => getRandomItem(level));
     const [feedback, setFeedback] = useState<
         | 'none'
         | 'wrong'
@@ -170,10 +162,13 @@ export default function AlphabetGame({
         | 'levelup'
         | 'leveldown'
         | 'preparing'
-    >('preparing');
-    const [prepTimer, setPrepTimer] = useState(3);
+    >('none');
+
     const [correctCount, setCorrectCount] = useState(0);
     const [totalCount, setTotalCount] = useState(0);
+    const accuracy =
+        totalCount === 0 ? 0 : Math.round((correctCount / totalCount) * 100);
+
     const [uiStreak, setUiStreak] = useState(0);
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState<string>('');
@@ -245,11 +240,14 @@ export default function AlphabetGame({
             stopMic();
             isRoundActive.current = false;
             setTarget(nextTarget);
-            setFeedback('preparing');
-            setPrepTimer(3);
             setTranscript('');
+            setFeedback('none');
+            isRoundActive.current = true;
+            timerRef.current = Date.now();
+            setTimerKey(Date.now());
+            startMic();
         },
-        [stopMic],
+        [stopMic, startMic],
     );
 
     const handleResult = useCallback(
@@ -295,10 +293,20 @@ export default function AlphabetGame({
                         levelShift = 'down';
                     }
                 }
+            } else {
+                if (isCorrect) {
+                    streakRef.current += 1;
+                    setUiStreak(streakRef.current);
+                } else {
+                    streakRef.current = 0;
+                    setUiStreak(0);
+                }
             }
 
             const newTotal = totalCount + 1;
             const newCorrect = isCorrect ? correctCount + 1 : correctCount;
+            const newAccuracy = Math.round((newCorrect / newTotal) * 100);
+
             setTotalCount(newTotal);
             if (isCorrect) setCorrectCount(newCorrect);
 
@@ -315,13 +323,20 @@ export default function AlphabetGame({
                             currentLevel: levelRef.current,
                             wordHeard: finalTranscript || '[silence]',
                             resultType,
+                            levelShift:
+                                isAdaptiveRef.current && levelShift !== 'none'
+                                    ? levelShift
+                                    : undefined,
+                            adaptiveMode: isAdaptiveRef.current,
                         },
                     },
                 ];
                 window.parent.postMessage(
                     {
                         type: 'GAME_SCORE_UPDATE',
-                        score: Math.round((newCorrect / newTotal) * 100),
+                        score: newCorrect,
+                        rounds: newTotal,
+                        accuracy: newAccuracy,
                         rawTelemetry: updated,
                     },
                     '*',
@@ -329,14 +344,17 @@ export default function AlphabetGame({
                 return updated;
             });
 
-            if (levelShift === 'up')
+            if (levelShift === 'up') {
+                setFeedback('levelup');
                 sfxRef.current.levelup?.play().catch(() => {});
-            else if (isCorrect) sfxRef.current.correct?.play().catch(() => {});
-            else sfxRef.current.wrong?.play().catch(() => {});
-
-            if (levelShift === 'up') setFeedback('levelup');
-            else if (levelShift === 'down') setFeedback('leveldown');
-            else setFeedback(resultType);
+            } else if (isCorrect) {
+                setFeedback('correct');
+                sfxRef.current.correct?.play().catch(() => {});
+            } else {
+                if (levelShift === 'down') setFeedback('leveldown');
+                else setFeedback(resultType);
+                sfxRef.current.wrong?.play().catch(() => {});
+            }
 
             stopMic();
             if (autoRecoveryTimeoutRef.current)
@@ -366,15 +384,13 @@ export default function AlphabetGame({
             if (event.data?.type === 'SYNC_STATE') {
                 if (event.data.payload.isAdaptive !== undefined)
                     setIsAdaptive(event.data.payload.isAdaptive);
-                if (event.data.payload.level !== undefined) {
-                    setLevel(event.data.payload.level);
-                    generate(event.data.payload.level);
-                }
+                if (event.data.payload.enableLearnerControls !== undefined)
+                    setShowMetrics(event.data.payload.enableLearnerControls);
             }
         };
         window.addEventListener('message', handleSync);
         return () => window.removeEventListener('message', handleSync);
-    }, [generate]);
+    }, []);
 
     useEffect(() => {
         sfxRef.current = {
@@ -434,25 +450,9 @@ export default function AlphabetGame({
             };
             recognitionRef.current = recognition;
         }
-        return () => stopMic();
-    }, [handleResult, stopMic]);
-
-    useEffect(() => {
-        if (feedback === 'preparing') {
-            const t = setTimeout(() => {
-                if (prepTimer > 0) setPrepTimer((prev) => prev - 1);
-                else {
-                    setFeedback('none');
-                    isRoundActive.current = true;
-                    const now = Date.now();
-                    timerRef.current = now;
-                    setTimerKey(now);
-                    startMic();
-                }
-            }, 1000);
-            return () => clearTimeout(t);
-        }
-    }, [feedback, prepTimer, startMic]);
+        generate(level);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         let t: NodeJS.Timeout;
@@ -497,7 +497,7 @@ export default function AlphabetGame({
         if (autoRecoveryTimeoutRef.current)
             clearTimeout(autoRecoveryTimeoutRef.current);
         if (!isListening) {
-            if (feedback === 'none' || feedback === 'preparing') startMic();
+            if (feedback === 'none') startMic();
             else if (
                 feedback === 'wrong' ||
                 feedback === 'timeout' ||
@@ -561,44 +561,75 @@ export default function AlphabetGame({
         (feedback === 'wrong' ||
             feedback === 'timeout' ||
             feedback === 'almost');
+    const isSuccessState = feedback === 'correct' || feedback === 'levelup';
 
     return (
-        <div className="w-full h-screen bg-[#fcfcfd] dark:bg-[#0a0c12] flex flex-col items-center justify-between py-6 px-4 overflow-hidden font-sans relative">
-            <div className="w-full flex justify-center gap-4 opacity-80 shrink-0 z-20">
+        <div className="w-full h-[100dvh] bg-[#fcfcfd] dark:bg-[#0a0c12] flex flex-col justify-between pt-[2dvh] px-4 overflow-hidden font-sans relative touch-none selection:bg-none">
+            <motion.div
+                animate={{ opacity: feedback === 'wrong' ? 1 : 0 }}
+                className="absolute inset-0 bg-rose-500/20 pointer-events-none z-0 transition-opacity duration-300"
+            />
+
+            <div className="flex flex-wrap justify-center items-center gap-2 shrink-0 z-20">
                 {studentAge && (
-                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-white/10 px-4 py-2 rounded-full text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/10 px-3 py-1.5 rounded-full text-xs font-bold text-slate-500 uppercase tracking-widest shadow-sm">
                         <User size={14} /> Age {studentAge}
                     </div>
                 )}
-                <div className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-full text-xs font-bold text-indigo-600 uppercase tracking-widest">
-                    <BarChart size={14} /> Level {level}
+                <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-indigo-600 uppercase tracking-widest shadow-sm border border-indigo-100">
+                    <BarChart size={14} /> Lvl {level}
                 </div>
-                <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/30 px-4 py-2 rounded-full text-xs font-bold text-emerald-600 uppercase tracking-widest">
-                    <Trophy size={14} />{' '}
-                    {totalCount === 0
-                        ? 0
-                        : Math.round((correctCount / totalCount) * 100)}
-                    %
-                </div>
+                {showMetrics && (
+                    <>
+                        <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-600 uppercase tracking-widest shadow-sm border border-emerald-100">
+                            <Trophy size={14} /> Score {correctCount}
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-purple-600 uppercase tracking-widest shadow-sm border border-purple-100">
+                            <Activity size={14} /> Rounds {totalCount}
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-900/30 px-3 py-1.5 rounded-full text-xs font-bold text-amber-600 uppercase tracking-widest shadow-sm border border-amber-100">
+                            <Target size={14} /> {accuracy}%
+                        </div>
+                    </>
+                )}
             </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center w-full min-h-0 relative z-10">
+            <div
+                className="flex-1 min-h-0 flex flex-col items-center justify-center w-full relative z-10 py-6"
+                style={{ perspective: 1000 }}
+            >
+                <AnimatePresence>
+                    {feedback === 'levelup' && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
+                            animate={{ opacity: 1, scale: 1.2, rotate: 0 }}
+                            exit={{ opacity: 0, scale: 2 }}
+                            className="absolute z-50 text-emerald-500 font-black text-[12vmin] uppercase tracking-widest drop-shadow-[0_0_30px_rgba(16,185,129,0.8)] whitespace-nowrap text-center flex flex-col items-center"
+                        >
+                            <SparkleIcon className="w-16 h-16 mb-2 animate-spin-slow" />
+                            LEVEL UP!
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
                 <motion.div
                     animate={
-                        feedback === 'correct' || feedback === 'levelup'
-                            ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }
+                        isSuccessState
+                            ? { rotateY: 360, scale: [1, 1.1, 1] }
                             : feedback === 'wrong' || feedback === 'leveldown'
-                              ? { x: [-10, 10, -10, 10, 0] }
-                              : { y: [0, -2, 0] }
+                              ? { x: [-15, 15, -15, 15, 0] }
+                              : { rotateY: 0, y: [0, -2, 0] }
                     }
-                    transition={{ duration: 0.5, ease: 'easeInOut' }}
+                    transition={{ duration: 0.6, ease: 'easeInOut' }}
+                    style={{ transformStyle: 'preserve-3d' }}
                     className={cn(
-                        'aspect-[4/3] w-[80vw] max-w-[350px] max-h-[250px] rounded-[40px] bg-white border border-slate-200 shadow-xl flex flex-col items-center justify-center relative overflow-visible transition-shadow duration-500',
-                        (feedback === 'correct' || feedback === 'levelup') &&
-                            'shadow-[0_0_50px_rgba(16,185,129,0.4)] border-emerald-200',
+                        'aspect-square max-h-full max-w-full w-auto h-full min-w-[150px] rounded-[25%] bg-white border shadow-xl flex flex-col items-center justify-center relative overflow-visible transition-colors duration-500',
+                        isSuccessState
+                            ? 'border-emerald-400 shadow-[0_0_80px_rgba(52,211,153,0.5)]'
+                            : 'border-slate-200 dark:border-white/10',
                     )}
                 >
-                    {(feedback === 'correct' || feedback === 'levelup') && (
+                    {isSuccessState && (
                         <>
                             <motion.div
                                 initial={{ opacity: 0 }}
@@ -610,148 +641,69 @@ export default function AlphabetGame({
                     )}
 
                     <AnimatePresence mode="wait">
-                        {feedback !== 'preparing' ? (
-                            <motion.div
-                                key={target.prompt}
-                                initial={{ opacity: 0, scale: 0.5 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 1.2 }}
-                                className="flex flex-col items-center z-10"
+                        <motion.div
+                            key={isSuccessState ? 'answer' : 'prompt'}
+                            initial={{ opacity: 0, scale: 0.5 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.5 }}
+                            style={{ rotateY: isSuccessState ? 360 : 0 }}
+                            className="flex flex-col items-center z-10"
+                        >
+                            <span
+                                className={cn(
+                                    'text-[clamp(4rem,20vmin,8rem)] leading-none select-none font-black drop-shadow-sm',
+                                    isSuccessState
+                                        ? 'text-emerald-500'
+                                        : 'text-slate-800',
+                                )}
                             >
-                                <span
-                                    className={cn(
-                                        'leading-none select-none font-black drop-shadow-sm transition-colors duration-500',
-                                        feedback === 'correct' ||
-                                            feedback === 'levelup'
-                                            ? 'text-emerald-500 text-[18vh] sm:text-[140px]'
-                                            : 'text-slate-800 text-[15vh] sm:text-[110px]',
-                                    )}
-                                >
-                                    {feedback === 'correct' ||
-                                    feedback === 'levelup'
-                                        ? target.answer
-                                        : target.prompt}
-                                </span>
-                            </motion.div>
-                        ) : (
-                            <motion.div
-                                key="prep"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="flex flex-col items-center justify-center z-10"
-                            >
-                                <span className="text-7xl font-black text-rose-500 animate-pulse">
-                                    {prepTimer > 0 ? prepTimer : 'GO!'}
-                                </span>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    <AnimatePresence>
-                        {feedback === 'levelup' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="absolute -top-12 text-emerald-500 flex flex-col items-center z-20"
-                            >
-                                <ArrowUpCircle
-                                    size={40}
-                                    className="animate-bounce"
-                                />
-                                <span className="text-[10px] font-black uppercase tracking-widest mt-1">
-                                    Level Up!
-                                </span>
-                            </motion.div>
-                        )}
-                        {feedback === 'leveldown' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="absolute -top-12 text-amber-500 flex flex-col items-center z-20"
-                            >
-                                <ArrowDownCircle
-                                    size={40}
-                                    className="animate-bounce"
-                                />
-                                <span className="text-[10px] font-black uppercase tracking-widest mt-1">
-                                    Easier
-                                </span>
-                            </motion.div>
-                        )}
+                                {isSuccessState ? target.answer : target.prompt}
+                            </span>
+                        </motion.div>
                     </AnimatePresence>
                 </motion.div>
-
-                <div className="h-[12vh] flex flex-col items-center justify-center mt-6 z-10">
-                    <AnimatePresence mode="wait">
-                        <motion.h2
-                            key={feedback}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="text-xl sm:text-2xl font-light text-slate-800 dark:text-slate-100 text-center px-4"
-                        >
-                            {feedback === 'preparing' ? (
-                                <span className="text-slate-400 font-bold">
-                                    Ready...
-                                </span>
-                            ) : feedback === 'correct' ||
-                              feedback === 'levelup' ? (
-                                <span className="text-emerald-500 font-black flex items-center gap-2 justify-center scale-110">
-                                    <motion.div
-                                        animate={{ scale: [0.8, 1.2, 0.8] }}
-                                        transition={{
-                                            repeat: Infinity,
-                                            duration: 1.5,
-                                        }}
-                                    >
-                                        <SparkleIcon className="w-6 h-6 text-emerald-400" />
-                                    </motion.div>
-                                    AMAZING!
-                                    <motion.div
-                                        animate={{ scale: [0.8, 1.2, 0.8] }}
-                                        transition={{
-                                            repeat: Infinity,
-                                            duration: 1.5,
-                                            delay: 0.3,
-                                        }}
-                                    >
-                                        <SparkleIcon className="w-6 h-6 text-emerald-400" />
-                                    </motion.div>
-                                </span>
-                            ) : feedback === 'almost' ? (
-                                <span className="text-amber-500 font-bold">
-                                    Almost there!
-                                </span>
-                            ) : feedback === 'wrong' ? (
-                                <span className="text-rose-500 font-bold">
-                                    Try again!
-                                </span>
-                            ) : feedback === 'timeout' ? (
-                                <span className="text-amber-500 font-bold">
-                                    I didn&apos;t hear you...
-                                </span>
-                            ) : (
-                                <>
-                                    Can you say the letter{' '}
-                                    <span className="font-semibold text-rose-500">
-                                        "{target.prompt}"
-                                    </span>
-                                    ?
-                                </>
-                            )}
-                        </motion.h2>
-                    </AnimatePresence>
-                    {transcript && (
-                        <span className="text-slate-400 italic text-sm mt-1 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                            "{transcript}"
-                        </span>
-                    )}
-                </div>
             </div>
 
-            <div className="w-full flex flex-col items-center gap-2 shrink-0 pb-4 z-20">
-                <div className="h-6 flex items-end gap-1 mb-2">
+            <div className="text-center shrink-0 w-full h-[8dvh] flex items-center justify-center z-10 px-4">
+                <h2
+                    className={cn(
+                        'text-[clamp(1.5rem,5vmin,2.5rem)] font-light tracking-tight leading-tight transition-colors',
+                        feedback === 'wrong' || feedback === 'leveldown'
+                            ? 'text-rose-500 font-bold'
+                            : feedback === 'correct'
+                              ? 'text-emerald-500 font-bold'
+                              : 'text-slate-800 dark:text-slate-100',
+                    )}
+                >
+                    {feedback === 'wrong' ? (
+                        'Try again!'
+                    ) : feedback === 'leveldown' ? (
+                        "Let's try an easier one!"
+                    ) : feedback === 'correct' ? (
+                        'Great Job!'
+                    ) : feedback === 'timeout' ? (
+                        "I didn't hear you..."
+                    ) : (
+                        <>
+                            Say the letter{' '}
+                            <span className="font-semibold text-indigo-500">
+                                "{target.prompt}"
+                            </span>
+                        </>
+                    )}
+                </h2>
+            </div>
+
+            <div className="h-[4dvh] flex items-center justify-center shrink-0 w-full mb-[1dvh]">
+                {transcript && (
+                    <span className="text-slate-400 italic text-[clamp(0.8rem,2.5vmin,1.2rem)] bg-slate-100 px-4 py-1 rounded-full border border-slate-200">
+                        "{transcript}"
+                    </span>
+                )}
+            </div>
+
+            <div className="w-full flex flex-col items-center shrink-0 z-20 pb-4">
+                <div className="h-[2dvh] flex items-end gap-1 mb-[1dvh]">
                     {isListening &&
                         [1, 2, 3, 4, 5].map((i) => (
                             <motion.div
@@ -761,7 +713,7 @@ export default function AlphabetGame({
                                     repeat: Infinity,
                                     duration: 0.5 + i * 0.1,
                                 }}
-                                className="w-1.5 bg-rose-400 rounded-full"
+                                className="w-[clamp(4px,1vmin,6px)] bg-rose-400 rounded-full"
                             />
                         ))}
                 </div>
@@ -773,11 +725,11 @@ export default function AlphabetGame({
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.5 }}
-                                className="absolute -top-14 text-rose-500 z-30"
+                                className="absolute -top-[6dvh] text-rose-500 z-30"
                             >
                                 <ArrowDownCircle
-                                    size={36}
-                                    className="animate-bounce drop-shadow-md"
+                                    size={32}
+                                    className="animate-bounce drop-shadow-md w-[clamp(1.5rem,5vmin,2.25rem)] h-[clamp(1.5rem,5vmin,2.25rem)]"
                                 />
                             </motion.div>
                         )}
@@ -797,23 +749,25 @@ export default function AlphabetGame({
                         }
                         onClick={handleMicClick}
                         className={cn(
-                            'w-24 h-24 rounded-full flex items-center justify-center border-4 shadow-xl transition-all duration-500 cursor-pointer relative',
+                            'w-[clamp(5rem,15vmin,7rem)] h-[clamp(5rem,15vmin,7rem)] rounded-full flex items-center justify-center border-[clamp(2px,0.6vmin,4px)] shadow-xl transition-all duration-500 cursor-pointer relative',
                             isListening
-                                ? 'bg-rose-500 border-rose-300 text-white shadow-rose-500/40'
+                                ? 'bg-rose-500 border-rose-300 text-white shadow-[0_0_30px_rgba(244,63,94,0.5)]'
                                 : isTryAgainState
                                   ? 'bg-rose-50 border-rose-400 text-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.3)]'
                                   : 'bg-white border-slate-200 text-rose-300 hover:border-rose-400',
                         )}
                     >
                         <Mic
-                            size={40}
-                            className={cn(isListening && 'animate-pulse')}
+                            className={cn(
+                                'w-[clamp(2rem,6vmin,3rem)] h-[clamp(2rem,6vmin,3rem)]',
+                                isListening && 'animate-pulse',
+                            )}
                         />
                     </motion.button>
                 </div>
 
-                <div className="w-48 h-1.5 bg-slate-200 rounded-full mt-4 overflow-hidden">
-                    {feedback === 'none' && (
+                <div className="w-[clamp(10rem,30vmin,15rem)] h-[clamp(4px,1vmin,6px)] bg-slate-200 rounded-full mt-[2dvh] overflow-hidden">
+                    {isListening && feedback === 'none' && (
                         <motion.div
                             key={timerKey}
                             initial={{ width: '100%' }}
@@ -826,7 +780,7 @@ export default function AlphabetGame({
 
                 <p
                     className={cn(
-                        'text-[11px] font-black uppercase tracking-[0.2em] mt-1 transition-colors duration-300',
+                        'text-[clamp(0.6rem,2vmin,0.75rem)] font-black uppercase tracking-[0.2em] mt-[1dvh] transition-colors duration-300',
                         isTryAgainState
                             ? 'text-rose-500 animate-pulse'
                             : 'text-slate-400',
@@ -835,7 +789,7 @@ export default function AlphabetGame({
                     {isListening
                         ? 'Listening...'
                         : isTryAgainState
-                          ? 'Get ready...'
+                          ? 'Tap Mic to Try Again'
                           : 'Tap Mic to Start'}
                 </p>
             </div>

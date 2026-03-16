@@ -34,13 +34,11 @@ export default function GameShellView({
     const { status, initialize } = telemetry;
     const [countdown, setCountdown] = useState<number | null>(null);
     const [isInitiating, setIsInitiating] = useState(false);
-    const activity = session?.activity || {};
 
-    // 1. SHELL IS THE SOURCE OF TRUTH FOR LEVEL
-    // It can start at a base difficulty if provided by the activity, otherwise 1
-    const [currentLevel, setCurrentLevel] = useState<number>(1);
+    const activity: any = session?.activity || {};
 
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
     const [vh, setVh] = useState('100vh');
 
     useEffect(() => {
@@ -71,48 +69,86 @@ export default function GameShellView({
     const shouldShowIframe =
         status === 'playing' || status === 'paused' || isInitiating;
 
-    // 2. INITIAL IFRAME MOUNT (Only happens once)
-    const iframeSrc = useMemo(() => {
-        if (!activity.activityUrl) return '';
+    // ✨ MEDIA PARSER FIX: Static URL ensures iframe NEVER hard reloads mid-game!
+    const mediaConfig = useMemo(() => {
+        let baseUrl = activity.activityUrl || '';
+        const type = activity.activityType?.toLowerCase() || '';
+        const rawHtml =
+            activity.visualContent ||
+            activity.content ||
+            activity.htmlContent ||
+            activity.richText ||
+            activity.description ||
+            '';
 
-        let baseUrl = activity.activityUrl;
+        if (type === 'visual' || (!baseUrl && rawHtml)) {
+            const htmlDocument = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.7;color:#1e293b;padding:2rem 5%;max-width:800px;margin:0 auto;font-size:18px;word-wrap:break-word;}img,video,iframe{max-width:100%;height:auto;border-radius:8px;margin:1rem 0;}a{color:#6366f1;text-decoration:none;font-weight:500;}a:hover{text-decoration:underline;}h1,h2,h3,h4{margin-top:2rem;margin-bottom:1rem;color:#0f172a;line-height:1.2;}blockquote{border-left:4px solid #cbd5e1;margin:1.5rem 0;padding-left:1rem;color:#64748b;font-style:italic;}pre,code{background:#f1f5f9;padding:0.2rem 0.4rem;border-radius:4px;font-size:0.9em;}@media (prefers-color-scheme: dark){body{color:#f8fafc;background:#000;}h1,h2,h3,h4{color:#ffffff;}blockquote{border-left-color:#334155;color:#94a3b8;}pre,code{background:#1e293b;color:#f8fafc;}}</style></head><body>${rawHtml}</body></html>`;
+            return { renderType: 'html', srcDoc: htmlDocument };
+        }
 
-        // Catch 'game' activity type and swap localhost with current deployment origin
-        if (activity.activityType === 'game' && typeof window !== 'undefined') {
+        if (!baseUrl) return { renderType: 'none', src: '' };
+
+        if (
+            type === 'youtube' ||
+            baseUrl.includes('youtube.com') ||
+            baseUrl.includes('youtu.be')
+        ) {
+            const ytRegex =
+                /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+            const match = baseUrl.match(ytRegex);
+            const videoId = match ? match[1] : null;
+            const origin =
+                typeof window !== 'undefined' ? window.location.origin : '';
+            return {
+                renderType: 'iframe',
+                src: videoId
+                    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&enablejsapi=1&origin=${origin}`
+                    : baseUrl,
+            };
+        }
+
+        if (type === 'pdf' || baseUrl.toLowerCase().endsWith('.pdf'))
+            return { renderType: 'iframe', src: baseUrl };
+        if (type === 'video' || baseUrl.match(/\.(mp4|webm|ogg|mov)$/i))
+            return { renderType: 'video', src: baseUrl };
+        if (
+            type === 'image' ||
+            baseUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i)
+        )
+            return { renderType: 'image', src: baseUrl };
+
+        if (type === 'game' && typeof window !== 'undefined') {
             try {
                 const parsedUrl = new URL(baseUrl);
                 if (
                     parsedUrl.hostname === 'localhost' ||
                     parsedUrl.hostname === '127.0.0.1'
                 ) {
-                    // window.location.origin provides the current "http://[IP]:[PORT]"
                     baseUrl = `${window.location.origin}${parsedUrl.pathname}${parsedUrl.search}`;
                 }
-            } catch (e) {
-                // Fails silently if the URL is already relative, moving on using the raw string
-            }
-        } else {
-            // Original fallback behavior for non-game activities
-            const adminPort = process.env.NEXT_PUBLIC_ADMIN_PORT;
+            } catch (e) {}
+        } else if (type === 'game') {
+            const adminPort = process.env.NEXT_PUBLIC_ADMIN_PORT || '';
             baseUrl = baseUrl.replace(`http://localhost:${adminPort}`, '');
         }
 
         const separator = baseUrl.includes('?') ? '&' : '?';
+        // URL is completely static. All dynamic data is sent via postMessage sync.
+        const finalSrc =
+            type === 'game' ? `${baseUrl}${separator}source=platform` : baseUrl;
 
-        // Pass initial state so the game boots correctly
-        const adaptiveFlag =
-            session.enableAdaptiveDifficulty !== false ? 'true' : 'false';
-
-        // We append the dynamic parameters
-        return `${baseUrl}${separator}adaptive=${adaptiveFlag}&level=${currentLevel}`;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        return { renderType: 'iframe', src: finalSrc };
     }, [
         activity.activityUrl,
         activity.activityType,
-        session?.enableAdaptiveDifficulty,
+        activity.visualContent,
+        activity.content,
+        activity.htmlContent,
+        activity.richText,
+        activity.description,
     ]);
 
-    // 3. SILENT PUSH: Sync Source of Truth down to the iframe without reloading
+    // SILENT PUSH: Sync Source of Truth down to the iframe silently
     useEffect(() => {
         if (iframeRef.current?.contentWindow) {
             iframeRef.current.contentWindow.postMessage(
@@ -120,52 +156,53 @@ export default function GameShellView({
                     type: 'SYNC_STATE',
                     payload: {
                         isAdaptive: session.enableAdaptiveDifficulty !== false,
-                        level: currentLevel,
+                        enableLearnerControls:
+                            session.enableLearnerControls || false,
                     },
                 },
                 '*',
             );
         }
-    }, [session.enableAdaptiveDifficulty, currentLevel]);
+    }, [session.enableAdaptiveDifficulty, session.enableLearnerControls]);
 
-    // 4. LISTEN FOR TELEMETRY & ENFORCE ADAPTIVE LOGIC
+    // MEDIA CONTROL
     useEffect(() => {
-        const handleGameMessage = (event: MessageEvent) => {
-            // Only proceed if it's a score update and we have telemetry data
+        if (status === 'paused') {
             if (
-                event.data?.type === 'GAME_SCORE_UPDATE' &&
-                event.data.rawTelemetry
+                mediaConfig.src?.includes('youtube') &&
+                iframeRef.current?.contentWindow
             ) {
-                const telemetryArray = event.data.rawTelemetry;
-                const latestLog = telemetryArray[telemetryArray.length - 1];
-
-                // 1. Check the Source of Truth from the Session
-                const isAdaptiveEnabled =
-                    session?.enableAdaptiveDifficulty !== false;
-
-                // 2. ONLY update the shell's level state if Adaptive is actually ON
-                if (isAdaptiveEnabled && latestLog?.metadata?.levelShift) {
-                    const shift = latestLog.metadata.levelShift;
-
-                    if (shift === 'up') {
-                        setCurrentLevel((prev) => Math.min(prev + 1, 5));
-                    } else if (shift === 'down') {
-                        setCurrentLevel((prev) => Math.max(prev - 1, 1));
-                    }
-                }
-                // If Adaptive is OFF, the Shell simply ignores 'levelShift'
-                // metadata and keeps currentLevel exactly where it is.
+                iframeRef.current.contentWindow.postMessage(
+                    JSON.stringify({
+                        event: 'command',
+                        func: 'pauseVideo',
+                        args: [],
+                    }),
+                    '*',
+                );
             }
-        };
+            if (mediaConfig.renderType === 'video' && videoRef.current)
+                videoRef.current.pause();
+        } else if (status === 'playing') {
+            if (
+                mediaConfig.src?.includes('youtube') &&
+                iframeRef.current?.contentWindow
+            ) {
+                iframeRef.current.contentWindow.postMessage(
+                    JSON.stringify({
+                        event: 'command',
+                        func: 'playVideo',
+                        args: [],
+                    }),
+                    '*',
+                );
+            }
+            if (mediaConfig.renderType === 'video' && videoRef.current)
+                videoRef.current.play();
+        }
+    }, [status, mediaConfig.src, mediaConfig.renderType]);
 
-        window.addEventListener('message', handleGameMessage);
-        return () => window.removeEventListener('message', handleGameMessage);
-
-        // Ensure session properties are in the dependency array so the listener
-        // doesn't use a stale 'false' or 'true' value.
-    }, [session?.enableAdaptiveDifficulty, session?.documentId]);
-
-    // --- AUTO-START LOGIC ---
+    // AUTO-START LOGIC
     useEffect(() => {
         if (
             session?.isHandsFree &&
@@ -178,7 +215,7 @@ export default function GameShellView({
         }
     }, [session?.isHandsFree, status, countdown, isInitiating]);
 
-    // --- COUNTDOWN LOGIC ---
+    // COUNTDOWN LOGIC
     useEffect(() => {
         if (countdown === null || countdown === 0) return;
         tickSfx.current?.play().catch(() => {});
@@ -279,14 +316,43 @@ export default function GameShellView({
 
             <main className="flex-1 relative w-full min-h-0 overflow-hidden bg-[#f8fafc] dark:bg-black">
                 {shouldShowIframe && (
-                    <iframe
-                        ref={iframeRef}
-                        // FIX: Key is strictly the session ID so it NEVER remounts or blinks white.
-                        key={session.documentId}
-                        src={iframeSrc}
-                        className="absolute inset-0 w-full h-full border-none m-0 p-0 block z-10 bg-transparent"
-                        allow="autoplay *; fullscreen *; clipboard-write *; microphone *;"
-                    />
+                    <div className="absolute inset-0 w-full h-full z-10 flex items-center justify-center bg-transparent">
+                        {mediaConfig.renderType === 'html' && (
+                            <iframe
+                                ref={iframeRef}
+                                key={session.documentId}
+                                srcDoc={mediaConfig.srcDoc}
+                                className="w-full h-full border-none m-0 p-0 block bg-white dark:bg-black"
+                                sandbox="allow-scripts allow-same-origin allow-popups"
+                            />
+                        )}
+                        {mediaConfig.renderType === 'iframe' && (
+                            <iframe
+                                ref={iframeRef}
+                                key={session.documentId}
+                                src={mediaConfig.src}
+                                className="w-full h-full border-none m-0 p-0 block bg-transparent"
+                                allow="autoplay *; fullscreen *; clipboard-write *; microphone *; picture-in-picture *;"
+                                allowFullScreen
+                            />
+                        )}
+                        {mediaConfig.renderType === 'video' && (
+                            <video
+                                ref={videoRef}
+                                src={mediaConfig.src}
+                                controls
+                                autoPlay
+                                className="w-full h-full max-h-full object-contain bg-black"
+                            />
+                        )}
+                        {mediaConfig.renderType === 'image' && (
+                            <img
+                                src={mediaConfig.src}
+                                alt={activity.name}
+                                className="w-full h-full max-h-full object-contain"
+                            />
+                        )}
+                    </div>
                 )}
 
                 <AnimatePresence mode="wait">

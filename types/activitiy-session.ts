@@ -105,6 +105,8 @@ export type UpdatectivitySessionPayload = {
     durationMinutes?: number;
     activitySessionStatus?: ActivitySessionStatus;
     score?: number;
+    rounds?: number;
+    accuracy?: number;
     rawTelemetry?: unknown[];
     timeLogs?: TimeLog[];
     enableLearnerControls?: boolean;

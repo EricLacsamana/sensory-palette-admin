@@ -359,10 +359,15 @@ export default function ActivityManager() {
                 const newIds = uploadedFiles.map((f: any) => f.id);
                 finalActivityFileIds = [...finalActivityFileIds, ...newIds];
             }
+            const VALID_STATUSES = ['active', 'disabled', 'coming_soon'];
+            const safeStatus = VALID_STATUSES.includes(formData.activityStatus)
+                ? formData.activityStatus
+                : 'coming_soon';
 
             const payload = {
                 ...formData,
-                // Nullify duration for visuals, keep calculated duration for video/audio/game
+                activityStatus: safeStatus,
+
                 durationMinutes:
                     formData.activityType === 'visual'
                         ? null
@@ -376,8 +381,8 @@ export default function ActivityManager() {
             };
 
             if (selectedActivity) {
-                const targetId =
-                    selectedActivity.documentId || selectedActivity.id;
+                const targetId = selectedActivity.documentId;
+
                 updateMutation.mutate(
                     { id: targetId, payload },
                     {
@@ -387,10 +392,15 @@ export default function ActivityManager() {
                             });
                             closeModal();
                         },
-                        onError: () =>
+                        onError: (error) => {
+                            console.error(
+                                'Upload or save failed:',
+                                error?.response,
+                            );
                             toast.error('Failed to update activity', {
                                 id: 'save-activity',
-                            }),
+                            });
+                        },
                     },
                 );
             } else {
@@ -408,7 +418,6 @@ export default function ActivityManager() {
                 });
             }
         } catch (error) {
-            console.error('Upload or save failed:', error);
             toast.error('System failure during media upload', {
                 id: 'save-activity',
             });
