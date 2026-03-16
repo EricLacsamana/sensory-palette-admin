@@ -94,6 +94,15 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
     const handleFinish = useCallback(
         async (sessionToSave: ActivitySessionResponse) => {
             if (isSaving || isDraining.current) return;
+
+            // ✨ FIX: If the game never actually started (counter didn't finish),
+            // do not send empty game data to the backend. Just cleanly exit.
+            if (!sessionToSave.actualStartAt) {
+                setLatchedSession(undefined);
+                telemetry.reset();
+                return;
+            }
+
             setIsSaving(true);
             isDraining.current = true;
             try {
@@ -114,15 +123,26 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
                 await queryClient.invalidateQueries({
                     queryKey: ['active-session-poll'],
                 });
-                toast.success('Activity data synced');
+                toast.success('Game saved! Awesome job! 🌟');
             } catch (error) {
-                toast.error('Sync failed. Please do not close tab.');
+                toast.error(
+                    'Hold on! Saving your game... please do not close the window! 🛑',
+                );
             } finally {
                 setIsSaving(false);
                 isDraining.current = false;
             }
         },
-        [score, rounds, accuracy, rawTelemetry, finish, queryClient, isSaving],
+        [
+            score,
+            rounds,
+            accuracy,
+            rawTelemetry,
+            finish,
+            queryClient,
+            isSaving,
+            telemetry,
+        ],
     );
 
     const handleStart = useCallback(
@@ -159,7 +179,9 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
                     queryKey: ['active-session-poll'],
                 });
             } catch (error) {
-                toast.error('Failed to start session');
+                toast.error(
+                    "Uh oh! The game didn't start. Let's try again! 🎮",
+                );
             } finally {
                 setIsLocalToggling(false);
             }
@@ -264,13 +286,16 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
                 latchedSession.activitySessionStatus !==
                     ActivitySessionStatus.Completed
             ) {
-                flushData(
-                    latchedSession.documentId,
-                    score,
-                    rounds,
-                    accuracy,
-                    rawTelemetry,
-                );
+                // ✨ FIX: Only flush data if the session officially started
+                if (latchedSession.actualStartAt) {
+                    flushData(
+                        latchedSession.documentId,
+                        score,
+                        rounds,
+                        accuracy,
+                        rawTelemetry,
+                    );
+                }
                 setLatchedSession(undefined);
                 telemetry.reset();
             }
@@ -282,13 +307,16 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         if (!latchedSession) {
             setLatchedSession(serverSession);
         } else if (serverSession.documentId !== latchedSession.documentId) {
-            flushData(
-                latchedSession.documentId,
-                score,
-                rounds,
-                accuracy,
-                rawTelemetry,
-            );
+            // ✨ FIX: Only flush data if the session officially started
+            if (latchedSession.actualStartAt) {
+                flushData(
+                    latchedSession.documentId,
+                    score,
+                    rounds,
+                    accuracy,
+                    rawTelemetry,
+                );
+            }
             telemetry.reset();
             setLatchedSession(serverSession);
         } else if (
