@@ -136,7 +136,6 @@ const pageVariants: Variants = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.05, duration: 0.4 } },
 };
-
 const itemVariants: Variants = {
     hidden: { y: 15, opacity: 0 },
     show: { y: 0, opacity: 1, transition: { duration: 0.3, ease: 'easeOut' } },
@@ -174,7 +173,7 @@ const EmptyWidgetState = ({
     </div>
 );
 
-// --- 🛠️ REHAULED TOOLTIPS ---
+// --- TOOLTIPS ---
 
 const CustomLineTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -210,7 +209,6 @@ const CustomLineTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-// Tooltip now relies completely on Recharts passing the correct active payload
 const CustomRadarTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
@@ -285,14 +283,12 @@ const CustomComposedTooltip = ({ active, payload }: any) => {
     return null;
 };
 
-// --- 🛠️ REHAULED RADAR TICK ---
-// Completely decoupled from React State. Uses pure SVG positioning.
+// --- ✨ OVERLAP-SAFE INTERACTIVE TICK ✨ ---
 const CleanRadarTick = (props: any) => {
     const { payload, x, y, cx, cy } = props;
     const patternName = payload.value;
     const Icon = PATTERN_ICONS[patternName] || BrainCircuit;
 
-    // Detect quadrant for anchoring
     const isTop = y < cy - 20;
     const isBottom = y > cy + 20;
     const isRight = x > cx + 20;
@@ -302,7 +298,6 @@ const CleanRadarTick = (props: any) => {
     if (isLeft && !isTop && !isBottom) textAnchor = 'end';
     if (isRight && !isTop && !isBottom) textAnchor = 'start';
 
-    // Calculate vectors to push labels outward
     const radius = Math.sqrt(Math.pow(x - cx, 2) + Math.pow(y - cy, 2));
     const unitX = (x - cx) / radius;
     const unitY = (y - cy) / radius;
@@ -321,7 +316,6 @@ const CleanRadarTick = (props: any) => {
 
     return (
         <g className="recharts-radar-tick">
-            {/* The Icon */}
             <foreignObject
                 x={iconX - 10}
                 y={iconY - 10}
@@ -333,8 +327,6 @@ const CleanRadarTick = (props: any) => {
                     <Icon size={14} strokeWidth={2} />
                 </div>
             </foreignObject>
-
-            {/* The Text - Note: pointerEvents='none' prevents it from blocking Recharts Tooltip hover detection */}
             <text
                 x={textX}
                 y={textY}
@@ -456,6 +448,16 @@ export default function StudentDashboard() {
         return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
     };
 
+    // ✨ FIX: Properly merge current and previous timeline data so Recharts doesn't drop the 'Previous' line on load.
+    const mergedTimelineData = useMemo(() => {
+        if (!analytics?.charts?.performanceTimeline) return [];
+        return analytics.charts.performanceTimeline.map((item: any) => ({
+            ...item,
+            currentAccuracy: item.currentAccuracy || 0,
+            prevAccuracy: item.prevAccuracy || 0,
+        }));
+    }, [analytics?.charts?.performanceTimeline]);
+
     if (isLoadingStudent || isLoadingAnalytics) {
         return (
             <div className="h-screen w-full flex items-center justify-center bg-[#F8FAFC]">
@@ -466,7 +468,6 @@ export default function StudentDashboard() {
 
     const { overviewMetrics, charts } = analytics || {};
     const displayRadarData = charts?.behavioralRadar || [];
-    const displayLineData = charts?.performanceTimeline || [];
 
     const summaryMetrics = [
         {
@@ -655,10 +656,10 @@ export default function StudentDashboard() {
                             </div>
                         </CardHeader>
                         <CardContent className="p-6 flex-1 min-h-0 relative">
-                            {displayLineData.length > 0 ? (
+                            {mergedTimelineData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart
-                                        data={displayLineData}
+                                        data={mergedTimelineData}
                                         margin={{
                                             top: 10,
                                             right: 10,
@@ -928,14 +929,12 @@ export default function StudentDashboard() {
                                             tick={false}
                                             axisLine={false}
                                         />
-
                                         <Radar
                                             dataKey="intensityScore"
                                             stroke="#8b5cf6"
                                             strokeWidth={2}
                                             fill="#8b5cf6"
                                             fillOpacity={0.12}
-                                            // Recharts handles dot hovering automatically without React State
                                             activeDot={{
                                                 r: 6,
                                                 fill: '#4F46E5',
@@ -948,7 +947,6 @@ export default function StudentDashboard() {
                                                 strokeWidth: 0,
                                             }}
                                         />
-                                        {/* Recharts native Voronoi tooltip trigger */}
                                         <RechartsTooltip
                                             cursor={false}
                                             content={<CustomRadarTooltip />}
@@ -1032,7 +1030,7 @@ export default function StudentDashboard() {
                                                                                 .activity
                                                                                 ?.name
                                                                                 ? 'text-slate-400 italic'
-                                                                                : 'text-slate-900',
+                                                                                : 'text-slate-700',
                                                                         )}
                                                                     >
                                                                         {session
