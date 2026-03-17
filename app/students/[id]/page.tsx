@@ -17,7 +17,6 @@ import {
     LineChart,
     Line,
     Bar,
-    BarChart,
     Cell,
     XAxis,
     YAxis,
@@ -215,7 +214,6 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         const Icon = PATTERN_ICONS[data.pattern] || BrainCircuit;
-
         return (
             <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-2xl min-w-[220px] pointer-events-none">
                 <div className="flex items-center gap-2.5 mb-4 border-b border-slate-700 pb-3">
@@ -255,7 +253,6 @@ const CustomComposedTooltip = ({ active, payload }: any) => {
         const scoreData = payload.find((p: any) => p.dataKey === 'avgAccuracy');
         const playData = payload.find((p: any) => p.dataKey === 'usageCount');
         const data = scoreData?.payload || playData?.payload;
-
         return (
             <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-xl max-w-[250px] z-50">
                 <p className="text-white font-bold text-sm mb-3 border-b border-slate-700 pb-2">
@@ -285,38 +282,29 @@ const CustomComposedTooltip = ({ active, payload }: any) => {
     return null;
 };
 
-// --- ✨ OVERLAP-SAFE INTERACTIVE TICK ✨ ---
 const CleanRadarTick = (props: any) => {
     const { payload, x, y, cx, cy } = props;
     const patternName = payload.value;
     const Icon = PATTERN_ICONS[patternName] || BrainCircuit;
-
     const isTop = y < cy - 20;
     const isBottom = y > cy + 20;
     const isRight = x > cx + 20;
     const isLeft = x < cx - 20;
-
     let textAnchor: 'start' | 'middle' | 'end' | 'inherit' = 'middle';
-
     if (isLeft && !isTop && !isBottom) textAnchor = 'end';
     if (isRight && !isTop && !isBottom) textAnchor = 'start';
-
     const radius = Math.sqrt(Math.pow(x - cx, 2) + Math.pow(y - cy, 2));
     const unitX = (x - cx) / radius;
     const unitY = (y - cy) / radius;
-
     const offsetIcon = 16;
     const offsetText = 36;
-
     const iconX = x + unitX * offsetIcon;
     const iconY = y + unitY * offsetIcon;
     const textX = x + unitX * offsetText;
     const textY = y + unitY * offsetText;
-
     let dyShift = 3;
     if (isTop) dyShift = -2;
     if (isBottom) dyShift = 10;
-
     return (
         <g className="recharts-radar-tick">
             <foreignObject
@@ -363,7 +351,6 @@ export default function StudentDashboard() {
     const studentId = params.id as string;
     const router = useRouter();
     const historyScrollRef = useRef<HTMLDivElement>(null);
-
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
     const [dateRange, setDateRange] = useState(() => {
@@ -461,15 +448,13 @@ export default function StudentDashboard() {
         setIsGeneratingPDF(true);
         const toastId = toast.loading('Generating Clinical Report...');
 
-        // 1. Pre-load the center logo to ensure it renders in the PDF
         const logoImg = new window.Image();
         logoImg.src = '/tlc_therapy_center_logo.png';
         await new Promise((resolve) => {
             logoImg.onload = resolve;
-            logoImg.onerror = resolve; // Continue even if logo fails
+            logoImg.onerror = resolve;
         });
 
-        // Let the state update propagate so animations stop before we snapshot
         setTimeout(async () => {
             try {
                 const doc = new jsPDF('p', 'mm', 'a4');
@@ -480,12 +465,10 @@ export default function StudentDashboard() {
                 // --- LETTERHEAD & BRANDING ---
                 yPos = 15;
 
-                // Add Logo if successfully loaded
                 if (logoImg.width > 0) {
                     doc.addImage(logoImg, 'PNG', 15, yPos, 24, 24);
                 }
 
-                // Center Details
                 doc.setTextColor(15, 23, 42); // Slate 900
                 doc.setFontSize(16);
                 doc.setFont('helvetica', 'bold');
@@ -505,7 +488,6 @@ export default function StudentDashboard() {
                     yPos + 17,
                 );
 
-                // Elegant, muted divider (Slate 200)
                 doc.setDrawColor(226, 232, 240);
                 doc.setLineWidth(1);
                 doc.line(15, yPos + 26, pageWidth - 15, yPos + 26);
@@ -514,7 +496,7 @@ export default function StudentDashboard() {
                 yPos += 45;
                 doc.setFontSize(22);
                 doc.setFont('helvetica', 'bold');
-                doc.setTextColor(15, 23, 42); // Slate 900
+                doc.setTextColor(15, 23, 42);
                 doc.text(
                     'Comprehensive Clinical Progress Report',
                     pageWidth / 2,
@@ -524,7 +506,7 @@ export default function StudentDashboard() {
 
                 doc.setFontSize(10);
                 doc.setFont('helvetica', 'normal');
-                doc.setTextColor(100, 116, 139); // Slate 500
+                doc.setTextColor(100, 116, 139);
                 const reportDate = format(new Date(), 'MMMM dd, yyyy');
                 doc.text(
                     `Generated on: ${reportDate}`,
@@ -535,18 +517,16 @@ export default function StudentDashboard() {
 
                 yPos += 22;
 
-                // Utility for Headers with Clean, Muted Accents
                 const addSectionHeader = (title: string) => {
                     if (yPos > pageHeight - 40) {
                         doc.addPage();
                         yPos = 20;
                     }
-                    doc.setTextColor(15, 23, 42); // Slate 900
+                    doc.setTextColor(15, 23, 42);
                     doc.setFontSize(13);
                     doc.setFont('helvetica', 'bold');
                     doc.text(title, 15, yPos);
 
-                    // Clean, subtle underline (Slate 200)
                     doc.setDrawColor(226, 232, 240);
                     doc.setLineWidth(1);
                     doc.line(15, yPos + 3, pageWidth - 15, yPos + 3);
@@ -555,94 +535,76 @@ export default function StudentDashboard() {
 
                 // --- Profile ---
                 addSectionHeader('Learner Profile');
-
-                doc.setTextColor(15, 23, 42); // Slate 900
+                doc.setTextColor(15, 23, 42);
                 doc.setFontSize(11);
-
-                const col1X = 15;
-                const col1ValX = 40;
-                const col2X = 110;
-                const col2ValX = 135;
-
                 doc.setFont('helvetica', 'bold');
-                doc.text('Name:', col1X, yPos);
+                doc.text('Name:', 15, yPos);
                 doc.setFont('helvetica', 'normal');
                 doc.text(
                     `${student?.firstName || ''} ${student?.lastName || ''}`,
-                    col1ValX,
+                    40,
                     yPos,
                 );
-
                 doc.setFont('helvetica', 'bold');
-                doc.text('Age:', col2X, yPos);
+                doc.text('Age:', 110, yPos);
                 doc.setFont('helvetica', 'normal');
-                doc.text(`${student?.age || 'N/A'} yrs`, col2ValX, yPos);
+                doc.text(`${student?.age || 'N/A'} yrs`, 135, yPos);
                 yPos += 8;
 
                 doc.setFont('helvetica', 'bold');
-                doc.text('Birthday:', col1X, yPos);
+                doc.text('Birthday:', 15, yPos);
                 doc.setFont('helvetica', 'normal');
-                const dob = student?.dateOfBirth
-                    ? format(new Date(student.dateOfBirth), 'MMMM dd, yyyy')
-                    : 'N/A';
-                doc.text(dob, col1ValX, yPos);
-
-                doc.setFont('helvetica', 'bold');
-                doc.text('Diagnosis:', col2X, yPos);
-                doc.setFont('helvetica', 'normal');
-                const diag = student?.diagnosis || 'Not specified in profile';
-                const splitDiag = doc.splitTextToSize(
-                    diag,
-                    pageWidth - col2ValX - 15,
+                doc.text(
+                    student?.dateOfBirth
+                        ? format(new Date(student.dateOfBirth), 'MMMM dd, yyyy')
+                        : 'N/A',
+                    40,
+                    yPos,
                 );
-                doc.text(splitDiag, col2ValX, yPos);
-
-                yPos += Math.max(12, splitDiag.length * 6);
+                doc.setFont('helvetica', 'bold');
+                doc.text('Diagnosis:', 110, yPos);
+                doc.setFont('helvetica', 'normal');
+                const diagSplit = doc.splitTextToSize(
+                    student?.diagnosis || 'Not specified',
+                    pageWidth - 135 - 15,
+                );
+                doc.text(diagSplit, 135, yPos);
+                yPos += Math.max(12, diagSplit.length * 6);
 
                 // --- Behavioral Observation ---
                 addSectionHeader('Behavioral Observation');
-
                 const topBehaviors =
                     analytics?.charts?.behavioralRadar
                         ?.slice(0, 3)
                         .map((b: any) => b.pattern)
                         .join(', ') || 'standard interaction patterns';
-                const startDate = format(
-                    new Date(dateRange.from),
-                    'MMMM dd, yyyy',
-                );
-                const endDate = format(new Date(dateRange.to), 'MMMM dd, yyyy');
-
-                const behaviorText = `During the evaluated period (${startDate} - ${endDate}), the learner predominantly exhibited ${topBehaviors.toLowerCase()}. Overall behavioral engagement was assessed using continuous telemetry tracking during clinical activities.`;
-
-                doc.setTextColor(71, 85, 105); // Slate 600
-                const splitBehavior = doc.splitTextToSize(
+                const behaviorText = `During the evaluated period (${format(new Date(dateRange.from), 'MMM dd')} - ${format(new Date(dateRange.to), 'MMM dd')}), the learner predominantly exhibited ${topBehaviors.toLowerCase()}. Overall behavioral engagement was assessed using continuous telemetry tracking during clinical activities.`;
+                const behaviorSplit = doc.splitTextToSize(
                     behaviorText,
                     pageWidth - 30,
                 );
-                doc.text(splitBehavior, 15, yPos);
-                yPos += splitBehavior.length * 6 + 10;
+                doc.setTextColor(71, 85, 105);
+                doc.text(behaviorSplit, 15, yPos);
+                yPos += behaviorSplit.length * 6 + 10;
 
                 // --- Performance Analysis ---
                 addSectionHeader('Performance Analysis');
 
-                // Muted Slate background and border for stat boxes
-                doc.setFillColor(248, 250, 252); // slate-50
-                doc.setDrawColor(226, 232, 240); // slate-200
+                doc.setFillColor(248, 250, 252);
+                doc.setDrawColor(226, 232, 240);
                 doc.roundedRect(15, yPos, 55, 20, 3, 3, 'FD');
                 doc.roundedRect(75, yPos, 55, 20, 3, 3, 'FD');
                 doc.roundedRect(135, yPos, 55, 20, 3, 3, 'FD');
 
                 doc.setFontSize(10);
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(100, 116, 139); // Slate 500
+                doc.setTextColor(100, 116, 139);
                 doc.text('Avg Accuracy', 42.5, yPos + 7, { align: 'center' });
                 doc.text('Therapy Time', 102.5, yPos + 7, { align: 'center' });
                 doc.text('Sessions Done', 162.5, yPos + 7, { align: 'center' });
 
                 doc.setFontSize(14);
                 doc.setFont('helvetica', 'bold');
-                doc.setTextColor(15, 23, 42); // Slate 900
+                doc.setTextColor(15, 23, 42);
                 doc.text(
                     `${analytics?.overviewMetrics?.averageAccuracy || 0}%`,
                     42.5,
@@ -661,113 +623,51 @@ export default function StudentDashboard() {
                     yPos + 15,
                     { align: 'center' },
                 );
-
                 yPos += 30;
 
-                // 📸 CAPTURE 1: Line Chart
                 const lineChartElem = document.getElementById('pdf-line-chart');
                 if (lineChartElem) {
-                    const canvasLine = await html2canvas(lineChartElem, {
+                    const canvas = await html2canvas(lineChartElem, {
                         scale: 2,
                         useCORS: true,
                         backgroundColor: '#ffffff',
                     });
-                    const imgDataLine = canvasLine.toDataURL('image/png');
-                    const imgPropsLine = doc.getImageProperties(imgDataLine);
-                    const pdfWidthLine = pageWidth - 30;
-                    const pdfHeightLine =
-                        (imgPropsLine.height * pdfWidthLine) /
-                        imgPropsLine.width;
-
-                    if (yPos + pdfHeightLine > pageHeight - 20) {
+                    const img = canvas.toDataURL('image/png');
+                    const props = doc.getImageProperties(img);
+                    const h = (props.height * (pageWidth - 30)) / props.width;
+                    if (yPos + h > pageHeight - 20) {
                         doc.addPage();
                         yPos = 20;
                     }
-
-                    doc.addImage(
-                        imgDataLine,
-                        'PNG',
-                        15,
-                        yPos,
-                        pdfWidthLine,
-                        pdfHeightLine,
-                    );
-                    yPos += pdfHeightLine + 10;
-                }
-
-                // 📸 CAPTURE 2: Radar Chart
-                const radarChartElem =
-                    document.getElementById('pdf-radar-chart');
-                if (radarChartElem) {
-                    const canvasRadar = await html2canvas(radarChartElem, {
-                        scale: 2,
-                        useCORS: true,
-                        backgroundColor: '#ffffff',
-                    });
-                    const imgDataRadar = canvasRadar.toDataURL('image/png');
-                    const imgPropsRadar = doc.getImageProperties(imgDataRadar);
-                    const pdfWidthRadar = 130;
-                    const pdfHeightRadar =
-                        (imgPropsRadar.height * pdfWidthRadar) /
-                        imgPropsRadar.width;
-                    const xOffsetRadar = (pageWidth - pdfWidthRadar) / 2;
-
-                    if (yPos + pdfHeightRadar > pageHeight - 20) {
-                        doc.addPage();
-                        yPos = 20;
-                    }
-
-                    doc.addImage(
-                        imgDataRadar,
-                        'PNG',
-                        xOffsetRadar,
-                        yPos,
-                        pdfWidthRadar,
-                        pdfHeightRadar,
-                    );
-                    yPos += pdfHeightRadar + 15;
+                    doc.addImage(img, 'PNG', 15, yPos, pageWidth - 30, h);
+                    yPos += h + 10;
                 }
 
                 // --- Clinical Recommendation ---
                 addSectionHeader('Clinical Recommendation');
-
-                doc.setTextColor(71, 85, 105); // Slate 600
-                doc.setFontSize(11);
-                doc.setFont('helvetica', 'normal');
-
-                const latestSessionWithRec = activitySessions.find(
+                const latestSession = activitySessions.find(
                     (s: any) => s.aiRecommendation,
                 );
-                let recText =
-                    'Continue current therapy plan and monitor progress closely.';
-
-                if (latestSessionWithRec) {
-                    recText = `Latest AI Insight (as of ${format(new Date(latestSessionWithRec.actualStartAt), 'MMMM dd, yyyy')}):\n\n${latestSessionWithRec.aiRecommendation}`;
-                }
-
-                const splitRec = doc.splitTextToSize(recText, pageWidth - 40);
-                const boxHeight = splitRec.length * 6 + 10;
-
-                if (yPos + boxHeight > pageHeight - 20) {
+                const recText = latestSession
+                    ? `Latest AI Insight:\n\n${latestSession.aiRecommendation}`
+                    : 'Continue current therapy plan.';
+                const recSplit = doc.splitTextToSize(recText, pageWidth - 40);
+                const recH = recSplit.length * 6 + 10;
+                if (yPos + recH > pageHeight - 20) {
                     doc.addPage();
                     yPos = 20;
                 }
 
-                // Muted Slate Recommendation Box
-                doc.setFillColor(248, 250, 252); // slate-50
-                doc.setDrawColor(226, 232, 240); // slate-200
-                doc.roundedRect(
-                    15,
-                    yPos,
-                    pageWidth - 30,
-                    boxHeight,
-                    3,
-                    3,
-                    'FD',
-                );
-                doc.text(splitRec, 20, yPos + 8);
+                doc.setFillColor(248, 250, 252);
+                doc.setDrawColor(226, 232, 240);
+                doc.roundedRect(15, yPos, pageWidth - 30, recH, 3, 3, 'FD');
 
-                // FOOTER (Page Numbers)
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(11);
+                doc.setTextColor(71, 85, 105);
+                doc.text(recSplit, 20, yPos + 8);
+
+                // FOOTER
                 const pageCount = (doc.internal as any).getNumberOfPages();
                 doc.setFontSize(8);
                 doc.setTextColor(148, 163, 184);
@@ -781,28 +681,23 @@ export default function StudentDashboard() {
                     );
                 }
 
-                doc.save(
-                    `${student?.firstName || 'Learner'}_Progress_Report_${format(new Date(), 'yyyyMMdd')}.pdf`,
-                );
+                doc.save(`${student?.firstName || 'Learner'}_Report.pdf`);
                 toast.success('Report Generated!', { id: toastId });
             } catch (error) {
-                console.error('PDF generation failed', error);
                 toast.error('Failed to compile PDF.', { id: toastId });
             } finally {
                 setIsGeneratingPDF(false);
             }
-        }, 500); // Give the DOM 500ms to stop animating before snapping
+        }, 500);
     };
 
-    if (isLoadingStudent || isLoadingAnalytics) {
+    if (isLoadingStudent || isLoadingAnalytics)
         return (
             <div className="h-screen w-full flex items-center justify-center bg-[#F8FAFC]">
                 <Loader2 className="animate-spin text-indigo-600" size={32} />
             </div>
         );
-    }
 
-    // Fix: Re-added the destructuring to ensure charts and overviewMetrics are available to all components
     const { overviewMetrics, charts } = analytics || {};
     const displayRadarData = charts?.behavioralRadar || [];
 
@@ -831,28 +726,29 @@ export default function StudentDashboard() {
     ];
 
     return (
-        <div className="min-h-screen w-full bg-[#F8FAFC] flex flex-col font-sans text-slate-900 p-6 lg:p-8">
+        <div className="min-h-screen w-full bg-[#F8FAFC] flex flex-col font-sans text-slate-900 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
             <motion.div
                 initial="hidden"
                 animate="show"
                 variants={pageVariants}
                 className="max-w-[1600px] w-full mx-auto flex flex-col pb-10 gap-6"
             >
-                {/* --- HEADER --- */}
+                {/* --- RESPONSIVE GRID HEADER --- */}
                 <motion.header
                     variants={itemVariants}
-                    className="flex flex-col xl:flex-row items-center justify-between bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm gap-8"
+                    className="grid grid-cols-1 xl:grid-cols-[auto_1fr_auto] gap-6 xl:gap-8 items-center bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm"
                 >
-                    <div className="flex items-center gap-6 shrink-0 w-full xl:w-auto">
+                    {/* PROFILE BLOCK */}
+                    <div className="flex items-center gap-4 sm:gap-6 min-w-0">
                         <Button
                             variant="outline"
                             size="icon"
                             onClick={() => router.back()}
-                            className="rounded-2xl h-12 w-12 border-slate-200 hover:bg-slate-50"
+                            className="rounded-2xl h-12 w-12 border-slate-200 hover:bg-slate-50 shrink-0"
                         >
                             <ArrowLeft size={20} />
                         </Button>
-                        <div className="flex items-center gap-5">
+                        <div className="flex items-center gap-4 sm:gap-5 min-w-0">
                             <UserAvatar
                                 src={FormatService.formatStrapiMedia(
                                     student?.profilePicture,
@@ -861,39 +757,38 @@ export default function StudentDashboard() {
                                 size="md"
                                 showStatus={true}
                                 name={student?.firstName}
-                                className="shadow-sm border border-slate-100"
+                                className="shadow-sm border border-slate-100 shrink-0"
                             />
-                            <div className="flex flex-col">
-                                <h1 className="text-2xl font-black tracking-tight text-slate-900 leading-tight">
+                            <div className="flex flex-col min-w-0">
+                                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 leading-tight truncate">
                                     {student?.firstName} {student?.lastName}
                                 </h1>
-                                <TechnicalLabel className="text-indigo-600">
+                                <TechnicalLabel className="text-indigo-600 truncate">
                                     ID: #{studentId.padStart(4, '0')}
                                 </TechnicalLabel>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex flex-1 flex-col md:flex-row items-start md:items-center justify-start xl:justify-center gap-5 md:gap-6 lg:gap-8 px-4 sm:px-8 border-y xl:border-y-0 xl:border-x border-slate-100 py-4 xl:py-0 w-full xl:w-auto">
-                        {/* AGE BLOCK */}
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-slate-50 rounded-xl">
+                    {/* DEMOGRAPHICS BLOCK (GRID PREVENTS TRIANGLE) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 border-y xl:border-y-0 xl:border-x border-slate-100 py-5 xl:py-0 px-0 xl:px-8 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2.5 bg-slate-50 rounded-xl shrink-0">
                                 <CakeIcon
                                     size={15}
                                     className="text-slate-400"
                                 />
                             </div>
-                            <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-1 min-w-0">
                                 <TechnicalLabel>Age & DOB</TechnicalLabel>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 truncate">
                                     <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
                                         {student?.age
                                             ? `${student.age}y`
                                             : '--'}
                                     </span>
-                                    <div className="h-3 w-[1px] bg-slate-200" />{' '}
-                                    {/* Subtle Divider */}
-                                    <span className="text-[11px] font-medium text-slate-400 whitespace-nowrap">
+                                    <div className="h-3 w-[1px] bg-slate-200 shrink-0" />
+                                    <span className="text-[11px] font-medium text-slate-400 truncate">
                                         {student?.dateOfBirth
                                             ? format(
                                                   new Date(student.dateOfBirth),
@@ -904,9 +799,8 @@ export default function StudentDashboard() {
                                 </div>
                             </div>
                         </div>
-                        {/* GENDER BLOCK */}
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-slate-50 rounded-xl">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2.5 bg-slate-50 rounded-xl shrink-0">
                                 {student?.gender === 'male' ? (
                                     <MarsIcon
                                         size={18}
@@ -919,25 +813,24 @@ export default function StudentDashboard() {
                                     />
                                 )}
                             </div>
-                            <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-1 min-w-0">
                                 <TechnicalLabel>Gender</TechnicalLabel>
-                                <span className="text-sm font-bold text-slate-700 capitalize">
+                                <span className="text-sm font-bold text-slate-700 capitalize truncate">
                                     {student?.gender || 'N/A'}
                                 </span>
                             </div>
                         </div>
-                        {/* --- DIAGNOSIS BLOCK --- */}
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-slate-50 rounded-xl">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2.5 bg-slate-50 rounded-xl shrink-0">
                                 <Activity
                                     size={18}
                                     className="text-purple-500"
                                 />
                             </div>
-                            <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-1 min-w-0">
                                 <TechnicalLabel>Diagnosis</TechnicalLabel>
                                 <span
-                                    className="text-sm font-bold text-slate-700 capitalize max-w-[150px] truncate"
+                                    className="text-sm font-bold text-slate-700 capitalize truncate"
                                     title={
                                         student?.diagnosis ||
                                         'No diagnosis specified'
@@ -949,16 +842,19 @@ export default function StudentDashboard() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 w-full xl:w-auto justify-between xl:justify-end">
-                        <DateRangePicker
-                            value={dateRange}
-                            onChange={setDateRange}
-                        />
+                    {/* ACTIONS BLOCK */}
+                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto justify-start xl:justify-end">
+                        <div className="w-full sm:w-auto">
+                            <DateRangePicker
+                                value={dateRange}
+                                onChange={setDateRange}
+                            />
+                        </div>
                         <Button
                             variant="outline"
                             onClick={handleDownloadPDF}
                             disabled={isGeneratingPDF}
-                            className="rounded-2xl border-slate-200 h-11 px-4 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-widest shrink-0 shadow-sm transition-all"
+                            className="w-full sm:w-auto rounded-2xl border-slate-200 h-11 px-4 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-widest shrink-0 shadow-sm transition-all"
                         >
                             {isGeneratingPDF ? (
                                 <Loader2 size={16} className="animate-spin" />
@@ -1134,7 +1030,6 @@ export default function StudentDashboard() {
                         </CardContent>
                     </Card>
 
-                    {/* BAR CHART */}
                     <Card className="col-span-1 xl:col-span-2 h-[420px] rounded-[32px] border-slate-200 shadow-sm bg-white flex flex-col overflow-hidden">
                         <CardHeader className="py-5 px-8 border-b border-slate-50 flex flex-row items-center gap-2 shrink-0">
                             <Trophy size={16} className="text-amber-500" />
@@ -1272,7 +1167,6 @@ export default function StudentDashboard() {
                                 </TechnicalLabel>
                             </div>
                         </CardHeader>
-
                         <CardContent className="p-2 flex-1 min-h-0 relative">
                             {displayRadarData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
@@ -1374,7 +1268,6 @@ export default function StudentDashboard() {
                                                         session.actualStartAt,
                                                         session.actualEndAt,
                                                     );
-
                                                 return (
                                                     <div
                                                         key={session.documentId}
