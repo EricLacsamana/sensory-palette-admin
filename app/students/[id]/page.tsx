@@ -435,13 +435,7 @@ export default function StudentDashboard() {
 
     const formatFullDate = (dateString: string) => {
         if (!dateString) return 'Unknown Date';
-        return new Date(dateString).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
+        return format(new Date(dateString), 'MMM dd, yyyy, hh:mm a');
     };
 
     const calculateDuration = (start?: string, end?: string) => {
@@ -462,10 +456,18 @@ export default function StudentDashboard() {
         }));
     }, [analytics?.charts?.performanceTimeline]);
 
-    // ✨ AESTHETIC CLINICAL PDF GENERATOR ✨
+    // ✨ AESTHETIC BRANDED PDF GENERATOR ✨
     const handleDownloadPDF = async () => {
         setIsGeneratingPDF(true);
         const toastId = toast.loading('Generating Clinical Report...');
+
+        // 1. Pre-load the center logo to ensure it renders in the PDF
+        const logoImg = new window.Image();
+        logoImg.src = '/tlc_therapy_center_logo.png';
+        await new Promise((resolve) => {
+            logoImg.onload = resolve;
+            logoImg.onerror = resolve; // Continue even if logo fails
+        });
 
         // Let the state update propagate so animations stop before we snapshot
         setTimeout(async () => {
@@ -475,44 +477,84 @@ export default function StudentDashboard() {
                 const pageHeight = doc.internal.pageSize.getHeight();
                 let yPos = 0;
 
-                // --- HEADER BANNER ---
-                doc.setFillColor(79, 70, 229); // Indigo 600 Background
-                doc.rect(0, 0, pageWidth, 45, 'F');
+                // --- LETTERHEAD & BRANDING ---
+                yPos = 15;
 
-                doc.setTextColor(255, 255, 255); // White Text
-                doc.setFontSize(24);
+                // Add Logo if successfully loaded
+                if (logoImg.width > 0) {
+                    doc.addImage(logoImg, 'PNG', 15, yPos, 24, 24);
+                }
+
+                // Center Details
+                doc.setTextColor(15, 23, 42); // Slate 900
+                doc.setFontSize(16);
                 doc.setFont('helvetica', 'bold');
-                doc.text('Clinical Progress Report', pageWidth / 2, 22, {
-                    align: 'center',
-                });
+                doc.text('TLC SPED & Therapy Center', 45, yPos + 6);
+
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(71, 85, 105); // Slate 600
+                doc.text(
+                    '1015 Salvador Avenue, Jordan Plaines Subdivision, Novaliches, Quezon City, Philippines, 1117',
+                    45,
+                    yPos + 12,
+                );
+                doc.text(
+                    'Contact info: 0927 211 7145  |  tlconline.ph@gmail.com  |  8 AM–5 PM',
+                    45,
+                    yPos + 17,
+                );
+
+                // Elegant, muted divider (Slate 200)
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(1);
+                doc.line(15, yPos + 26, pageWidth - 15, yPos + 26);
+
+                // --- REPORT HEADING ---
+                yPos += 45;
+                doc.setFontSize(22);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(15, 23, 42); // Slate 900
+                doc.text(
+                    'Comprehensive Clinical Progress Report',
+                    pageWidth / 2,
+                    yPos,
+                    { align: 'center' },
+                );
 
                 doc.setFontSize(10);
                 doc.setFont('helvetica', 'normal');
+                doc.setTextColor(100, 116, 139); // Slate 500
                 const reportDate = format(new Date(), 'MMMM dd, yyyy');
-                doc.text(`Generated on: ${reportDate}`, pageWidth / 2, 32, {
-                    align: 'center',
-                });
+                doc.text(
+                    `Generated on: ${reportDate}`,
+                    pageWidth / 2,
+                    yPos + 7,
+                    { align: 'center' },
+                );
 
-                yPos = 55;
+                yPos += 22;
 
+                // Utility for Headers with Clean, Muted Accents
                 const addSectionHeader = (title: string) => {
                     if (yPos > pageHeight - 40) {
                         doc.addPage();
                         yPos = 20;
                     }
-                    doc.setTextColor(79, 70, 229); // Indigo 600
-                    doc.setFontSize(14);
+                    doc.setTextColor(15, 23, 42); // Slate 900
+                    doc.setFontSize(13);
                     doc.setFont('helvetica', 'bold');
                     doc.text(title, 15, yPos);
 
-                    doc.setDrawColor(226, 232, 240); // Slate 200 border line
-                    doc.setLineWidth(0.5);
+                    // Clean, subtle underline (Slate 200)
+                    doc.setDrawColor(226, 232, 240);
+                    doc.setLineWidth(1);
                     doc.line(15, yPos + 3, pageWidth - 15, yPos + 3);
                     yPos += 12;
                 };
 
-                // --- PART I: Profile ---
-                addSectionHeader('PART I. Learner Profile');
+                // --- Profile ---
+                addSectionHeader('Learner Profile');
 
                 doc.setTextColor(15, 23, 42); // Slate 900
                 doc.setFontSize(11);
@@ -557,8 +599,8 @@ export default function StudentDashboard() {
 
                 yPos += Math.max(12, splitDiag.length * 6);
 
-                // --- PART II: Behavioral Observation ---
-                addSectionHeader('PART II. Behavioral Observation');
+                // --- Behavioral Observation ---
+                addSectionHeader('Behavioral Observation');
 
                 const topBehaviors =
                     analytics?.charts?.behavioralRadar
@@ -581,12 +623,12 @@ export default function StudentDashboard() {
                 doc.text(splitBehavior, 15, yPos);
                 yPos += splitBehavior.length * 6 + 10;
 
-                // --- PART III: Performance Analysis ---
-                addSectionHeader('PART III. Performance Analysis');
+                // --- Performance Analysis ---
+                addSectionHeader('Performance Analysis');
 
-                // Aesthetic Stat Boxes
-                doc.setFillColor(248, 250, 252); // Slate 50
-                doc.setDrawColor(226, 232, 240); // Slate 200
+                // Muted Slate background and border for stat boxes
+                doc.setFillColor(248, 250, 252); // slate-50
+                doc.setDrawColor(226, 232, 240); // slate-200
                 doc.roundedRect(15, yPos, 55, 20, 3, 3, 'FD');
                 doc.roundedRect(75, yPos, 55, 20, 3, 3, 'FD');
                 doc.roundedRect(135, yPos, 55, 20, 3, 3, 'FD');
@@ -686,8 +728,8 @@ export default function StudentDashboard() {
                     yPos += pdfHeightRadar + 15;
                 }
 
-                // --- PART IV: Recommendation ---
-                addSectionHeader('PART IV. Clinical Recommendation');
+                // --- Clinical Recommendation ---
+                addSectionHeader('Clinical Recommendation');
 
                 doc.setTextColor(71, 85, 105); // Slate 600
                 doc.setFontSize(11);
@@ -711,8 +753,9 @@ export default function StudentDashboard() {
                     yPos = 20;
                 }
 
-                doc.setFillColor(249, 250, 251); // Gray 50
-                doc.setDrawColor(226, 232, 240); // Slate 200
+                // Muted Slate Recommendation Box
+                doc.setFillColor(248, 250, 252); // slate-50
+                doc.setDrawColor(226, 232, 240); // slate-200
                 doc.roundedRect(
                     15,
                     yPos,
@@ -759,6 +802,7 @@ export default function StudentDashboard() {
         );
     }
 
+    // Fix: Re-added the destructuring to ensure charts and overviewMetrics are available to all components
     const { overviewMetrics, charts } = analytics || {};
     const displayRadarData = charts?.behavioralRadar || [];
 
@@ -831,6 +875,7 @@ export default function StudentDashboard() {
                     </div>
 
                     <div className="flex flex-1 flex-col md:flex-row items-start md:items-center justify-start xl:justify-center gap-5 md:gap-6 lg:gap-8 px-4 sm:px-8 border-y xl:border-y-0 xl:border-x border-slate-100 py-4 xl:py-0 w-full xl:w-auto">
+                        {/* AGE BLOCK */}
                         <div className="flex items-center gap-3">
                             <div className="p-2.5 bg-slate-50 rounded-xl">
                                 <CakeIcon
@@ -859,6 +904,7 @@ export default function StudentDashboard() {
                                 </div>
                             </div>
                         </div>
+                        {/* GENDER BLOCK */}
                         <div className="flex items-center gap-3">
                             <div className="p-2.5 bg-slate-50 rounded-xl">
                                 {student?.gender === 'male' ? (
@@ -873,14 +919,14 @@ export default function StudentDashboard() {
                                     />
                                 )}
                             </div>
-                            <div className="flex flex-col">
+                            <div className="flex flex-col gap-1">
                                 <TechnicalLabel>Gender</TechnicalLabel>
                                 <span className="text-sm font-bold text-slate-700 capitalize">
                                     {student?.gender || 'N/A'}
                                 </span>
                             </div>
                         </div>
-                        {/* --- NEW DIAGNOSIS BLOCK --- */}
+                        {/* --- DIAGNOSIS BLOCK --- */}
                         <div className="flex items-center gap-3">
                             <div className="p-2.5 bg-slate-50 rounded-xl">
                                 <Activity
@@ -888,7 +934,7 @@ export default function StudentDashboard() {
                                     className="text-purple-500"
                                 />
                             </div>
-                            <div className="flex flex-col">
+                            <div className="flex flex-col gap-1">
                                 <TechnicalLabel>Diagnosis</TechnicalLabel>
                                 <span
                                     className="text-sm font-bold text-slate-700 capitalize max-w-[150px] truncate"
@@ -915,10 +961,14 @@ export default function StudentDashboard() {
                             className="rounded-2xl border-slate-200 h-11 px-4 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-widest shrink-0 shadow-sm transition-all"
                         >
                             {isGeneratingPDF ? (
-                                <Loader2 size={16} className="animate-spin" />
+                                <Loader2
+                                    size={16}
+                                    className="animate-spin mr-2"
+                                />
                             ) : (
-                                <Download size={16} />
+                                <Download size={16} className="mr-2" />
                             )}
+                            Export PDF
                         </Button>
                     </div>
                 </motion.header>

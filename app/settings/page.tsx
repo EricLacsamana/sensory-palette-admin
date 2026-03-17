@@ -282,12 +282,12 @@ export default function SettingsPage() {
                                 icon={Lock}
                                 label="Password & Security"
                             />
-                            <TabButton
+                            {/* <TabButton
                                 active={activeTab === 'notifications'}
                                 onClick={() => setActiveTab('notifications')}
                                 icon={Bell}
                                 label="Notifications"
-                            />
+                            /> */}
                         </nav>
                     </Card>
 

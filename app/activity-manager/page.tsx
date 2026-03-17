@@ -1426,7 +1426,7 @@ export default function ActivityManager() {
                                             </div>
                                             <div className="space-y-1.5">
                                                 <label className="text-[11px] font-bold text-slate-700 uppercase">
-                                                    Standard Description
+                                                    Description
                                                 </label>
                                                 <textarea
                                                     value={
@@ -1446,41 +1446,6 @@ export default function ActivityManager() {
                                                 />
                                             </div>
                                         </div>
-
-                                        {/* Configuration Payload (HIDDEN if not a game) */}
-                                        {isGame && (
-                                            <div className="space-y-4">
-                                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100 pb-2 flex items-center gap-2">
-                                                    <Settings size={14} />{' '}
-                                                    System Config
-                                                </h3>
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[11px] font-bold text-slate-700 uppercase flex justify-between">
-                                                        <span>
-                                                            Pad Configuration
-                                                            (JSON)
-                                                        </span>
-                                                    </label>
-                                                    <textarea
-                                                        value={
-                                                            formData.padConfiguration ||
-                                                            ''
-                                                        }
-                                                        onChange={(e) =>
-                                                            setFormData({
-                                                                ...formData,
-                                                                padConfiguration:
-                                                                    e.target
-                                                                        .value,
-                                                            })
-                                                        }
-                                                        rows={6}
-                                                        className="w-full border border-slate-200 bg-slate-900 text-emerald-400 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none font-mono custom-scrollbar shadow-inner"
-                                                        placeholder='{\n  "mode": "standard"\n}'
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
                                     </>
                                 )}
                             </form>
