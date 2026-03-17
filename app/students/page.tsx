@@ -132,7 +132,6 @@ export default function StudentsDirectory() {
     } = useQuery({
         queryKey: ['students', { searchQuery: debouncedSearch }],
         queryFn: getStudents,
-        placeholderData: keepPreviousData,
     });
 
     // ✨ ENHANCED: Client-Side Processing (Filtering & Sorting)

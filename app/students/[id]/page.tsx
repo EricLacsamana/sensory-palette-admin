@@ -4,6 +4,10 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { motion, Variants } from 'framer-motion';
+import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas-pro';
+import { toast } from 'sonner';
 import {
     Radar,
     RadarChart,
@@ -26,7 +30,7 @@ import {
 import {
     ArrowLeft,
     Activity,
-    Printer,
+    Download,
     Loader2,
     TrendingUp,
     CheckCircle2,
@@ -37,7 +41,6 @@ import {
     Trophy,
     Sparkles,
     Timer,
-    Gamepad2,
     AlertTriangle,
     RefreshCw,
     Focus,
@@ -48,7 +51,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
-import { getActivitySessionsNew } from '@/api/acitivity-session';
+import { getActivitySessionsNew } from '@/api/activity-session';
 import { getStudentAnalytics } from '@/api/analytics';
 import { getStudent } from '@/api/students';
 import { cn } from '@/lib/utils';
@@ -174,7 +177,6 @@ const EmptyWidgetState = ({
 );
 
 // --- TOOLTIPS ---
-
 const CustomLineTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         return (
@@ -362,13 +364,15 @@ export default function StudentDashboard() {
     const router = useRouter();
     const historyScrollRef = useRef<HTMLDivElement>(null);
 
+    const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
     const [dateRange, setDateRange] = useState(() => {
         const end = new Date();
         const start = new Date();
         start.setDate(end.getDate() - 30);
         return {
-            from: start.toISOString().split('T')[0],
-            to: end.toISOString().split('T')[0],
+            from: format(start, 'yyyy-MM-dd'),
+            to: format(end, 'yyyy-MM-dd'),
         };
     });
 
@@ -449,7 +453,6 @@ export default function StudentDashboard() {
         return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
     };
 
-    // ✨ FIX: Properly merge current and previous timeline data so Recharts doesn't drop the 'Previous' line on load.
     const mergedTimelineData = useMemo(() => {
         if (!analytics?.charts?.performanceTimeline) return [];
         return analytics.charts.performanceTimeline.map((item: any) => ({
@@ -458,6 +461,295 @@ export default function StudentDashboard() {
             prevAccuracy: item.prevAccuracy || 0,
         }));
     }, [analytics?.charts?.performanceTimeline]);
+
+    // ✨ AESTHETIC CLINICAL PDF GENERATOR ✨
+    const handleDownloadPDF = async () => {
+        setIsGeneratingPDF(true);
+        const toastId = toast.loading('Generating Clinical Report...');
+
+        // Let the state update propagate so animations stop before we snapshot
+        setTimeout(async () => {
+            try {
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                let yPos = 0;
+
+                // --- HEADER BANNER ---
+                doc.setFillColor(79, 70, 229); // Indigo 600 Background
+                doc.rect(0, 0, pageWidth, 45, 'F');
+
+                doc.setTextColor(255, 255, 255); // White Text
+                doc.setFontSize(24);
+                doc.setFont('helvetica', 'bold');
+                doc.text('Clinical Progress Report', pageWidth / 2, 22, {
+                    align: 'center',
+                });
+
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                const reportDate = format(new Date(), 'MMMM dd, yyyy');
+                doc.text(`Generated on: ${reportDate}`, pageWidth / 2, 32, {
+                    align: 'center',
+                });
+
+                yPos = 55;
+
+                const addSectionHeader = (title: string) => {
+                    if (yPos > pageHeight - 40) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    doc.setTextColor(79, 70, 229); // Indigo 600
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(title, 15, yPos);
+
+                    doc.setDrawColor(226, 232, 240); // Slate 200 border line
+                    doc.setLineWidth(0.5);
+                    doc.line(15, yPos + 3, pageWidth - 15, yPos + 3);
+                    yPos += 12;
+                };
+
+                // --- PART I: Profile ---
+                addSectionHeader('PART I. Learner Profile');
+
+                doc.setTextColor(15, 23, 42); // Slate 900
+                doc.setFontSize(11);
+
+                const col1X = 15;
+                const col1ValX = 40;
+                const col2X = 110;
+                const col2ValX = 135;
+
+                doc.setFont('helvetica', 'bold');
+                doc.text('Name:', col1X, yPos);
+                doc.setFont('helvetica', 'normal');
+                doc.text(
+                    `${student?.firstName || ''} ${student?.lastName || ''}`,
+                    col1ValX,
+                    yPos,
+                );
+
+                doc.setFont('helvetica', 'bold');
+                doc.text('Age:', col2X, yPos);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`${student?.age || 'N/A'} yrs`, col2ValX, yPos);
+                yPos += 8;
+
+                doc.setFont('helvetica', 'bold');
+                doc.text('Birthday:', col1X, yPos);
+                doc.setFont('helvetica', 'normal');
+                const dob = student?.dateOfBirth
+                    ? format(new Date(student.dateOfBirth), 'MMMM dd, yyyy')
+                    : 'N/A';
+                doc.text(dob, col1ValX, yPos);
+
+                doc.setFont('helvetica', 'bold');
+                doc.text('Diagnosis:', col2X, yPos);
+                doc.setFont('helvetica', 'normal');
+                const diag = student?.diagnosis || 'Not specified in profile';
+                const splitDiag = doc.splitTextToSize(
+                    diag,
+                    pageWidth - col2ValX - 15,
+                );
+                doc.text(splitDiag, col2ValX, yPos);
+
+                yPos += Math.max(12, splitDiag.length * 6);
+
+                // --- PART II: Behavioral Observation ---
+                addSectionHeader('PART II. Behavioral Observation');
+
+                const topBehaviors =
+                    analytics?.charts?.behavioralRadar
+                        ?.slice(0, 3)
+                        .map((b: any) => b.pattern)
+                        .join(', ') || 'standard interaction patterns';
+                const startDate = format(
+                    new Date(dateRange.from),
+                    'MMMM dd, yyyy',
+                );
+                const endDate = format(new Date(dateRange.to), 'MMMM dd, yyyy');
+
+                const behaviorText = `During the evaluated period (${startDate} - ${endDate}), the learner predominantly exhibited ${topBehaviors.toLowerCase()}. Overall behavioral engagement was assessed using continuous telemetry tracking during clinical activities.`;
+
+                doc.setTextColor(71, 85, 105); // Slate 600
+                const splitBehavior = doc.splitTextToSize(
+                    behaviorText,
+                    pageWidth - 30,
+                );
+                doc.text(splitBehavior, 15, yPos);
+                yPos += splitBehavior.length * 6 + 10;
+
+                // --- PART III: Performance Analysis ---
+                addSectionHeader('PART III. Performance Analysis');
+
+                // Aesthetic Stat Boxes
+                doc.setFillColor(248, 250, 252); // Slate 50
+                doc.setDrawColor(226, 232, 240); // Slate 200
+                doc.roundedRect(15, yPos, 55, 20, 3, 3, 'FD');
+                doc.roundedRect(75, yPos, 55, 20, 3, 3, 'FD');
+                doc.roundedRect(135, yPos, 55, 20, 3, 3, 'FD');
+
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(100, 116, 139); // Slate 500
+                doc.text('Avg Accuracy', 42.5, yPos + 7, { align: 'center' });
+                doc.text('Therapy Time', 102.5, yPos + 7, { align: 'center' });
+                doc.text('Sessions Done', 162.5, yPos + 7, { align: 'center' });
+
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(15, 23, 42); // Slate 900
+                doc.text(
+                    `${analytics?.overviewMetrics?.averageAccuracy || 0}%`,
+                    42.5,
+                    yPos + 15,
+                    { align: 'center' },
+                );
+                doc.text(
+                    `${analytics?.overviewMetrics?.totalTherapyHours || 0}h`,
+                    102.5,
+                    yPos + 15,
+                    { align: 'center' },
+                );
+                doc.text(
+                    `${analytics?.overviewMetrics?.totalSessionsCompleted || 0}`,
+                    162.5,
+                    yPos + 15,
+                    { align: 'center' },
+                );
+
+                yPos += 30;
+
+                // 📸 CAPTURE 1: Line Chart
+                const lineChartElem = document.getElementById('pdf-line-chart');
+                if (lineChartElem) {
+                    const canvasLine = await html2canvas(lineChartElem, {
+                        scale: 2,
+                        useCORS: true,
+                        backgroundColor: '#ffffff',
+                    });
+                    const imgDataLine = canvasLine.toDataURL('image/png');
+                    const imgPropsLine = doc.getImageProperties(imgDataLine);
+                    const pdfWidthLine = pageWidth - 30;
+                    const pdfHeightLine =
+                        (imgPropsLine.height * pdfWidthLine) /
+                        imgPropsLine.width;
+
+                    if (yPos + pdfHeightLine > pageHeight - 20) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+
+                    doc.addImage(
+                        imgDataLine,
+                        'PNG',
+                        15,
+                        yPos,
+                        pdfWidthLine,
+                        pdfHeightLine,
+                    );
+                    yPos += pdfHeightLine + 10;
+                }
+
+                // 📸 CAPTURE 2: Radar Chart
+                const radarChartElem =
+                    document.getElementById('pdf-radar-chart');
+                if (radarChartElem) {
+                    const canvasRadar = await html2canvas(radarChartElem, {
+                        scale: 2,
+                        useCORS: true,
+                        backgroundColor: '#ffffff',
+                    });
+                    const imgDataRadar = canvasRadar.toDataURL('image/png');
+                    const imgPropsRadar = doc.getImageProperties(imgDataRadar);
+                    const pdfWidthRadar = 130;
+                    const pdfHeightRadar =
+                        (imgPropsRadar.height * pdfWidthRadar) /
+                        imgPropsRadar.width;
+                    const xOffsetRadar = (pageWidth - pdfWidthRadar) / 2;
+
+                    if (yPos + pdfHeightRadar > pageHeight - 20) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+
+                    doc.addImage(
+                        imgDataRadar,
+                        'PNG',
+                        xOffsetRadar,
+                        yPos,
+                        pdfWidthRadar,
+                        pdfHeightRadar,
+                    );
+                    yPos += pdfHeightRadar + 15;
+                }
+
+                // --- PART IV: Recommendation ---
+                addSectionHeader('PART IV. Clinical Recommendation');
+
+                doc.setTextColor(71, 85, 105); // Slate 600
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'normal');
+
+                const latestSessionWithRec = activitySessions.find(
+                    (s: any) => s.aiRecommendation,
+                );
+                let recText =
+                    'Continue current therapy plan and monitor progress closely.';
+
+                if (latestSessionWithRec) {
+                    recText = `Latest AI Insight (as of ${format(new Date(latestSessionWithRec.actualStartAt), 'MMMM dd, yyyy')}):\n\n${latestSessionWithRec.aiRecommendation}`;
+                }
+
+                const splitRec = doc.splitTextToSize(recText, pageWidth - 40);
+                const boxHeight = splitRec.length * 6 + 10;
+
+                if (yPos + boxHeight > pageHeight - 20) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                doc.setFillColor(249, 250, 251); // Gray 50
+                doc.setDrawColor(226, 232, 240); // Slate 200
+                doc.roundedRect(
+                    15,
+                    yPos,
+                    pageWidth - 30,
+                    boxHeight,
+                    3,
+                    3,
+                    'FD',
+                );
+                doc.text(splitRec, 20, yPos + 8);
+
+                // FOOTER (Page Numbers)
+                const pageCount = doc.internal.getNumberOfPages();
+                doc.setFontSize(8);
+                doc.setTextColor(148, 163, 184);
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.text(
+                        `Page ${i} of ${pageCount}`,
+                        pageWidth / 2,
+                        pageHeight - 10,
+                        { align: 'center' },
+                    );
+                }
+
+                doc.save(
+                    `${student?.firstName || 'Learner'}_Progress_Report_${format(new Date(), 'yyyyMMdd')}.pdf`,
+                );
+                toast.success('Report Generated!', { id: toastId });
+            } catch (error) {
+                console.error('PDF generation failed', error);
+                toast.error('Failed to compile PDF.', { id: toastId });
+            } finally {
+                setIsGeneratingPDF(false);
+            }
+        }, 500); // Give the DOM 500ms to stop animating before snapping
+    };
 
     if (isLoadingStudent || isLoadingAnalytics) {
         return (
@@ -477,13 +769,6 @@ export default function StudentDashboard() {
             icon: Target,
             color: 'text-emerald-500',
             bg: 'bg-emerald-50',
-        },
-        {
-            label: 'Avg Score',
-            value: overviewMetrics?.averageScore || 0,
-            icon: Trophy,
-            color: 'text-indigo-500',
-            bg: 'bg-indigo-50',
         },
         {
             label: 'Therapy Time',
@@ -603,9 +888,19 @@ export default function StudentDashboard() {
                         />
                         <Button
                             variant="outline"
-                            className="rounded-2xl border-slate-200 h-11 w-11 flex items-center justify-center text-slate-500 hover:text-indigo-600 shrink-0 hidden sm:flex"
+                            onClick={handleDownloadPDF}
+                            disabled={isGeneratingPDF}
+                            className="rounded-2xl border-slate-200 h-11 px-4 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-widest shrink-0 shadow-sm transition-all"
                         >
-                            <Printer size={16} />
+                            {isGeneratingPDF ? (
+                                <Loader2
+                                    size={16}
+                                    className="mr-2 animate-spin"
+                                />
+                            ) : (
+                                <Download size={16} className="mr-2" />
+                            )}
+                            Export PDF
                         </Button>
                     </div>
                 </motion.header>
@@ -644,7 +939,10 @@ export default function StudentDashboard() {
                     className="grid grid-cols-1 xl:grid-cols-5 gap-6"
                 >
                     {/* LINE CHART */}
-                    <Card className="col-span-1 xl:col-span-3 rounded-[32px] border-slate-200 shadow-sm bg-white h-[420px] flex flex-col relative overflow-hidden">
+                    <Card
+                        id="pdf-line-chart"
+                        className="col-span-1 xl:col-span-3 rounded-[32px] border-slate-200 shadow-sm bg-white h-[420px] flex flex-col relative overflow-hidden"
+                    >
                         <CardHeader className="py-5 px-8 border-b border-slate-50 flex flex-row items-center justify-between shrink-0">
                             <div className="flex items-center gap-2">
                                 <TrendingUp
@@ -720,7 +1018,9 @@ export default function StudentDashboard() {
                                                 paddingTop: '20px',
                                             }}
                                         />
+                                        {/* 🚨 ANIMATIONS DISABLED DURING PDF EXPORT 🚨 */}
                                         <Line
+                                            isAnimationActive={!isGeneratingPDF}
                                             name="Current Accuracy"
                                             type="monotone"
                                             dataKey="currentAccuracy"
@@ -740,6 +1040,7 @@ export default function StudentDashboard() {
                                             filter="url(#shadow)"
                                         />
                                         <Line
+                                            isAnimationActive={!isGeneratingPDF}
                                             name="Previous Accuracy"
                                             type="monotone"
                                             dataKey="prevAccuracy"
@@ -839,7 +1140,9 @@ export default function StudentDashboard() {
                                             content={<CustomComposedTooltip />}
                                             cursor={{ fill: '#f8fafc' }}
                                         />
+                                        {/* 🚨 ANIMATIONS DISABLED DURING PDF EXPORT 🚨 */}
                                         <Bar
+                                            isAnimationActive={!isGeneratingPDF}
                                             yAxisId="left"
                                             dataKey="usageCount"
                                             barSize={35}
@@ -860,6 +1163,7 @@ export default function StudentDashboard() {
                                             )}
                                         </Bar>
                                         <Line
+                                            isAnimationActive={!isGeneratingPDF}
                                             yAxisId="right"
                                             type="monotone"
                                             dataKey="avgAccuracy"
@@ -892,7 +1196,10 @@ export default function StudentDashboard() {
                     className="grid grid-cols-1 xl:grid-cols-5 gap-6"
                 >
                     {/* RADAR CHART WIDGET */}
-                    <Card className="col-span-1 xl:col-span-3 rounded-[32px] border-slate-200 shadow-sm bg-white h-[500px] flex flex-col overflow-hidden">
+                    <Card
+                        id="pdf-radar-chart"
+                        className="col-span-1 xl:col-span-3 rounded-[32px] border-slate-200 shadow-sm bg-white h-[500px] flex flex-col overflow-hidden"
+                    >
                         <CardHeader className="py-5 px-8 border-b border-slate-50 shrink-0 flex flex-row items-center justify-between">
                             <div className="flex flex-row items-center gap-2">
                                 <Target size={16} className="text-amber-500" />
@@ -930,7 +1237,9 @@ export default function StudentDashboard() {
                                             tick={false}
                                             axisLine={false}
                                         />
+                                        {/* 🚨 ANIMATIONS DISABLED DURING PDF EXPORT 🚨 */}
                                         <Radar
+                                            isAnimationActive={!isGeneratingPDF}
                                             dataKey="intensityScore"
                                             stroke="#8b5cf6"
                                             strokeWidth={2}
@@ -963,7 +1272,7 @@ export default function StudentDashboard() {
                         </CardContent>
                     </Card>
 
-                    {/* INTERACTION HISTORY WIDGET */}
+                    {/* HISTORY WIDGET */}
                     <Card className="col-span-1 xl:col-span-2 h-[500px] flex flex-col bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden relative">
                         <CardHeader className="py-5 px-8 border-b border-slate-50 flex flex-row items-center gap-2 shrink-0">
                             <History size={16} className="text-slate-400" />
@@ -974,7 +1283,7 @@ export default function StudentDashboard() {
                             className="flex-1 overflow-y-auto p-6 custom-scrollbar relative"
                         >
                             {isSuccess && activitySessions.length > 0 ? (
-                                <div className="relative border-l-2 border-slate-100 ml-3 pl-6 space-y-6 pb-6">
+                                <div className="relative border-l-2 border-slate-100 ml-3 pl-6 space-y-5 pb-6">
                                     {activitySessions
                                         .slice()
                                         .sort(
@@ -1014,14 +1323,14 @@ export default function StudentDashboard() {
                                                     >
                                                         <div
                                                             className={cn(
-                                                                'absolute -left-[33px] top-15.5 h-4 w-4 rounded-full border-[3px] border-white shadow-sm transition-transform group-hover:scale-125 z-10',
+                                                                'absolute -left-[33px] top-5 h-4 w-4 rounded-full border-[3px] border-white shadow-sm transition-transform group-hover:scale-125 z-10',
                                                                 session.activitySessionStatus ===
                                                                     'completed'
                                                                     ? 'bg-emerald-500'
                                                                     : 'bg-amber-400',
                                                             )}
                                                         />
-                                                        <div className="flex flex-col gap-3 bg-slate-50/50 p-4 rounded-2xl border border-transparent group-hover:border-slate-100 group-hover:bg-white transition-all shadow-sm group-hover:shadow-md">
+                                                        <div className="flex flex-col gap-2.5 bg-slate-50/50 p-4 rounded-2xl border border-transparent group-hover:border-slate-200 group-hover:bg-white transition-all shadow-sm group-hover:shadow-md">
                                                             <div className="flex flex-col gap-1 items-start justify-between">
                                                                 <div className="flex items-center gap-2 w-full">
                                                                     <span
@@ -1050,26 +1359,27 @@ export default function StudentDashboard() {
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                            <div className="flex flex-wrap items-center gap-2">
                                                                 {session.aiRecommendation && (
-                                                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-50 rounded-lg border border-purple-100 text-[10px] font-bold text-purple-600 shadow-sm">
+                                                                    <div className="flex items-center gap-1 px-2 py-0.5 bg-purple-50 rounded-md border border-purple-100 text-[10px] font-bold text-purple-600">
                                                                         <Sparkles
                                                                             size={
-                                                                                12
+                                                                                10
                                                                             }
                                                                         />{' '}
                                                                         AI
+                                                                        Report
                                                                     </div>
                                                                 )}
                                                                 {isGameActivity && (
                                                                     <>
                                                                         <div
-                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 rounded-lg border border-emerald-100 text-[10px] font-bold text-emerald-700 shadow-sm"
+                                                                            className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 rounded-md border border-emerald-100 text-[10px] font-bold text-emerald-700"
                                                                             title="Accuracy"
                                                                         >
                                                                             <Target
                                                                                 size={
-                                                                                    12
+                                                                                    10
                                                                                 }
                                                                                 className="text-emerald-500"
                                                                             />
@@ -1078,12 +1388,12 @@ export default function StudentDashboard() {
                                                                             %
                                                                         </div>
                                                                         <div
-                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 rounded-lg border border-indigo-100 text-[10px] font-bold text-indigo-700 shadow-sm"
+                                                                            className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 rounded-md border border-indigo-100 text-[10px] font-bold text-indigo-700"
                                                                             title="Score / Total Rounds"
                                                                         >
                                                                             <Trophy
                                                                                 size={
-                                                                                    12
+                                                                                    10
                                                                                 }
                                                                                 className="text-indigo-500"
                                                                             />
@@ -1094,12 +1404,12 @@ export default function StudentDashboard() {
                                                                                 0}
                                                                         </div>
                                                                         <div
-                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 rounded-lg border border-amber-100 text-[10px] font-bold text-amber-700 shadow-sm"
+                                                                            className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 rounded-md border border-amber-100 text-[10px] font-bold text-amber-700"
                                                                             title="Time Duration"
                                                                         >
                                                                             <Timer
                                                                                 size={
-                                                                                    12
+                                                                                    10
                                                                                 }
                                                                                 className="text-amber-500"
                                                                             />
@@ -1110,7 +1420,7 @@ export default function StudentDashboard() {
                                                                     </>
                                                                 )}
                                                             </div>
-                                                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 mt-2 pt-2 border-t border-slate-100">
+                                                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mt-1 pt-2 border-t border-slate-100">
                                                                 <Clock
                                                                     size={12}
                                                                 />{' '}
@@ -1131,7 +1441,7 @@ export default function StudentDashboard() {
                                 />
                             )}
                         </CardContent>
-                        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none rounded-b-[32px]" />
                     </Card>
                 </motion.div>
             </motion.div>

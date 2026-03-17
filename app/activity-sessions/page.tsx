@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Activity, Search, Filter, X, Loader2 } from 'lucide-react';
 
-import { getActivitySessionsNew } from '@/api/acitivity-session';
+import { getActivitySessionsNew } from '@/api/activity-session';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';

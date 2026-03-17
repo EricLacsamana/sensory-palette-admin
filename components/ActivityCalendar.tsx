@@ -47,7 +47,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-import { getActivitySessionsNew } from '@/api/acitivity-session';
+import { getActivitySessionsNew } from '@/api/activity-session';
 import { ActivitySessionResponse } from '@/types/activitiy-session';
 import { FormatService } from '@/utils/helpers';
 

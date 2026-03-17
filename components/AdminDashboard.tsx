@@ -54,7 +54,7 @@ import { RootState } from '@/redux/store';
 import {
     getActivitySessionsNew,
     updateActivitySession,
-} from '@/api/acitivity-session';
+} from '@/api/activity-session';
 import { getActivities } from '@/api/activity';
 
 // UI Components
@@ -1167,13 +1167,13 @@ export default function AppAdminDashboard() {
 
                                                     {/* Bottom Row: Control Center */}
                                                     <div className="flex gap-2">
-                                                        <Button
+                                                        {/* <Button
                                                             variant="outline"
                                                             className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest gap-2 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all"
                                                         >
                                                             <Eye size={14} />{' '}
                                                             Observe
-                                                        </Button>
+                                                        </Button> */}
                                                         <Button
                                                             variant="outline"
                                                             size="icon"
@@ -1222,7 +1222,7 @@ export default function AppAdminDashboard() {
                                 Platform Tools
                             </h3>
 
-                            <div className="space-y-2 flex-1 overflow-y-auto">
+                            {/* <div className="space-y-2 flex-1 overflow-y-auto">
                                 <Button
                                     variant="outline"
                                     className="w-full justify-start h-9 text-[11px] font-bold text-slate-700 bg-white border-slate-200 shadow-sm gap-3 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
@@ -1243,7 +1243,7 @@ export default function AppAdminDashboard() {
                                     />{' '}
                                     Export Audit Logs
                                 </Button>
-                            </div>
+                            </div> */}
 
                             <div className="pt-4 border-t border-slate-100 mt-4 shrink-0">
                                 <span className="text-[9px] font-black uppercase tracking-widest text-rose-500 flex items-center gap-1.5 mb-2">

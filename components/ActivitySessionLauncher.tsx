@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
     getActivitySessionsNew,
     updateActivitySession,
-} from '@/api/acitivity-session';
+} from '@/api/activity-session';
 import {
     ActivitySessionResponse,
     ActivitySessionStatus,

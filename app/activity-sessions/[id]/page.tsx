@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Database, Zap } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { getActivitySession } from '@/api/acitivity-session';
+import { getActivitySession } from '@/api/activity-session';
 import ActivitySessionDashboard from '@/components/ActivitySessionDashboard';
 
 export default function ActivitySessionPage() {

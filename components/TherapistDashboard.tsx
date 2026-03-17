@@ -132,7 +132,7 @@ import { me, updateStudentPasscode } from '@/api/users';
 import {
     getActivitySessionsNew,
     updateActivitySession,
-} from '@/api/acitivity-session';
+} from '@/api/activity-session';
 import { getGlobalAnalytics, getStudentAnalytics } from '@/api/analytics';
 import { cn } from '@/lib/utils';
 import { FormatService } from '@/utils/helpers';
@@ -364,8 +364,8 @@ const StudentComparisonPanel = ({
         const start = new Date();
         start.setDate(end.getDate() - 30);
         return {
-            from: start.toISOString().split('T')[0],
-            to: end.toISOString().split('T')[0],
+            from: format(start, 'yyyy-MM-dd'),
+            to: format(end, 'yyyy-MM-dd'),
         };
     });
 
@@ -415,6 +415,7 @@ const StudentComparisonPanel = ({
                 rawDates.add(entry.date),
             );
         });
+
         const sortedDates = Array.from(rawDates).sort(
             (a, b) => new Date(a).getTime() - new Date(b).getTime(),
         );
@@ -431,6 +432,7 @@ const StudentComparisonPanel = ({
                 );
                 row[name] = studentEntry ? studentEntry.currentAccuracy : 0;
             });
+
             return row;
         });
     }, [studentQueries, selectedIds, uniqueStudents]);
@@ -1046,8 +1048,8 @@ export default function Dashboard() {
         const start = new Date();
         start.setDate(end.getDate() - 30);
         return {
-            startDate: start.toISOString().split('T')[0],
-            endDate: end.toISOString().split('T')[0],
+            startDate: format(start, 'yyyy-MM-dd'),
+            endDate: format(end, 'yyyy-MM-dd'),
         };
     }, []);
 

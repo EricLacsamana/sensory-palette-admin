@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getActivitySessionsNew } from '@/api/acitivity-session';
+import { getActivitySessionsNew } from '@/api/activity-session';
 import { ActivitySessionEntry } from '@/types/activitiy-session';
 import { Activity } from '@/types/actitivity';
 import { calculateSchedule } from '@/components/SessionPlanningModal/utils/scheduler';

@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { me } from '@/api/users';
 import { logout } from '@/redux/auth/authSlice';
 import { RootState } from '@/redux/store';
-import { getActivitySessionsNew } from '@/api/acitivity-session';
+import { getActivitySessionsNew } from '@/api/activity-session';
 
 // UI Components
 import { Card } from '@/components/ui/card';

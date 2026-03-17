@@ -6,8 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
     Loader2Icon,
-    EyeIcon,
-    EyeOffIcon,
     ChevronRight,
     ChevronLeft,
     Check,
@@ -36,15 +34,10 @@ import { cn } from '@/lib/utils';
 
 // --- VALIDATION SCHEMA ---
 export const studentFormSchema = z.object({
-    // Account
-    username: z.string().min(3, 'Minimum 3 characters.'),
-    email: z.string().email('Invalid email address.').min(6),
-    password: z
-        .string()
-        .min(6, 'Minimum 6 characters.')
-        .optional()
-        .or(z.literal('')),
-    // Fixed: Removed .default() to prevent boolean | undefined mismatch with useForm
+    // Account (Hidden from UI but required for backend)
+    username: z.string().min(3),
+    email: z.string().email(),
+    password: z.string().min(6),
     confirmed: z.boolean(),
     blocked: z.boolean(),
 
@@ -57,6 +50,7 @@ export const studentFormSchema = z.object({
     gender: z.enum(['male', 'female'], {
         required_error: 'Please select a gender.',
     }),
+    diagnosis: z.string().min(1, 'Please select a diagnosis.'),
 
     // Address
     addressLabel: z.string().optional(),
@@ -87,13 +81,12 @@ interface EnrollStudentFormProps {
 }
 
 const STEPS = [
-    { id: 1, title: 'Account' },
-    { id: 2, title: 'Personal' },
-    { id: 3, title: 'Address' },
-    { id: 4, title: 'Guardian' },
+    { id: 1, title: 'Personal' },
+    { id: 2, title: 'Address' },
+    { id: 3, title: 'Guardian' },
 ];
 
-// --- REUSABLE STYLES FOR PREMIUM LOOK ---
+// --- REUSABLE STYLES ---
 const styles = {
     formItem: 'space-y-1.5',
     formLabel:
@@ -109,7 +102,6 @@ export default function EnrollStudentForm({
     isLoading,
 }: EnrollStudentFormProps) {
     const [step, setStep] = React.useState(1);
-    const [showPassword, setShowPassword] = React.useState(false);
     const [imagePreview, setImagePreview] = React.useState<string | null>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -119,13 +111,15 @@ export default function EnrollStudentForm({
             username: '',
             email: '',
             password: '',
-            confirmed: true, // The source of truth for the default value
-            blocked: false, // The source of truth for the default value
+            confirmed: true,
+            blocked: false,
             profilePicture: null,
             firstName: '',
             middleName: '',
             lastName: '',
             dateOfBirth: '',
+            gender: undefined,
+            diagnosis: '',
             addressLabel: 'Home',
             streetAddress: '',
             city: '',
@@ -149,7 +143,7 @@ export default function EnrollStudentForm({
     };
 
     const handleSkip = async () => {
-        if (step === 3) {
+        if (step === 2) {
             form.setValue('streetAddress', '');
             form.setValue('city', '');
             form.setValue('stateProvince', '');
@@ -170,21 +164,55 @@ export default function EnrollStudentForm({
         }
     };
 
+    // Generates secure account info automatically when passing step 1
+    const autoGenerateAccountInfo = () => {
+        const first = form
+            .getValues('firstName')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+        const last = form
+            .getValues('lastName')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+        const dob = form.getValues('dateOfBirth');
+
+        // Extract birth year, or generate a random 4 digit number if empty
+        const numericSuffix = dob
+            ? dob.split('-')[0]
+            : Math.floor(1000 + Math.random() * 9000);
+
+        const generatedUsername = `${first}.${last}${numericSuffix}`;
+        const generatedEmail = `${generatedUsername}@sensorypalette.com`;
+
+        // Example password: Firstname (Capitalized) + @ + Year
+        const capitalizedFirst =
+            form.getValues('firstName').trim().charAt(0).toUpperCase() +
+            form.getValues('firstName').trim().slice(1).replace(/\s+/g, '');
+        const generatedPassword = `${capitalizedFirst}@${numericSuffix}`;
+
+        form.setValue('username', generatedUsername);
+        form.setValue('email', generatedEmail);
+        form.setValue('password', generatedPassword);
+    };
+
     const handleSmartSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (step < STEPS.length) {
             let fieldsToValidate: (keyof StudentFormValues)[] = [];
-            if (step === 1)
-                fieldsToValidate = ['username', 'email', 'password'];
-            if (step === 2)
+
+            if (step === 1) {
                 fieldsToValidate = [
                     'firstName',
                     'lastName',
                     'dateOfBirth',
                     'gender',
+                    'diagnosis',
                 ];
-            if (step === 3)
+            }
+            if (step === 2) {
                 fieldsToValidate = [
                     'streetAddress',
                     'city',
@@ -192,11 +220,18 @@ export default function EnrollStudentForm({
                     'postalCode',
                     'countryCode',
                 ];
+            }
 
             const isStepValid = await form.trigger(fieldsToValidate);
-            if (isStepValid) setStep((prev) => prev + 1);
+
+            if (isStepValid) {
+                if (step === 1) {
+                    autoGenerateAccountInfo();
+                }
+                setStep((prev) => prev + 1);
+            }
         } else {
-            // Final step: validate entire form and submit
+            // Final step: validate entire form (including the auto-generated account fields) and submit
             await form.handleSubmit(onSubmit)(e);
         }
     };
@@ -254,122 +289,12 @@ export default function EnrollStudentForm({
                     onSubmit={handleSmartSubmit}
                     className="flex flex-col flex-1"
                 >
-                    {/* FIXED HEIGHT CONTAINER TO PREVENT JUMPING */}
                     <div className="min-h-[340px] flex flex-col justify-start">
-                        {/* STEP 1: ACCOUNT */}
+                        {/* STEP 1: PERSONAL */}
                         <div
                             className={cn(
                                 'space-y-5 animate-in slide-in-from-right-4 fade-in duration-500',
                                 step === 1 ? 'block' : 'hidden',
-                            )}
-                        >
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <FormField
-                                    control={form.control}
-                                    name="username"
-                                    render={({ field }) => (
-                                        <FormItem className={styles.formItem}>
-                                            <FormLabel
-                                                className={styles.formLabel}
-                                            >
-                                                Student Username *
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    className={styles.formInput}
-                                                    placeholder="johndoe123"
-                                                    {...field}
-                                                    disabled={isLoading}
-                                                />
-                                            </FormControl>
-                                            <FormMessage
-                                                className={styles.formMessage}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="email"
-                                    render={({ field }) => (
-                                        <FormItem className={styles.formItem}>
-                                            <FormLabel
-                                                className={styles.formLabel}
-                                            >
-                                                Student Email *
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    type="email"
-                                                    placeholder="john@example.com"
-                                                    className={styles.formInput}
-                                                    {...field}
-                                                    disabled={isLoading}
-                                                />
-                                            </FormControl>
-                                            <FormMessage
-                                                className={styles.formMessage}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="password"
-                                    render={({ field }) => (
-                                        <FormItem className={styles.formItem}>
-                                            <FormLabel
-                                                className={styles.formLabel}
-                                            >
-                                                Password (Optional)
-                                            </FormLabel>
-                                            <div className="relative">
-                                                <FormControl>
-                                                    <Input
-                                                        type={
-                                                            showPassword
-                                                                ? 'text'
-                                                                : 'password'
-                                                        }
-                                                        placeholder="••••••••"
-                                                        className={cn(
-                                                            styles.formInput,
-                                                            'pr-10',
-                                                        )}
-                                                        {...field}
-                                                        disabled={isLoading}
-                                                    />
-                                                </FormControl>
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setShowPassword(
-                                                            !showPassword,
-                                                        )
-                                                    }
-                                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
-                                                >
-                                                    {showPassword ? (
-                                                        <EyeOffIcon size={16} />
-                                                    ) : (
-                                                        <EyeIcon size={16} />
-                                                    )}
-                                                </button>
-                                            </div>
-                                            <FormMessage
-                                                className={styles.formMessage}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                        </div>
-
-                        {/* STEP 2: PERSONAL */}
-                        <div
-                            className={cn(
-                                'space-y-5 animate-in slide-in-from-right-4 fade-in duration-500',
-                                step === 2 ? 'block' : 'hidden',
                             )}
                         >
                             <div className="flex justify-center pb-2">
@@ -478,7 +403,7 @@ export default function EnrollStudentForm({
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <FormField
                                     control={form.control}
                                     name="dateOfBirth"
@@ -502,6 +427,7 @@ export default function EnrollStudentForm({
                                         </FormItem>
                                     )}
                                 />
+                                {/* 🚨 NEW RADIO BUTTON GENDER SELECTOR */}
                                 <FormField
                                     control={form.control}
                                     name="gender"
@@ -511,6 +437,66 @@ export default function EnrollStudentForm({
                                                 className={styles.formLabel}
                                             >
                                                 Gender *
+                                            </FormLabel>
+                                            <FormControl>
+                                                <div className="flex gap-3">
+                                                    <label className="flex-1 cursor-pointer">
+                                                        <input
+                                                            type="radio"
+                                                            value="male"
+                                                            checked={
+                                                                field.value ===
+                                                                'male'
+                                                            }
+                                                            onChange={() =>
+                                                                field.onChange(
+                                                                    'male',
+                                                                )
+                                                            }
+                                                            disabled={isLoading}
+                                                            className="sr-only peer"
+                                                        />
+                                                        <div className="h-11 flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-bold text-slate-400 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-checked:text-indigo-700 hover:border-indigo-200 hover:bg-white hover:text-slate-600 shadow-inner peer-checked:shadow-sm">
+                                                            Male
+                                                        </div>
+                                                    </label>
+                                                    <label className="flex-1 cursor-pointer">
+                                                        <input
+                                                            type="radio"
+                                                            value="female"
+                                                            checked={
+                                                                field.value ===
+                                                                'female'
+                                                            }
+                                                            onChange={() =>
+                                                                field.onChange(
+                                                                    'female',
+                                                                )
+                                                            }
+                                                            disabled={isLoading}
+                                                            className="sr-only peer"
+                                                        />
+                                                        <div className="h-11 flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-bold text-slate-400 transition-all peer-checked:border-pink-500 peer-checked:bg-pink-50 peer-checked:text-pink-700 hover:border-pink-200 hover:bg-white hover:text-slate-600 shadow-inner peer-checked:shadow-sm">
+                                                            Female
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </FormControl>
+                                            <FormMessage
+                                                className={styles.formMessage}
+                                            />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="diagnosis"
+                                    render={({ field }) => (
+                                        <FormItem className={styles.formItem}>
+                                            <FormLabel
+                                                className={styles.formLabel}
+                                            >
+                                                Diagnosis *
                                             </FormLabel>
                                             <Select
                                                 onValueChange={field.onChange}
@@ -523,21 +509,46 @@ export default function EnrollStudentForm({
                                                             styles.formInput
                                                         }
                                                     >
-                                                        <SelectValue placeholder="Select gender" />
+                                                        <SelectValue placeholder="Select diagnosis" />
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent className="rounded-xl shadow-xl">
                                                     <SelectItem
-                                                        value="male"
+                                                        value="ADHD"
                                                         className="font-medium text-sm"
                                                     >
-                                                        Male
+                                                        ADHD
                                                     </SelectItem>
                                                     <SelectItem
-                                                        value="female"
+                                                        value="Autism Spectrum Disorder"
                                                         className="font-medium text-sm"
                                                     >
-                                                        Female
+                                                        Autism
+                                                    </SelectItem>
+                                                    <SelectItem
+                                                        value="Global Developmental Delay"
+                                                        className="font-medium text-sm"
+                                                    >
+                                                        Global Developmental
+                                                        Delay
+                                                    </SelectItem>
+                                                    <SelectItem
+                                                        value="Pending Evaluation"
+                                                        className="font-medium text-sm"
+                                                    >
+                                                        Pending Evaluation
+                                                    </SelectItem>
+                                                    <SelectItem
+                                                        value="None / Not Applicable"
+                                                        className="font-medium text-sm text-slate-500"
+                                                    >
+                                                        None / Not Applicable
+                                                    </SelectItem>
+                                                    <SelectItem
+                                                        value="Other"
+                                                        className="font-medium text-sm"
+                                                    >
+                                                        Other
                                                     </SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -550,11 +561,11 @@ export default function EnrollStudentForm({
                             </div>
                         </div>
 
-                        {/* STEP 3: ADDRESS */}
+                        {/* STEP 2: ADDRESS */}
                         <div
                             className={cn(
                                 'space-y-5 animate-in slide-in-from-right-4 fade-in duration-500',
-                                step === 3 ? 'block' : 'hidden',
+                                step === 2 ? 'block' : 'hidden',
                             )}
                         >
                             <FormField
@@ -674,11 +685,11 @@ export default function EnrollStudentForm({
                             </div>
                         </div>
 
-                        {/* STEP 4: GUARDIAN */}
+                        {/* STEP 3: GUARDIAN */}
                         <div
                             className={cn(
                                 'space-y-5 animate-in slide-in-from-right-4 fade-in duration-500',
-                                step === 4 ? 'block' : 'hidden',
+                                step === 3 ? 'block' : 'hidden',
                             )}
                         >
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -799,7 +810,7 @@ export default function EnrollStudentForm({
                             </Button>
                         )}
 
-                        {step === 3 && (
+                        {step === 2 && (
                             <Button
                                 type="button"
                                 variant="secondary"

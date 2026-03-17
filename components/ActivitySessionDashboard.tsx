@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import {
     Radar,
@@ -38,6 +38,9 @@ import {
     Trophy,
     Timer,
     Gamepad2,
+    Lightbulb,
+    ArrowRight,
+    Play,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -51,8 +54,10 @@ import { Textarea } from '@/components/ui/textarea';
 import {
     triggerActivitySessionRecommendation,
     updateActivitySession,
-} from '@/api/acitivity-session';
+} from '@/api/activity-session';
+import { getActivity } from '@/api/activity';
 import { cn } from '@/lib/utils';
+import { FormatService } from '@/utils/helpers';
 import {
     ActivitySessionResponse,
     ActivitySessionStatus,
@@ -313,10 +318,11 @@ function SessionMetricsSummary({
     );
 }
 
+// Ensure ActivitySessionResponse has `aiRecommendationId?: string;`
 export default function ActivitySessionDashboard({
     session,
 }: {
-    session: ActivitySessionResponse;
+    session: ActivitySessionResponse & { aiRecommendationId?: string };
 }) {
     const queryClient = useQueryClient();
     const router = useRouter();
@@ -328,6 +334,18 @@ export default function ActivitySessionDashboard({
 
     const isGameActivity =
         session.activity?.activityType?.toLowerCase() === 'game';
+
+    // Direct access to Strapi documentId
+    const targetActivityId = session.aiRecommendationId;
+
+    // Fetch the suggested activity using the extracted ID
+    const { data: suggestedActivity, isLoading: isLoadingSuggested } = useQuery(
+        {
+            queryKey: ['suggested-activity', targetActivityId],
+            queryFn: () => getActivity(targetActivityId as string),
+            enabled: !!targetActivityId,
+        },
+    );
 
     const aiMutation = useMutation({
         mutationFn: triggerActivitySessionRecommendation,
@@ -558,15 +576,6 @@ export default function ActivitySessionDashboard({
                                     ? `${session.student.firstName} ${session.student.lastName}`
                                     : 'Unknown Student'}
                             </span>
-                            <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                                <CalendarClock
-                                    size={14}
-                                    className="text-slate-400"
-                                />
-                                {formatOnlyDate(
-                                    session.startAt || session.actualStartAt,
-                                )}
-                            </span>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -574,32 +583,11 @@ export default function ActivitySessionDashboard({
                     </div>
                 </motion.header>
 
+                {/* --- 4 STATS ROW --- */}
                 <motion.div
                     variants={itemVariants}
                     className="grid grid-cols-1 md:grid-cols-4 gap-6"
                 >
-                    <AnalysisStat
-                        label={
-                            isGameActivity ? 'Game Accuracy' : 'Completion Rate'
-                        }
-                        value={
-                            session.accuracy !== null &&
-                            session.accuracy !== undefined
-                                ? `${session.accuracy}%`
-                                : session.score !== null &&
-                                    session.score !== undefined
-                                  ? `${session.score}%`
-                                  : '---'
-                        }
-                        subtitle={
-                            session.accuracy !== null &&
-                            session.accuracy !== undefined
-                                ? 'Overall Precision'
-                                : 'Awaiting Data'
-                        }
-                        icon={Target}
-                        colorClass="group-hover:text-emerald-500"
-                    />
                     <AnalysisStat
                         label="AI Diagnostics"
                         value={
@@ -646,6 +634,17 @@ export default function ActivitySessionDashboard({
                         icon={CalendarClock}
                         colorClass="group-hover:text-amber-500"
                     />
+                    <AnalysisStat
+                        label="Telemetry Yield"
+                        value={
+                            session.telemetryAnalysis?.length
+                                ? session.telemetryAnalysis.length.toString()
+                                : '0'
+                        }
+                        subtitle="Data Points Processed"
+                        icon={Network}
+                        colorClass="group-hover:text-emerald-500"
+                    />
                 </motion.div>
 
                 {isGameActivity &&
@@ -688,7 +687,9 @@ export default function ActivitySessionDashboard({
                                         initial={{ opacity: 0, y: 15 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ duration: 0.4 }}
+                                        className="space-y-6"
                                     >
+                                        {/* AI INSIGHT CARD */}
                                         <Card className="rounded-[32px] border border-slate-900 bg-slate-950 text-white shadow-xl overflow-hidden relative group">
                                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
                                             <Zap
@@ -723,6 +724,114 @@ export default function ActivitySessionDashboard({
                                                 </div>
                                             </CardContent>
                                         </Card>
+
+                                        {/* BESPOKE NEXT SUGGESTED ACTIVITY UI */}
+                                        {targetActivityId && (
+                                            <Card className="rounded-[32px] border border-amber-200/60 bg-gradient-to-br from-amber-50 to-white shadow-sm overflow-hidden mt-6">
+                                                <CardContent className="p-6 md:p-8">
+                                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                                        <div className="space-y-2 flex-1">
+                                                            <div className="flex items-center gap-2 text-amber-600">
+                                                                <Lightbulb
+                                                                    size={16}
+                                                                />
+                                                                <h3 className="text-[10px] font-black uppercase tracking-widest">
+                                                                    Recommended
+                                                                    Next Step
+                                                                </h3>
+                                                            </div>
+                                                            <p className="text-sm font-medium text-slate-500">
+                                                                Based on the
+                                                                telemetry
+                                                                pattern, the AI
+                                                                recommends
+                                                                transitioning to
+                                                                this activity
+                                                                next to
+                                                                reinforce
+                                                                learning.
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="w-full md:w-auto md:min-w-[380px]">
+                                                            {isLoadingSuggested ? (
+                                                                <div className="flex items-center justify-center h-[76px] w-full border border-slate-200 bg-white rounded-2xl border-dashed">
+                                                                    <Loader2 className="animate-spin text-slate-300 h-5 w-5" />
+                                                                </div>
+                                                            ) : suggestedActivity ? (
+                                                                <div className="flex items-center gap-4 bg-white p-3 pr-4 rounded-2xl border border-slate-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-200">
+                                                                    <div className="h-14 w-14 rounded-xl overflow-hidden border border-slate-100 shrink-0 bg-slate-50 relative group flex items-center justify-center">
+                                                                        {FormatService.formatStrapiMedia(
+                                                                            suggestedActivity.banner,
+                                                                            'thumbnail',
+                                                                        ) ? (
+                                                                            // eslint-disable-next-line @next/next/no-img-element
+                                                                            <img
+                                                                                src={FormatService.formatStrapiMedia(
+                                                                                    suggestedActivity.banner,
+                                                                                    'thumbnail',
+                                                                                )}
+                                                                                alt={
+                                                                                    suggestedActivity.name
+                                                                                }
+                                                                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                                                            />
+                                                                        ) : (
+                                                                            <div className="w-4 h-4 rounded-full bg-slate-200" />
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                                        <h4 className="text-sm font-bold text-slate-800 truncate leading-tight">
+                                                                            {
+                                                                                suggestedActivity.name
+                                                                            }
+                                                                        </h4>
+                                                                        <div className="flex items-center gap-2 mt-1.5">
+                                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                                                                {suggestedActivity.durationMinutes ||
+                                                                                    30}{' '}
+                                                                                Min
+                                                                            </span>
+                                                                            {suggestedActivity.activityType && (
+                                                                                <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 truncate max-w-[80px]">
+                                                                                    {
+                                                                                        suggestedActivity.activityType
+                                                                                    }
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <Button
+                                                                        className="shrink-0 h-10 w-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-sm"
+                                                                        size="icon"
+                                                                        onClick={() =>
+                                                                            router.push(
+                                                                                `/activities/${suggestedActivity.documentId}`,
+                                                                            )
+                                                                        }
+                                                                        title="Go to Activity"
+                                                                    >
+                                                                        <ArrowRight
+                                                                            size={
+                                                                                16
+                                                                            }
+                                                                        />
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center justify-center h-[76px] w-full border border-slate-200 bg-slate-50 rounded-2xl">
+                                                                    <span className="text-xs font-medium text-slate-400 italic">
+                                                                        Activity
+                                                                        details
+                                                                        unavailable.
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        )}
                                     </motion.div>
                                 ) : (
                                     <motion.div
@@ -1089,14 +1198,6 @@ export default function ActivitySessionDashboard({
                                         {session.documentId?.slice(0, 8) ||
                                             'N/A'}
                                     </Badge>
-                                </div>
-                                <div className="flex justify-between items-center text-[10px] font-bold">
-                                    <span className="text-slate-400 uppercase tracking-widest">
-                                        Assigned Hub
-                                    </span>
-                                    <span className="text-slate-900">
-                                        Quezon City Hub
-                                    </span>
                                 </div>
                                 <div className="flex justify-between items-center text-[10px] font-bold">
                                     <span className="text-slate-400 uppercase tracking-widest">

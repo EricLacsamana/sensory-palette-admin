@@ -33,7 +33,7 @@ import {
     createActivitySession,
     updateActivitySession,
     deleteActivitySession,
-} from '@/api/acitivity-session';
+} from '@/api/activity-session';
 import { FormatService } from '@/utils/helpers';
 import { Input } from '@base-ui/react';
 import { UserResponse } from '@/types';
