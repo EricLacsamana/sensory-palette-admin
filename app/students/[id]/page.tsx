@@ -961,14 +961,10 @@ export default function StudentDashboard() {
                             className="rounded-2xl border-slate-200 h-11 px-4 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-widest shrink-0 shadow-sm transition-all"
                         >
                             {isGeneratingPDF ? (
-                                <Loader2
-                                    size={16}
-                                    className="animate-spin mr-2"
-                                />
+                                <Loader2 size={16} className="animate-spin" />
                             ) : (
-                                <Download size={16} className="mr-2" />
+                                <Download size={16} />
                             )}
-                            Export PDF
                         </Button>
                     </div>
                 </motion.header>
