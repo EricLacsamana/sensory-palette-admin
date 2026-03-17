@@ -625,6 +625,7 @@ export default function StudentDashboard() {
                 );
                 yPos += 30;
 
+                // 📸 CAPTURE 1: Line Chart
                 const lineChartElem = document.getElementById('pdf-line-chart');
                 if (lineChartElem) {
                     const canvas = await html2canvas(lineChartElem, {
@@ -641,6 +642,38 @@ export default function StudentDashboard() {
                     }
                     doc.addImage(img, 'PNG', 15, yPos, pageWidth - 30, h);
                     yPos += h + 10;
+                }
+
+                // 📸 CAPTURE 2: Radar Chart
+                const radarChartElem =
+                    document.getElementById('pdf-radar-chart');
+                if (radarChartElem) {
+                    const canvasRadar = await html2canvas(radarChartElem, {
+                        scale: 2,
+                        useCORS: true,
+                        backgroundColor: '#ffffff',
+                    });
+                    const imgDataRadar = canvasRadar.toDataURL('image/png');
+                    const imgPropsRadar = doc.getImageProperties(imgDataRadar);
+                    const pdfWidthRadar = 120; // Slightly constrained width to ensure perfect centering
+                    const pdfHeightRadar =
+                        (imgPropsRadar.height * pdfWidthRadar) /
+                        imgPropsRadar.width;
+                    const xOffsetRadar = (pageWidth - pdfWidthRadar) / 2;
+
+                    if (yPos + pdfHeightRadar > pageHeight - 20) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    doc.addImage(
+                        imgDataRadar,
+                        'PNG',
+                        xOffsetRadar,
+                        yPos,
+                        pdfWidthRadar,
+                        pdfHeightRadar,
+                    );
+                    yPos += pdfHeightRadar + 10;
                 }
 
                 // --- Clinical Recommendation ---
