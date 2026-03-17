@@ -725,7 +725,7 @@ export default function StudentDashboard() {
                 doc.text(splitRec, 20, yPos + 8);
 
                 // FOOTER (Page Numbers)
-                const pageCount = doc.internal.getNumberOfPages();
+                const pageCount = (doc.internal as any).getNumberOfPages();
                 doc.setFontSize(8);
                 doc.setTextColor(148, 163, 184);
                 for (let i = 1; i <= pageCount; i++) {
@@ -830,32 +830,33 @@ export default function StudentDashboard() {
                         </div>
                     </div>
 
-                    <div className="flex flex-1 flex-wrap items-center xl:justify-center justify-start gap-x-10 gap-y-4 px-8 border-y xl:border-y-0 xl:border-x border-slate-100 py-4 xl:py-0 w-full xl:w-auto">
+                    <div className="flex flex-1 flex-col md:flex-row items-start md:items-center justify-start xl:justify-center gap-5 md:gap-6 lg:gap-8 px-4 sm:px-8 border-y xl:border-y-0 xl:border-x border-slate-100 py-4 xl:py-0 w-full xl:w-auto">
                         <div className="flex items-center gap-3">
                             <div className="p-2.5 bg-slate-50 rounded-xl">
                                 <CakeIcon
-                                    size={18}
+                                    size={15}
                                     className="text-slate-400"
                                 />
                             </div>
-                            <div className="flex flex-col">
-                                <TechnicalLabel>DOB / Age</TechnicalLabel>
-                                <span className="text-sm font-bold text-slate-700">
-                                    {student?.dateOfBirth
-                                        ? new Date(
-                                              student.dateOfBirth,
-                                          ).toLocaleDateString('en-US', {
-                                              month: 'short',
-                                              day: 'numeric',
-                                              year: 'numeric',
-                                          })
-                                        : '--'}
-                                    {student?.dateOfBirth && (
-                                        <span className="text-slate-400 ml-1">
-                                            ({student?.age}y)
-                                        </span>
-                                    )}
-                                </span>
+                            <div className="flex flex-col gap-1">
+                                <TechnicalLabel>Age & DOB</TechnicalLabel>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
+                                        {student?.age
+                                            ? `${student.age}y`
+                                            : '--'}
+                                    </span>
+                                    <div className="h-3 w-[1px] bg-slate-200" />{' '}
+                                    {/* Subtle Divider */}
+                                    <span className="text-[11px] font-medium text-slate-400 whitespace-nowrap">
+                                        {student?.dateOfBirth
+                                            ? format(
+                                                  new Date(student.dateOfBirth),
+                                                  'MMM dd, yyyy',
+                                              )
+                                            : '--'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -879,6 +880,27 @@ export default function StudentDashboard() {
                                 </span>
                             </div>
                         </div>
+                        {/* --- NEW DIAGNOSIS BLOCK --- */}
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-slate-50 rounded-xl">
+                                <Activity
+                                    size={18}
+                                    className="text-purple-500"
+                                />
+                            </div>
+                            <div className="flex flex-col">
+                                <TechnicalLabel>Diagnosis</TechnicalLabel>
+                                <span
+                                    className="text-sm font-bold text-slate-700 capitalize max-w-[150px] truncate"
+                                    title={
+                                        student?.diagnosis ||
+                                        'No diagnosis specified'
+                                    }
+                                >
+                                    {student?.diagnosis || 'N/A'}
+                                </span>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 w-full xl:w-auto justify-between xl:justify-end">
@@ -893,14 +915,10 @@ export default function StudentDashboard() {
                             className="rounded-2xl border-slate-200 h-11 px-4 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-widest shrink-0 shadow-sm transition-all"
                         >
                             {isGeneratingPDF ? (
-                                <Loader2
-                                    size={16}
-                                    className="mr-2 animate-spin"
-                                />
+                                <Loader2 size={16} className="animate-spin" />
                             ) : (
-                                <Download size={16} className="mr-2" />
+                                <Download size={16} />
                             )}
-                            Export PDF
                         </Button>
                     </div>
                 </motion.header>
