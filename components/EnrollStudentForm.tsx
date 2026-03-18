@@ -648,7 +648,7 @@ export default function EnrollStudentForm({
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    placeholder="US"
+                                                    placeholder="PH"
                                                     className={cn(
                                                         styles.formInput,
                                                         'uppercase',
