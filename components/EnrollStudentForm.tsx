@@ -526,29 +526,10 @@ export default function EnrollStudentForm({
                                                         Autism
                                                     </SelectItem>
                                                     <SelectItem
-                                                        value="Global Developmental Delay"
-                                                        className="font-medium text-sm"
-                                                    >
-                                                        Global Developmental
-                                                        Delay
-                                                    </SelectItem>
-                                                    <SelectItem
-                                                        value="Pending Evaluation"
-                                                        className="font-medium text-sm"
-                                                    >
-                                                        Pending Evaluation
-                                                    </SelectItem>
-                                                    <SelectItem
                                                         value="None / Not Applicable"
                                                         className="font-medium text-sm text-slate-500"
                                                     >
                                                         None / Not Applicable
-                                                    </SelectItem>
-                                                    <SelectItem
-                                                        value="Other"
-                                                        className="font-medium text-sm"
-                                                    >
-                                                        Other
                                                     </SelectItem>
                                                 </SelectContent>
                                             </Select>

@@ -8,7 +8,7 @@ export const me = () => {
 export const createUser = async (payload: any) => {
     const { data } = await api.post(ENDPOINTS.USERS, payload);
 
-    console.log('data update', data);
+    console.log('data create', data);
     return data;
 };
 
@@ -33,7 +33,6 @@ export const getUsers = async (ctx: any) => {
 export const updateUserProfile = async (userId: number, payload: any) => {
     const { data } = await api.put(`${ENDPOINTS.USERS}/${userId}`, payload);
 
-    console.log('data update', data);
     return data;
 };
 

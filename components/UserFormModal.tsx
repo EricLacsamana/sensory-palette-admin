@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserPlus, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,6 +13,9 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import UserForm, { UserFormValues } from './UserForm';
+
+// Import your API instance and endpoints
+import api from '@/api';
 import { createUser, updateUserProfile } from '@/api/users';
 
 interface UserFormModalProps {
@@ -29,39 +32,67 @@ export default function UserFormModal({
     const queryClient = useQueryClient();
     const isEditing = !!userToEdit;
 
+    // We can add a local loading state to track the upload phase specifically if desired,
+    // though mutation.isPending will cover the whole process.
+    const [isUploading, setIsUploading] = useState(false);
+
+    // --- Helper: Upload File to Strapi ---
+    const uploadFilesToStrapi = async (file: File) => {
+        const formData = new FormData();
+        formData.append('files', file);
+
+        const response = await api.post('/api/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        return response.data;
+    };
+
     // --- Data Mutation ---
     const mutation = useMutation({
         mutationFn: async (values: UserFormValues) => {
-            const payload = { ...values };
+            let payload: any = { ...values };
 
             // 1. Prevent overwriting with an empty password during edits
             if (isEditing && !payload.password) {
                 delete payload.password;
             }
 
-            // 2. Initialize FormData for file upload support
-            const formData = new FormData();
+            // 2. Clean up intentionally blank fields (like N/A for diagnosis)
+            if (payload.diagnosis === 'N/A') {
+                payload.diagnosis = null;
+            }
 
-            // 3. Append all values to FormData
-            Object.entries(payload).forEach(([key, value]) => {
-                if (value instanceof File) {
-                    // Handle the actual File object
-                    formData.append(key, value);
-                } else if (value !== undefined && value !== null) {
-                    // Convert booleans and numbers to strings
-                    formData.append(key, String(value));
-                } else if (value === null) {
-                    // Send an empty string for intentional nulls (like 'N/A' diagnosis)
-                    formData.append(key, '');
+            // 3. Handle Profile Picture Upload
+            if (payload.profilePicture instanceof File) {
+                setIsUploading(true);
+                try {
+                    const uploadedImage = await uploadFilesToStrapi(
+                        payload.profilePicture,
+                    );
+                    // Attach the returned media ID to the payload
+                    payload.profilePicture = uploadedImage[0].id;
+                } catch (error) {
+                    console.error('Image upload failed:', error);
+                    throw new Error(
+                        'Failed to upload profile picture. Please try again.',
+                    );
+                } finally {
+                    setIsUploading(false);
                 }
-            });
-
-            // 4. Send FormData instead of standard JSON
-            if (isEditing) {
-                // Assuming userToEdit has an id or _id field
-                return await updateUserProfile(userToEdit.id, formData);
+            } else if (payload.profilePicture && payload.profilePicture.id) {
+                // If it's an existing image object from Strapi, just pass its ID back
+                payload.profilePicture = payload.profilePicture.id;
             } else {
-                return await createUser(formData);
+                // If it's null or removed, ensure we don't send invalid data
+                payload.profilePicture = null;
+            }
+
+            // 4. Send standard JSON to the User endpoints
+            if (isEditing) {
+                return await updateUserProfile(userToEdit.id, payload);
+            } else {
+                return await createUser(payload);
             }
         },
         onSuccess: () => {
@@ -75,14 +106,17 @@ export default function UserFormModal({
         },
         onError: (error: any) => {
             toast.error(
-                error?.response?.data?.message ||
+                error?.response?.data?.error?.message ||
+                    error?.response?.data?.message ||
                     error.message ||
                     'Failed to save user.',
             );
+            setIsUploading(false);
         },
     });
 
     const handleSubmit = (values: UserFormValues) => {
+        // Start the mutation flow
         mutation.mutate(values);
     };
 
@@ -112,7 +146,8 @@ export default function UserFormModal({
                     initialData={userToEdit}
                     onSubmit={handleSubmit}
                     onCancel={onClose}
-                    isLoading={mutation.isPending}
+                    // Disable the form if the mutation is pending OR if the image is actively uploading
+                    isLoading={mutation.isPending || isUploading}
                 />
             </DialogContent>
         </Dialog>

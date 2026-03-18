@@ -14,7 +14,6 @@ import {
     Ban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     DropdownMenu,
@@ -23,8 +22,8 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { FormatService } from '@/utils/helpers';
 
-// Helper to get initials
 const getInitials = (
     firstName?: string,
     lastName?: string,
@@ -36,7 +35,6 @@ const getInitials = (
     return 'U';
 };
 
-// Helper for Role UI - Standardized with the Command Center palette
 const getRoleDetails = (roleName: string) => {
     const role = roleName?.toLowerCase() || 'user';
     if (role.includes('admin'))
@@ -63,6 +61,7 @@ const getRoleDetails = (roleName: string) => {
             color: 'bg-indigo-50 text-indigo-600 border-indigo-100',
             iconBg: 'bg-indigo-100/50',
         };
+
     return {
         icon: Shield,
         color: 'bg-slate-50 text-slate-600 border-slate-100',
@@ -145,8 +144,12 @@ export function UserCard({
                 <div className="flex flex-col items-center mt-10 text-center">
                     <div className="relative mb-4">
                         <Avatar className="h-20 w-20 rounded-[28px] border-4 border-white shadow-md ring-1 ring-slate-100 group-hover:scale-105 transition-transform duration-500">
+                            {/* 🚨 FIX: Pass the whole object, not just .url */}
                             <AvatarImage
-                                src={user.profilePicture?.url}
+                                src={FormatService.formatStrapiMedia(
+                                    user.profilePicture,
+                                    'thumbnail',
+                                )}
                                 alt={displayName}
                                 className="object-cover"
                             />
@@ -158,7 +161,6 @@ export function UserCard({
                                 )}
                             </AvatarFallback>
                         </Avatar>
-                        {/* Status Dot */}
                         <div
                             className={cn(
                                 'absolute bottom-0 right-0 h-5 w-5 rounded-full border-[4px] border-white shadow-sm',
@@ -178,7 +180,6 @@ export function UserCard({
                         </span>
                     </div>
 
-                    {/* --- ROLE BADGE --- */}
                     <div
                         className={cn(
                             'inline-flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-xl border transition-all duration-300',
@@ -195,8 +196,6 @@ export function UserCard({
                 </div>
             </div>
 
-            {/* --- FOOTER / BOTTOM SPACING --- */}
-            {/* Standardized footer metadata with extra padding for "breathing room" */}
             <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center mt-auto">
                 <div className="flex flex-col">
                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
