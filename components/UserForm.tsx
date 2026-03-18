@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 import {
     Loader2Icon,
     ChevronRight,
@@ -14,6 +15,9 @@ import {
     ShieldCheck,
     HeartHandshake,
     GraduationCap,
+    Zap,
+    Brain,
+    Minus,
 } from 'lucide-react';
 
 import {
@@ -26,17 +30,9 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
-// --- ROLE VARIABLES ---
 export const ROLES = {
     ADMIN: '6',
     THERAPIST: '5',
@@ -44,48 +40,77 @@ export const ROLES = {
 };
 
 // --- BASE VALIDATION SCHEMA ---
-// (Password is excluded here so we can dynamically require it based on isEditing)
-export const baseUserFormSchema = z.object({
-    role: z.string().min(1, 'Role is required.'),
+export const baseUserFormSchema = z
+    .object({
+        role: z.string().min(1, 'Role is required.'),
+        username: z.string().min(3, 'Minimum 3 characters.'),
+        email: z.string().email('Invalid email.'),
+        confirmed: z.boolean().optional(),
+        blocked: z.boolean().optional(),
+        profilePicture: z.any().optional(),
+        firstName: z.string().min(1, 'First name is required.'),
+        middleName: z.string().optional(),
+        lastName: z.string().min(1, 'Last name is required.'),
+        dateOfBirth: z.string().min(1, 'Date of birth is required.'),
+        gender: z.enum(['male', 'female'], {
+            required_error: 'Please select a gender.',
+        }),
 
-    // Account
-    username: z.string().min(3, 'Minimum 3 characters.'),
-    email: z.string().email('Invalid email.'),
-    confirmed: z.boolean().optional(),
-    blocked: z.boolean().optional(),
+        diagnosis: z.string().nullable().optional(),
+        addressLabel: z.string().optional(),
+        streetAddress: z.string().optional(),
+        city: z.string().optional(),
+        stateProvince: z.string().optional(),
+        postalCode: z.string().optional(),
+        countryCode: z.string().max(2, 'Max 2 chars').optional(),
+        isDefault: z.boolean().optional(),
 
-    // Personal
-    profilePicture: z.any().optional(),
-    firstName: z.string().min(1, 'First name is required.'),
-    middleName: z.string().optional(),
-    lastName: z.string().min(1, 'Last name is required.'),
-    dateOfBirth: z.string().min(1, 'Date of birth is required.'),
-    gender: z.enum(['male', 'female'], {
-        required_error: 'Please select a gender.',
-    }),
-    diagnosis: z.string().nullable().optional(),
+        guardianName: z.string().optional(),
+        guardianRelationship: z.string().optional(),
+        guardianContact: z.string().optional(),
+        guardianEmail: z
+            .string()
+            .email('Invalid email.')
+            .optional()
+            .or(z.literal('')),
+    })
+    .superRefine((data, ctx) => {
+        // Apply strict requirements ONLY if the user is a student
+        if (data.role === ROLES.STUDENT) {
+            if (!data.diagnosis || data.diagnosis === '') {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Diagnosis is required.',
+                    path: ['diagnosis'],
+                });
+            }
+            if (!data.guardianName || data.guardianName.trim() === '') {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Guardian name is required.',
+                    path: ['guardianName'],
+                });
+            }
+            if (
+                !data.guardianRelationship ||
+                data.guardianRelationship.trim() === ''
+            ) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Relationship is required.',
+                    path: ['guardianRelationship'],
+                });
+            }
+            if (!data.guardianContact || data.guardianContact.trim() === '') {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Contact number is required.',
+                    path: ['guardianContact'],
+                });
+            }
+        }
+    });
 
-    // Address
-    addressLabel: z.string().optional(),
-    streetAddress: z.string().optional(),
-    city: z.string().optional(),
-    stateProvince: z.string().optional(),
-    postalCode: z.string().optional(),
-    countryCode: z.string().max(2, 'Max 2 chars').optional(),
-    isDefault: z.boolean().optional(),
-
-    // Guardian
-    guardianName: z.string().optional(),
-    guardianRelationship: z.string().optional(),
-    guardianContact: z.string().optional(),
-    guardianEmail: z
-        .string()
-        .email('Invalid email.')
-        .optional()
-        .or(z.literal('')),
-});
-
-// We extend the base type to include the dynamic password field
 export type UserFormValues = z.infer<typeof baseUserFormSchema> & {
     password?: string;
 };
@@ -94,10 +119,13 @@ interface UserFormProps {
     initialData?: any;
     onSubmit: (values: UserFormValues) => void;
     onCancel: () => void;
+    onCheckUserExists?: (
+        username: string,
+        email: string,
+    ) => Promise<{ field: string; message: string } | null>;
     isLoading: boolean;
 }
 
-// --- REUSABLE STYLES ---
 const styles = {
     formItem: 'space-y-1.5 relative pb-4',
     formLabel:
@@ -112,21 +140,26 @@ export default function UserForm({
     initialData,
     onSubmit,
     onCancel,
-    isLoading,
+    onCheckUserExists,
+    isLoading: isSubmitting,
 }: UserFormProps) {
     const [step, setStep] = React.useState(1);
+    const [isValidating, setIsValidating] = React.useState(false);
     const [showPassword, setShowPassword] = React.useState(false);
     const [imagePreview, setImagePreview] = React.useState<string | null>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const isEditing = !!initialData;
 
-    // Dynamically require password ONLY if we are creating a new user
+    const isEditing = !!initialData;
+    const isLoading = isSubmitting || isValidating;
+
     const formSchema = React.useMemo(() => {
-        return baseUserFormSchema.extend({
-            password: isEditing
-                ? z.string().optional().or(z.literal(''))
-                : z.string().min(6, 'Password is required (min 6 characters).'),
-        });
+        return baseUserFormSchema.and(
+            z.object({
+                password: isEditing
+                    ? z.string().optional().or(z.literal(''))
+                    : z.string().min(6, 'Password is required (min 6 chars).'),
+            }),
+        );
     }, [isEditing]);
 
     const form = useForm<UserFormValues>({
@@ -162,23 +195,14 @@ export default function UserForm({
     const selectedRole = form.watch('role');
     const isStudent = String(selectedRole) === ROLES.STUDENT;
 
-    // --- DYNAMIC WIZARD STEPS ---
     const STEPS = React.useMemo(() => {
         const baseSteps = [
             { id: 'role', title: 'Role' },
             { id: 'personal', title: 'Personal' },
         ];
-
-        if (!isStudent) {
-            baseSteps.push({ id: 'account', title: 'Account' });
-        }
-
+        if (!isStudent) baseSteps.push({ id: 'account', title: 'Account' });
         baseSteps.push({ id: 'address', title: 'Address' });
-
-        if (isStudent) {
-            baseSteps.push({ id: 'guardian', title: 'Guardian' });
-        }
-
+        if (isStudent) baseSteps.push({ id: 'guardian', title: 'Guardian' });
         return baseSteps;
     }, [isStudent]);
 
@@ -239,7 +263,6 @@ export default function UserForm({
                 'countryCode',
             ]);
         }
-
         if (step < STEPS.length) {
             setStep((prev) => prev + 1);
         } else {
@@ -247,29 +270,29 @@ export default function UserForm({
         }
     };
 
-    // Auto-generates account info for students behind the scenes
     const autoGenerateAccountInfo = () => {
-        const first = form
-            .getValues('firstName')
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, '');
-        const last = form
-            .getValues('lastName')
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, '');
+        const first = form.getValues('firstName') || '';
+        const last = form.getValues('lastName') || '';
         const dob = form.getValues('dateOfBirth');
 
+        const firstClean = first
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+        const lastClean = last
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
         const numericSuffix = dob
             ? dob.split('-')[0]
             : Math.floor(1000 + Math.random() * 9000);
-        const generatedUsername = `${first}.${last}${numericSuffix}`;
+
+        const generatedUsername = `${firstClean}.${lastClean}${numericSuffix}`;
         const generatedEmail = `${generatedUsername}@sensorypalette.com`;
 
         const capitalizedFirst =
-            form.getValues('firstName').trim().charAt(0).toUpperCase() +
-            form.getValues('firstName').trim().slice(1).replace(/\s+/g, '');
+            first.trim().charAt(0).toUpperCase() +
+            first.trim().slice(1).replace(/\s+/g, '');
         const generatedPassword = `${capitalizedFirst}@${numericSuffix}`;
 
         form.setValue('username', generatedUsername);
@@ -279,12 +302,7 @@ export default function UserForm({
 
     const handleFinalSubmit = (values: UserFormValues) => {
         const finalPayload = { ...values };
-
-        // Convert N/A to a true null for the backend
-        if (finalPayload.diagnosis === 'N/A') {
-            finalPayload.diagnosis = null;
-        }
-
+        if (finalPayload.diagnosis === 'N/A') finalPayload.diagnosis = null;
         onSubmit(finalPayload);
     };
 
@@ -318,20 +336,62 @@ export default function UserForm({
             const isStepValid = await form.trigger(fieldsToValidate);
 
             if (isStepValid) {
-                // Background generate Student credentials if passing Personal
+                // --- ASYNC DUPLICATE CHECK ---
+                if (currentStepId === 'account' && onCheckUserExists) {
+                    const currentUsername = form.getValues('username');
+                    const currentEmail = form.getValues('email');
+
+                    const isUsernameChanged =
+                        currentUsername !== initialData?.username;
+                    const isEmailChanged = currentEmail !== initialData?.email;
+
+                    if (!isEditing || isUsernameChanged || isEmailChanged) {
+                        setIsValidating(true);
+                        const checkUsername =
+                            !isEditing || isUsernameChanged
+                                ? currentUsername
+                                : '';
+                        const checkEmail =
+                            !isEditing || isEmailChanged ? currentEmail : '';
+
+                        const duplicateError = await onCheckUserExists(
+                            checkUsername,
+                            checkEmail,
+                        );
+                        setIsValidating(false);
+
+                        if (duplicateError) {
+                            form.setError(duplicateError.field as any, {
+                                type: 'manual',
+                                message: duplicateError.message,
+                            });
+                            return; // 🚨 Halt form transition
+                        }
+                    }
+                }
+
                 if (currentStepId === 'personal' && isStudent) {
                     autoGenerateAccountInfo();
                 }
-                setStep((prev) => prev + 1);
+
+                setStep((prev) => prev + 1); // ✅ Only fires if valid
+            } else {
+                toast.error('Please fill in all required fields correctly.');
             }
         } else {
+            // Final Step (Guardian or Address)
             if (isStudent) {
                 const isFinalValid = await form.trigger([
                     'guardianName',
                     'guardianRelationship',
                     'guardianContact',
                 ]);
-                if (!isFinalValid) return;
+                if (!isFinalValid) {
+                    toast.error(
+                        'Please provide all required Guardian details.',
+                    );
+                    return;
+                }
             }
             await form.handleSubmit(handleFinalSubmit)(e);
         }
@@ -394,7 +454,7 @@ export default function UserForm({
                     className="flex flex-col flex-1"
                 >
                     <div className="min-h-[340px] flex flex-col justify-start">
-                        {/* --- STEP 1: ROLE (AESTHETIC CARDS) --- */}
+                        {/* --- STEP 1: ROLE --- */}
                         <div
                             className={cn(
                                 'space-y-4 animate-in slide-in-from-right-4 fade-in duration-500',
@@ -411,7 +471,6 @@ export default function UserForm({
                                         </FormLabel>
                                         <FormControl>
                                             <div className="grid grid-cols-1 gap-3 mt-2">
-                                                {/* Role: Admin */}
                                                 <label
                                                     className={cn(
                                                         'relative flex cursor-pointer rounded-2xl border p-4 shadow-sm transition-all duration-200',
@@ -431,9 +490,9 @@ export default function UserForm({
                                                             field.value ===
                                                             ROLES.ADMIN
                                                         }
-                                                        onChange={() =>
+                                                        onChange={(e) =>
                                                             field.onChange(
-                                                                ROLES.ADMIN,
+                                                                e.target.value,
                                                             )
                                                         }
                                                         disabled={
@@ -477,7 +536,6 @@ export default function UserForm({
                                                     </div>
                                                 </label>
 
-                                                {/* Role: Therapist */}
                                                 <label
                                                     className={cn(
                                                         'relative flex cursor-pointer rounded-2xl border p-4 shadow-sm transition-all duration-200',
@@ -497,9 +555,9 @@ export default function UserForm({
                                                             field.value ===
                                                             ROLES.THERAPIST
                                                         }
-                                                        onChange={() =>
+                                                        onChange={(e) =>
                                                             field.onChange(
-                                                                ROLES.THERAPIST,
+                                                                e.target.value,
                                                             )
                                                         }
                                                         disabled={
@@ -545,7 +603,6 @@ export default function UserForm({
                                                     </div>
                                                 </label>
 
-                                                {/* Role: Student */}
                                                 <label
                                                     className={cn(
                                                         'relative flex cursor-pointer rounded-2xl border p-4 shadow-sm transition-all duration-200',
@@ -565,9 +622,9 @@ export default function UserForm({
                                                             field.value ===
                                                             ROLES.STUDENT
                                                         }
-                                                        onChange={() =>
+                                                        onChange={(e) =>
                                                             field.onChange(
-                                                                ROLES.STUDENT,
+                                                                e.target.value,
                                                             )
                                                         }
                                                         disabled={
@@ -785,9 +842,10 @@ export default function UserForm({
                                                                 field.value ===
                                                                 'male'
                                                             }
-                                                            onChange={() =>
+                                                            onChange={(e) =>
                                                                 field.onChange(
-                                                                    'male',
+                                                                    e.target
+                                                                        .value,
                                                                 )
                                                             }
                                                             disabled={isLoading}
@@ -805,9 +863,10 @@ export default function UserForm({
                                                                 field.value ===
                                                                 'female'
                                                             }
-                                                            onChange={() =>
+                                                            onChange={(e) =>
                                                                 field.onChange(
-                                                                    'female',
+                                                                    e.target
+                                                                        .value,
                                                                 )
                                                             }
                                                             disabled={isLoading}
@@ -839,46 +898,88 @@ export default function UserForm({
                                                 >
                                                     Diagnosis *
                                                 </FormLabel>
-                                                <Select
-                                                    onValueChange={
-                                                        field.onChange
-                                                    }
-                                                    defaultValue={
-                                                        field.value || undefined
-                                                    }
-                                                    disabled={isLoading}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger
-                                                            className={cn(
-                                                                styles.formInput,
-                                                                'h-10',
-                                                            )}
-                                                        >
-                                                            <SelectValue placeholder="Select diagnosis" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent className="rounded-xl shadow-xl">
-                                                        <SelectItem
-                                                            value="ADHD"
-                                                            className="font-medium text-sm"
-                                                        >
-                                                            ADHD
-                                                        </SelectItem>
-                                                        <SelectItem
-                                                            value="Autism"
-                                                            className="font-medium text-sm"
-                                                        >
-                                                            Autism
-                                                        </SelectItem>
-                                                        <SelectItem
-                                                            value="N/A"
-                                                            className="font-medium text-sm text-slate-500"
-                                                        >
-                                                            N/A
-                                                        </SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                                <FormControl>
+                                                    <div className="flex gap-2">
+                                                        <label className="flex-1 cursor-pointer">
+                                                            <input
+                                                                type="radio"
+                                                                value="ADHD"
+                                                                checked={
+                                                                    field.value ===
+                                                                    'ADHD'
+                                                                }
+                                                                onChange={(e) =>
+                                                                    field.onChange(
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    isLoading
+                                                                }
+                                                                className="sr-only peer"
+                                                            />
+                                                            <div className="h-11 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/50 text-xs font-bold text-slate-400 transition-all peer-checked:border-amber-500 peer-checked:bg-amber-50 peer-checked:text-amber-700 hover:border-amber-200 hover:bg-white hover:text-slate-600 shadow-inner peer-checked:shadow-sm">
+                                                                <Zap
+                                                                    size={14}
+                                                                />{' '}
+                                                                ADHD
+                                                            </div>
+                                                        </label>
+                                                        <label className="flex-1 cursor-pointer">
+                                                            <input
+                                                                type="radio"
+                                                                value="Autism"
+                                                                checked={
+                                                                    field.value ===
+                                                                    'Autism'
+                                                                }
+                                                                onChange={(e) =>
+                                                                    field.onChange(
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    isLoading
+                                                                }
+                                                                className="sr-only peer"
+                                                            />
+                                                            <div className="h-11 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/50 text-xs font-bold text-slate-400 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-checked:text-indigo-700 hover:border-indigo-200 hover:bg-white hover:text-slate-600 shadow-inner peer-checked:shadow-sm">
+                                                                <Brain
+                                                                    size={14}
+                                                                />{' '}
+                                                                Autism
+                                                            </div>
+                                                        </label>
+                                                        <label className="flex-1 cursor-pointer">
+                                                            <input
+                                                                type="radio"
+                                                                value="N/A"
+                                                                checked={
+                                                                    field.value ===
+                                                                    'N/A'
+                                                                }
+                                                                onChange={(e) =>
+                                                                    field.onChange(
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    isLoading
+                                                                }
+                                                                className="sr-only peer"
+                                                            />
+                                                            <div className="h-11 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/50 text-xs font-bold text-slate-400 transition-all peer-checked:border-slate-500 peer-checked:bg-slate-100 peer-checked:text-slate-700 hover:border-slate-300 hover:bg-white hover:text-slate-600 shadow-inner peer-checked:shadow-sm">
+                                                                <Minus
+                                                                    size={14}
+                                                                />{' '}
+                                                                N/A
+                                                            </div>
+                                                        </label>
+                                                    </div>
+                                                </FormControl>
                                                 <FormMessage
                                                     className={
                                                         styles.formMessage
@@ -1109,7 +1210,7 @@ export default function UserForm({
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    placeholder="US"
+                                                    placeholder="PH"
                                                     className={cn(
                                                         styles.formInput,
                                                         'uppercase',
@@ -1270,6 +1371,7 @@ export default function UserForm({
                                 type="button"
                                 variant="outline"
                                 onClick={onCancel}
+                                disabled={isLoading}
                                 className="flex-1 h-12 rounded-xl text-xs font-bold uppercase tracking-widest shadow-sm hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors"
                             >
                                 Cancel
@@ -1279,6 +1381,7 @@ export default function UserForm({
                                 type="button"
                                 variant="outline"
                                 onClick={() => setStep(step - 1)}
+                                disabled={isLoading}
                                 className="flex-1 h-12 rounded-xl text-xs font-bold uppercase tracking-widest shadow-sm"
                             >
                                 <ChevronLeft className="w-4 h-4 mr-1.5" /> Back
@@ -1300,10 +1403,20 @@ export default function UserForm({
                         {step < STEPS.length ? (
                             <Button
                                 type="submit"
+                                disabled={isLoading}
                                 className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-widest shadow-md transition-all active:scale-95"
                             >
-                                Continue{' '}
-                                <ChevronRight className="w-4 h-4 ml-1.5" />
+                                {isValidating ? (
+                                    <>
+                                        <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />{' '}
+                                        Verifying...
+                                    </>
+                                ) : (
+                                    <>
+                                        Continue{' '}
+                                        <ChevronRight className="w-4 h-4 ml-1.5" />
+                                    </>
+                                )}
                             </Button>
                         ) : (
                             <Button

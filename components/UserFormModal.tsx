@@ -16,7 +16,7 @@ import UserForm, { UserFormValues } from './UserForm';
 
 // Import your API instance and endpoints
 import api from '@/api';
-import { createUser, updateUserProfile } from '@/api/users';
+import { createUser, updateUserProfile, getUsers } from '@/api/users';
 
 interface UserFormModalProps {
     isOpen: boolean;
@@ -32,9 +32,81 @@ export default function UserFormModal({
     const queryClient = useQueryClient();
     const isEditing = !!userToEdit;
 
-    // We can add a local loading state to track the upload phase specifically if desired,
-    // though mutation.isPending will cover the whole process.
     const [isUploading, setIsUploading] = useState(false);
+
+    // --- Helper: Check for duplicate users ---
+    const handleCheckUserExists = async (username: string, email: string) => {
+        try {
+            // 1. Check Username (if provided)
+            if (username) {
+                // Strapi's /users endpoint natively supports flat filtering like ?username=...
+                const userRes = await getUsers({
+                    queryKey: [
+                        'checkUser',
+                        {
+                            filters: {
+                                username: { eq$: username },
+                            },
+                        },
+                    ],
+                });
+
+                console.log('users res', userRes);
+                const users = Array.isArray(userRes)
+                    ? userRes
+                    : userRes?.data || [];
+
+                // Explicit physical check to guarantee we only stop if there is a 100% exact match
+                const isUsernameTaken = users.some(
+                    (u: any) =>
+                        u.username?.toLowerCase() === username.toLowerCase(),
+                );
+
+                if (isUsernameTaken) {
+                    return {
+                        field: 'username',
+                        message: 'This username is already taken.',
+                    };
+                }
+            }
+
+            // 2. Check Email (if provided)
+            if (email) {
+                const emailRes = await getUsers({
+                    queryKey: [
+                        'checkUser',
+                        {
+                            filters: {
+                                username: { eq$: email },
+                            },
+                        },
+                    ],
+                });
+
+                const emails = Array.isArray(emailRes)
+                    ? emailRes
+                    : emailRes?.data || [];
+
+                const isEmailTaken = emails.some(
+                    (u: any) => u.email?.toLowerCase() === email.toLowerCase(),
+                );
+
+                if (isEmailTaken) {
+                    return {
+                        field: 'email',
+                        message: 'This email is already registered.',
+                    };
+                }
+            }
+
+            return null; // No duplicates found, safe to proceed!
+        } catch (error) {
+            console.error('Duplicate check failed:', error);
+            // If the check fails (e.g. network error), we return null to let the form submit.
+            // The backend will still catch the duplicate and return a proper 400 error toast.
+            return null;
+        }
+    };
 
     // --- Helper: Upload File to Strapi ---
     const uploadFilesToStrapi = async (file: File) => {
@@ -70,7 +142,6 @@ export default function UserFormModal({
                     const uploadedImage = await uploadFilesToStrapi(
                         payload.profilePicture,
                     );
-                    // Attach the returned media ID to the payload
                     payload.profilePicture = uploadedImage[0].id;
                 } catch (error) {
                     console.error('Image upload failed:', error);
@@ -81,10 +152,8 @@ export default function UserFormModal({
                     setIsUploading(false);
                 }
             } else if (payload.profilePicture && payload.profilePicture.id) {
-                // If it's an existing image object from Strapi, just pass its ID back
                 payload.profilePicture = payload.profilePicture.id;
             } else {
-                // If it's null or removed, ensure we don't send invalid data
                 payload.profilePicture = null;
             }
 
@@ -116,7 +185,6 @@ export default function UserFormModal({
     });
 
     const handleSubmit = (values: UserFormValues) => {
-        // Start the mutation flow
         mutation.mutate(values);
     };
 
@@ -141,12 +209,11 @@ export default function UserFormModal({
                     </DialogDescription>
                 </DialogHeader>
 
-                {/* Pure Form Component */}
                 <UserForm
                     initialData={userToEdit}
                     onSubmit={handleSubmit}
                     onCancel={onClose}
-                    // Disable the form if the mutation is pending OR if the image is actively uploading
+                    onCheckUserExists={handleCheckUserExists}
                     isLoading={mutation.isPending || isUploading}
                 />
             </DialogContent>
