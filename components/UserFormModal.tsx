@@ -12,11 +12,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import UserForm, { UserFormValues } from './UserForm'; // Import the new form
-
-// --- API Functions (Import these from your actual API file) ---
-const mockApiCall = async (data: any) =>
-    new Promise((resolve) => setTimeout(resolve, 1000));
+import UserForm, { UserFormValues } from './UserForm';
+import { createUser, updateUserProfile } from '@/api/users';
 
 interface UserFormModalProps {
     isOpen: boolean;
@@ -32,16 +29,40 @@ export default function UserFormModal({
     const queryClient = useQueryClient();
     const isEditing = !!userToEdit;
 
-    // --- Mutations ---
+    // --- Data Mutation ---
     const mutation = useMutation({
         mutationFn: async (values: UserFormValues) => {
-            // NOTE: Strip out empty password if editing so we don't overwrite it
             const payload = { ...values };
+
+            // 1. Prevent overwriting with an empty password during edits
             if (isEditing && !payload.password) {
                 delete payload.password;
             }
-            // return isEditing ? updateUser(userToEdit.id, payload) : createUser(payload);
-            await mockApiCall(payload);
+
+            // 2. Initialize FormData for file upload support
+            const formData = new FormData();
+
+            // 3. Append all values to FormData
+            Object.entries(payload).forEach(([key, value]) => {
+                if (value instanceof File) {
+                    // Handle the actual File object
+                    formData.append(key, value);
+                } else if (value !== undefined && value !== null) {
+                    // Convert booleans and numbers to strings
+                    formData.append(key, String(value));
+                } else if (value === null) {
+                    // Send an empty string for intentional nulls (like 'N/A' diagnosis)
+                    formData.append(key, '');
+                }
+            });
+
+            // 4. Send FormData instead of standard JSON
+            if (isEditing) {
+                // Assuming userToEdit has an id or _id field
+                return await updateUserProfile(userToEdit.id, formData);
+            } else {
+                return await createUser(formData);
+            }
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -52,8 +73,12 @@ export default function UserFormModal({
             );
             onClose();
         },
-        onError: (error) => {
-            toast.error(error.message || 'Failed to save user.');
+        onError: (error: any) => {
+            toast.error(
+                error?.response?.data?.message ||
+                    error.message ||
+                    'Failed to save user.',
+            );
         },
     });
 
@@ -77,12 +102,12 @@ export default function UserFormModal({
                     </DialogTitle>
                     <DialogDescription className="text-xs font-medium text-slate-400 uppercase tracking-widest">
                         {isEditing
-                            ? 'Update system permissions'
-                            : 'Register system access'}
+                            ? 'Update system permissions and personal details'
+                            : 'Register new system access and profile'}
                     </DialogDescription>
                 </DialogHeader>
 
-                {/* Render the decoupled form component */}
+                {/* Pure Form Component */}
                 <UserForm
                     initialData={userToEdit}
                     onSubmit={handleSubmit}

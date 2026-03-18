@@ -6,12 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
     Loader2Icon,
-    EyeIcon,
-    EyeOffIcon,
     ChevronRight,
     ChevronLeft,
     Check,
     Camera,
+    EyeIcon,
+    ShieldCheck,
+    HeartHandshake,
+    GraduationCap,
 } from 'lucide-react';
 
 import {
@@ -34,26 +36,36 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
-// --- VALIDATION SCHEMA ---
-export const userFormSchema = z.object({
-    username: z.string().min(3, 'Minimum 3 characters.'),
-    email: z.string().email('Invalid email.').min(6),
-    password: z
-        .string()
-        .min(6, 'Minimum 6 characters.')
-        .optional()
-        .or(z.literal('')),
-    role: z.string().min(1, 'Role is required.'),
-    confirmed: z.boolean(),
-    blocked: z.boolean(),
+// --- ROLE VARIABLES ---
+export const ROLES = {
+    ADMIN: '6',
+    THERAPIST: '5',
+    STUDENT: '3',
+};
 
+// --- BASE VALIDATION SCHEMA ---
+// (Password is excluded here so we can dynamically require it based on isEditing)
+export const baseUserFormSchema = z.object({
+    role: z.string().min(1, 'Role is required.'),
+
+    // Account
+    username: z.string().min(3, 'Minimum 3 characters.'),
+    email: z.string().email('Invalid email.'),
+    confirmed: z.boolean().optional(),
+    blocked: z.boolean().optional(),
+
+    // Personal
     profilePicture: z.any().optional(),
     firstName: z.string().min(1, 'First name is required.'),
     middleName: z.string().optional(),
     lastName: z.string().min(1, 'Last name is required.'),
     dateOfBirth: z.string().min(1, 'Date of birth is required.'),
-    gender: z.enum(['male', 'female'], { required_error: 'Select a gender.' }),
+    gender: z.enum(['male', 'female'], {
+        required_error: 'Please select a gender.',
+    }),
+    diagnosis: z.string().nullable().optional(),
 
+    // Address
     addressLabel: z.string().optional(),
     streetAddress: z.string().optional(),
     city: z.string().optional(),
@@ -62,17 +74,21 @@ export const userFormSchema = z.object({
     countryCode: z.string().max(2, 'Max 2 chars').optional(),
     isDefault: z.boolean().optional(),
 
+    // Guardian
     guardianName: z.string().optional(),
     guardianRelationship: z.string().optional(),
     guardianContact: z.string().optional(),
     guardianEmail: z
         .string()
-        .email('Invalid email')
+        .email('Invalid email.')
         .optional()
         .or(z.literal('')),
 });
 
-export type UserFormValues = z.infer<typeof userFormSchema>;
+// We extend the base type to include the dynamic password field
+export type UserFormValues = z.infer<typeof baseUserFormSchema> & {
+    password?: string;
+};
 
 interface UserFormProps {
     initialData?: any;
@@ -80,6 +96,17 @@ interface UserFormProps {
     onCancel: () => void;
     isLoading: boolean;
 }
+
+// --- REUSABLE STYLES ---
+const styles = {
+    formItem: 'space-y-1.5 relative pb-4',
+    formLabel:
+        'text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1',
+    formInput:
+        'h-11 rounded-xl border-slate-200 bg-slate-50/50 text-sm shadow-inner focus-visible:ring-4 focus-visible:ring-indigo-500/10 focus-visible:border-indigo-400 transition-all font-medium placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed',
+    formMessage:
+        'text-[10px] font-bold text-rose-500 absolute bottom-0 left-1 leading-none',
+};
 
 export default function UserForm({
     initialData,
@@ -93,13 +120,22 @@ export default function UserForm({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const isEditing = !!initialData;
 
+    // Dynamically require password ONLY if we are creating a new user
+    const formSchema = React.useMemo(() => {
+        return baseUserFormSchema.extend({
+            password: isEditing
+                ? z.string().optional().or(z.literal(''))
+                : z.string().min(6, 'Password is required (min 6 characters).'),
+        });
+    }, [isEditing]);
+
     const form = useForm<UserFormValues>({
-        resolver: zodResolver(userFormSchema),
+        resolver: zodResolver(formSchema),
         defaultValues: {
+            role: '',
             username: '',
             email: '',
             password: '',
-            role: '',
             confirmed: true,
             blocked: false,
             profilePicture: null,
@@ -107,6 +143,8 @@ export default function UserForm({
             middleName: '',
             lastName: '',
             dateOfBirth: '',
+            gender: undefined,
+            diagnosis: '',
             addressLabel: 'Home',
             streetAddress: '',
             city: '',
@@ -122,37 +160,59 @@ export default function UserForm({
     });
 
     const selectedRole = form.watch('role');
-    const isStudent =
-        String(selectedRole) === '4' ||
-        String(selectedRole).toLowerCase().includes('student');
+    const isStudent = String(selectedRole) === ROLES.STUDENT;
 
+    // --- DYNAMIC WIZARD STEPS ---
     const STEPS = React.useMemo(() => {
         const baseSteps = [
-            { id: 1, title: 'Account' },
-            { id: 2, title: 'Personal' },
-            { id: 3, title: 'Address' },
+            { id: 'role', title: 'Role' },
+            { id: 'personal', title: 'Personal' },
         ];
-        if (isStudent) baseSteps.push({ id: 4, title: 'Guardian' });
+
+        if (!isStudent) {
+            baseSteps.push({ id: 'account', title: 'Account' });
+        }
+
+        baseSteps.push({ id: 'address', title: 'Address' });
+
+        if (isStudent) {
+            baseSteps.push({ id: 'guardian', title: 'Guardian' });
+        }
+
         return baseSteps;
     }, [isStudent]);
+
+    const currentStepId = STEPS[step - 1]?.id;
 
     React.useEffect(() => {
         if (initialData) {
             form.reset({
                 ...form.getValues(),
-                username: initialData.username || '',
-                email: initialData.email || '',
                 role:
                     initialData.role?.id?.toString() || initialData.role || '',
+                username: initialData.username || '',
+                email: initialData.email || '',
                 confirmed: initialData.confirmed ?? true,
                 blocked: initialData.blocked ?? false,
                 firstName: initialData.firstName || '',
+                middleName: initialData.middleName || '',
                 lastName: initialData.lastName || '',
                 dateOfBirth: initialData.dateOfBirth || '',
                 gender: initialData.gender || undefined,
+                diagnosis: initialData.diagnosis || '',
+                streetAddress: initialData.streetAddress || '',
+                city: initialData.city || '',
+                stateProvince: initialData.stateProvince || '',
+                postalCode: initialData.postalCode || '',
+                countryCode: initialData.countryCode || '',
+                guardianName: initialData.guardianName || '',
+                guardianRelationship: initialData.guardianRelationship || '',
+                guardianContact: initialData.guardianContact || '',
+                guardianEmail: initialData.guardianEmail || '',
             });
-            if (initialData.profilePicture?.url)
+            if (initialData.profilePicture?.url) {
                 setImagePreview(initialData.profilePicture.url);
+            }
         }
     }, [initialData, form]);
 
@@ -165,7 +225,7 @@ export default function UserForm({
     };
 
     const handleSkip = async () => {
-        if (step === 3) {
+        if (currentStepId === 'address') {
             form.setValue('streetAddress', '');
             form.setValue('city', '');
             form.setValue('stateProvince', '');
@@ -178,24 +238,54 @@ export default function UserForm({
                 'postalCode',
                 'countryCode',
             ]);
-        } else if (step === 4) {
-            form.setValue('guardianName', '');
-            form.setValue('guardianRelationship', '');
-            form.setValue('guardianContact', '');
-            form.setValue('guardianEmail', '');
-            form.clearErrors([
-                'guardianName',
-                'guardianRelationship',
-                'guardianContact',
-                'guardianEmail',
-            ]);
         }
 
         if (step < STEPS.length) {
             setStep((prev) => prev + 1);
         } else {
-            await form.handleSubmit(onSubmit)();
+            await form.handleSubmit(handleFinalSubmit)();
         }
+    };
+
+    // Auto-generates account info for students behind the scenes
+    const autoGenerateAccountInfo = () => {
+        const first = form
+            .getValues('firstName')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+        const last = form
+            .getValues('lastName')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+        const dob = form.getValues('dateOfBirth');
+
+        const numericSuffix = dob
+            ? dob.split('-')[0]
+            : Math.floor(1000 + Math.random() * 9000);
+        const generatedUsername = `${first}.${last}${numericSuffix}`;
+        const generatedEmail = `${generatedUsername}@sensorypalette.com`;
+
+        const capitalizedFirst =
+            form.getValues('firstName').trim().charAt(0).toUpperCase() +
+            form.getValues('firstName').trim().slice(1).replace(/\s+/g, '');
+        const generatedPassword = `${capitalizedFirst}@${numericSuffix}`;
+
+        form.setValue('username', generatedUsername);
+        form.setValue('email', generatedEmail);
+        if (!isEditing) form.setValue('password', generatedPassword);
+    };
+
+    const handleFinalSubmit = (values: UserFormValues) => {
+        const finalPayload = { ...values };
+
+        // Convert N/A to a true null for the backend
+        if (finalPayload.diagnosis === 'N/A') {
+            finalPayload.diagnosis = null;
+        }
+
+        onSubmit(finalPayload);
     };
 
     const handleSmartSubmit = async (e: React.FormEvent) => {
@@ -203,16 +293,20 @@ export default function UserForm({
 
         if (step < STEPS.length) {
             let fieldsToValidate: (keyof UserFormValues)[] = [];
-            if (step === 1)
-                fieldsToValidate = ['username', 'email', 'password', 'role'];
-            if (step === 2)
+
+            if (currentStepId === 'role') fieldsToValidate = ['role'];
+            if (currentStepId === 'personal') {
                 fieldsToValidate = [
                     'firstName',
                     'lastName',
                     'dateOfBirth',
                     'gender',
                 ];
-            if (step === 3)
+                if (isStudent) fieldsToValidate.push('diagnosis');
+            }
+            if (currentStepId === 'account')
+                fieldsToValidate = ['username', 'email', 'password'];
+            if (currentStepId === 'address')
                 fieldsToValidate = [
                     'streetAddress',
                     'city',
@@ -222,230 +316,318 @@ export default function UserForm({
                 ];
 
             const isStepValid = await form.trigger(fieldsToValidate);
+
             if (isStepValid) {
+                // Background generate Student credentials if passing Personal
+                if (currentStepId === 'personal' && isStudent) {
+                    autoGenerateAccountInfo();
+                }
                 setStep((prev) => prev + 1);
             }
         } else {
-            await form.handleSubmit(onSubmit)(e);
+            if (isStudent) {
+                const isFinalValid = await form.trigger([
+                    'guardianName',
+                    'guardianRelationship',
+                    'guardianContact',
+                ]);
+                if (!isFinalValid) return;
+            }
+            await form.handleSubmit(handleFinalSubmit)(e);
         }
     };
 
-    // --- REUSABLE CLASSNAMES FOR ANTI-JUMPING ---
-    const formItemClass = 'relative pb-4 space-y-1';
-    const formLabelClass =
-        'text-[9px] font-bold text-slate-500 uppercase tracking-wider ml-1';
-    const formInputClass =
-        'h-9 rounded-xl border-slate-200 bg-slate-50/30 text-sm shadow-sm';
-    const formMessageClass =
-        'text-[9px] font-medium text-red-500 absolute bottom-0 left-1 leading-none';
-
     return (
-        <div className="flex flex-col w-full">
-            {/* --- ULTRA-COMPACT WIZARD PROGRESS BAR --- */}
-            <div className="mb-4 relative px-4">
-                <div className="absolute top-1/2 left-6 right-6 h-0.5 bg-slate-100 -translate-y-1/2 z-0" />
+        <div className="flex flex-col w-full h-full">
+            {/* WIZARD PROGRESS BAR */}
+            <div className="mb-8 relative px-2">
+                <div className="absolute top-1/2 left-6 right-6 h-[2px] bg-slate-100 -translate-y-1/2 z-0 rounded-full" />
                 <div
-                    className="absolute top-1/2 left-6 h-0.5 bg-indigo-600 -translate-y-1/2 z-0 transition-all duration-500 ease-in-out"
+                    className="absolute top-1/2 left-6 h-[2px] bg-indigo-600 -translate-y-1/2 z-0 transition-all duration-500 ease-out rounded-full shadow-[0_0_10px_rgba(79,70,229,0.4)]"
                     style={{
                         width: `calc(${((step - 1) / (STEPS.length - 1)) * 100}% - 1.5rem)`,
                     }}
                 />
-
                 <div className="relative z-10 flex justify-between">
-                    {STEPS.map((s) => (
-                        <div
-                            key={s.id}
-                            className="flex flex-col items-center gap-1 bg-white px-2"
-                        >
+                    {STEPS.map((s, index) => {
+                        const stepNum = index + 1;
+                        return (
                             <div
-                                className={cn(
-                                    'h-5 w-5 rounded-full flex items-center justify-center text-[8px] font-bold transition-all duration-300 border-2',
-                                    step > s.id
-                                        ? 'bg-indigo-600 border-indigo-600 text-white'
-                                        : step === s.id
-                                          ? 'bg-white border-indigo-600 text-indigo-600 shadow-sm'
-                                          : 'bg-white border-slate-200 text-slate-400',
-                                )}
+                                key={s.id}
+                                className="flex flex-col items-center gap-2 bg-white px-2"
                             >
-                                {step > s.id ? (
-                                    <Check size={10} strokeWidth={3} />
-                                ) : (
-                                    s.id
-                                )}
+                                <div
+                                    className={cn(
+                                        'h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all duration-500 border-2',
+                                        step > stepNum
+                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200'
+                                            : step === stepNum
+                                              ? 'bg-white border-indigo-600 text-indigo-600 shadow-sm ring-4 ring-indigo-50'
+                                              : 'bg-white border-slate-200 text-slate-300',
+                                    )}
+                                >
+                                    {step > stepNum ? (
+                                        <Check size={12} strokeWidth={4} />
+                                    ) : (
+                                        stepNum
+                                    )}
+                                </div>
+                                <span
+                                    className={cn(
+                                        'text-[8px] uppercase tracking-widest font-black transition-colors duration-300',
+                                        step >= stepNum
+                                            ? 'text-indigo-900'
+                                            : 'text-slate-300',
+                                    )}
+                                >
+                                    {s.title}
+                                </span>
                             </div>
-                            <span
-                                className={cn(
-                                    'text-[7px] uppercase tracking-widest font-bold',
-                                    step >= s.id
-                                        ? 'text-indigo-900'
-                                        : 'text-slate-400',
-                                )}
-                            >
-                                {s.title}
-                            </span>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
 
             <Form {...form}>
-                <form onSubmit={handleSmartSubmit} className="flex flex-col">
-                    {/* Fixed Height Container prevents form from jumping between steps */}
-                    <div className="min-h-[260px] md:min-h-[280px] flex flex-col justify-start">
-                        {/* --- STEP 1: ACCOUNT INFO --- */}
+                <form
+                    onSubmit={handleSmartSubmit}
+                    className="flex flex-col flex-1"
+                >
+                    <div className="min-h-[340px] flex flex-col justify-start">
+                        {/* --- STEP 1: ROLE (AESTHETIC CARDS) --- */}
                         <div
                             className={cn(
-                                'animate-in fade-in duration-300',
-                                step === 1 ? 'block' : 'hidden',
+                                'space-y-4 animate-in slide-in-from-right-4 fade-in duration-500',
+                                currentStepId === 'role' ? 'block' : 'hidden',
                             )}
                         >
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0">
-                                <FormField
-                                    control={form.control}
-                                    name="username"
-                                    render={({ field }) => (
-                                        <FormItem className={formItemClass}>
-                                            <FormLabel
-                                                className={formLabelClass}
-                                            >
-                                                Username *
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    className={formInputClass}
-                                                    {...field}
-                                                    disabled={isLoading}
-                                                />
-                                            </FormControl>
-                                            <FormMessage
-                                                className={formMessageClass}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="email"
-                                    render={({ field }) => (
-                                        <FormItem className={formItemClass}>
-                                            <FormLabel
-                                                className={formLabelClass}
-                                            >
-                                                Email *
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    type="email"
-                                                    className={formInputClass}
-                                                    {...field}
-                                                    disabled={isLoading}
-                                                />
-                                            </FormControl>
-                                            <FormMessage
-                                                className={formMessageClass}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="password"
-                                    render={({ field }) => (
-                                        <FormItem className={formItemClass}>
-                                            <FormLabel
-                                                className={formLabelClass}
-                                            >
-                                                {isEditing
-                                                    ? 'New Password'
-                                                    : 'Password *'}
-                                            </FormLabel>
-                                            <div className="relative">
-                                                <FormControl>
-                                                    <Input
-                                                        type={
-                                                            showPassword
-                                                                ? 'text'
-                                                                : 'password'
-                                                        }
-                                                        className={cn(
-                                                            formInputClass,
-                                                            'pr-10',
-                                                        )}
-                                                        {...field}
-                                                        disabled={isLoading}
-                                                    />
-                                                </FormControl>
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setShowPassword(
-                                                            !showPassword,
-                                                        )
-                                                    }
-                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                            <FormField
+                                control={form.control}
+                                name="role"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-4 relative pb-4">
+                                        <FormLabel className={styles.formLabel}>
+                                            Select Account Type *
+                                        </FormLabel>
+                                        <FormControl>
+                                            <div className="grid grid-cols-1 gap-3 mt-2">
+                                                {/* Role: Admin */}
+                                                <label
+                                                    className={cn(
+                                                        'relative flex cursor-pointer rounded-2xl border p-4 shadow-sm transition-all duration-200',
+                                                        field.value ===
+                                                            ROLES.ADMIN
+                                                            ? 'border-indigo-600 bg-indigo-50/50 ring-1 ring-indigo-600'
+                                                            : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50',
+                                                        (isLoading ||
+                                                            isEditing) &&
+                                                            'opacity-60 cursor-not-allowed',
+                                                    )}
                                                 >
-                                                    <EyeIcon size={14} />
-                                                </button>
-                                            </div>
-                                            <FormMessage
-                                                className={formMessageClass}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="role"
-                                    render={({ field }) => (
-                                        <FormItem className={formItemClass}>
-                                            <FormLabel
-                                                className={formLabelClass}
-                                            >
-                                                Role *
-                                            </FormLabel>
-                                            <Select
-                                                onValueChange={field.onChange}
-                                                defaultValue={field.value}
-                                                disabled={isLoading}
-                                            >
-                                                <FormControl>
-                                                    <SelectTrigger
-                                                        className={
-                                                            formInputClass
+                                                    <input
+                                                        type="radio"
+                                                        value={ROLES.ADMIN}
+                                                        checked={
+                                                            field.value ===
+                                                            ROLES.ADMIN
                                                         }
-                                                    >
-                                                        <SelectValue placeholder="Select role" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="1">
-                                                        Admin
-                                                    </SelectItem>
-                                                    <SelectItem value="2">
-                                                        Therapist
-                                                    </SelectItem>
-                                                    <SelectItem value="3">
-                                                        Secretary
-                                                    </SelectItem>
-                                                    <SelectItem value="4">
-                                                        Student
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage
-                                                className={formMessageClass}
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
+                                                        onChange={() =>
+                                                            field.onChange(
+                                                                ROLES.ADMIN,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            isLoading ||
+                                                            isEditing
+                                                        }
+                                                        className="sr-only"
+                                                    />
+                                                    <div className="flex w-full items-center gap-4">
+                                                        <div
+                                                            className={cn(
+                                                                'flex h-12 w-12 items-center justify-center rounded-full transition-colors',
+                                                                field.value ===
+                                                                    ROLES.ADMIN
+                                                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                                                                    : 'bg-slate-100 text-slate-500',
+                                                            )}
+                                                        >
+                                                            <ShieldCheck
+                                                                size={24}
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span
+                                                                className={cn(
+                                                                    'text-sm font-bold',
+                                                                    field.value ===
+                                                                        ROLES.ADMIN
+                                                                        ? 'text-indigo-900'
+                                                                        : 'text-slate-900',
+                                                                )}
+                                                            >
+                                                                System Admin
+                                                            </span>
+                                                            <span className="text-xs font-medium text-slate-500 mt-0.5">
+                                                                Full access to
+                                                                system settings
+                                                                and management.
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </label>
+
+                                                {/* Role: Therapist */}
+                                                <label
+                                                    className={cn(
+                                                        'relative flex cursor-pointer rounded-2xl border p-4 shadow-sm transition-all duration-200',
+                                                        field.value ===
+                                                            ROLES.THERAPIST
+                                                            ? 'border-indigo-600 bg-indigo-50/50 ring-1 ring-indigo-600'
+                                                            : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50',
+                                                        (isLoading ||
+                                                            isEditing) &&
+                                                            'opacity-60 cursor-not-allowed',
+                                                    )}
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        value={ROLES.THERAPIST}
+                                                        checked={
+                                                            field.value ===
+                                                            ROLES.THERAPIST
+                                                        }
+                                                        onChange={() =>
+                                                            field.onChange(
+                                                                ROLES.THERAPIST,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            isLoading ||
+                                                            isEditing
+                                                        }
+                                                        className="sr-only"
+                                                    />
+                                                    <div className="flex w-full items-center gap-4">
+                                                        <div
+                                                            className={cn(
+                                                                'flex h-12 w-12 items-center justify-center rounded-full transition-colors',
+                                                                field.value ===
+                                                                    ROLES.THERAPIST
+                                                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                                                                    : 'bg-slate-100 text-slate-500',
+                                                            )}
+                                                        >
+                                                            <HeartHandshake
+                                                                size={24}
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span
+                                                                className={cn(
+                                                                    'text-sm font-bold',
+                                                                    field.value ===
+                                                                        ROLES.THERAPIST
+                                                                        ? 'text-indigo-900'
+                                                                        : 'text-slate-900',
+                                                                )}
+                                                            >
+                                                                Therapist /
+                                                                Staff
+                                                            </span>
+                                                            <span className="text-xs font-medium text-slate-500 mt-0.5">
+                                                                Manage
+                                                                schedules,
+                                                                sessions, and
+                                                                track progress.
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </label>
+
+                                                {/* Role: Student */}
+                                                <label
+                                                    className={cn(
+                                                        'relative flex cursor-pointer rounded-2xl border p-4 shadow-sm transition-all duration-200',
+                                                        field.value ===
+                                                            ROLES.STUDENT
+                                                            ? 'border-indigo-600 bg-indigo-50/50 ring-1 ring-indigo-600'
+                                                            : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50',
+                                                        (isLoading ||
+                                                            isEditing) &&
+                                                            'opacity-60 cursor-not-allowed',
+                                                    )}
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        value={ROLES.STUDENT}
+                                                        checked={
+                                                            field.value ===
+                                                            ROLES.STUDENT
+                                                        }
+                                                        onChange={() =>
+                                                            field.onChange(
+                                                                ROLES.STUDENT,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            isLoading ||
+                                                            isEditing
+                                                        }
+                                                        className="sr-only"
+                                                    />
+                                                    <div className="flex w-full items-center gap-4">
+                                                        <div
+                                                            className={cn(
+                                                                'flex h-12 w-12 items-center justify-center rounded-full transition-colors',
+                                                                field.value ===
+                                                                    ROLES.STUDENT
+                                                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                                                                    : 'bg-slate-100 text-slate-500',
+                                                            )}
+                                                        >
+                                                            <GraduationCap
+                                                                size={24}
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span
+                                                                className={cn(
+                                                                    'text-sm font-bold',
+                                                                    field.value ===
+                                                                        ROLES.STUDENT
+                                                                        ? 'text-indigo-900'
+                                                                        : 'text-slate-900',
+                                                                )}
+                                                            >
+                                                                Student Learner
+                                                            </span>
+                                                            <span className="text-xs font-medium text-slate-500 mt-0.5">
+                                                                Enrolls student
+                                                                profiles
+                                                                requiring a
+                                                                guardian.
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </FormControl>
+                                        <FormMessage
+                                            className={styles.formMessage}
+                                        />
+                                    </FormItem>
+                                )}
+                            />
                         </div>
 
-                        {/* --- STEP 2: PERSONAL INFO --- */}
+                        {/* --- STEP 2: PERSONAL --- */}
                         <div
                             className={cn(
-                                'animate-in fade-in duration-300',
-                                step === 2 ? 'block' : 'hidden',
+                                'space-y-4 animate-in slide-in-from-right-4 fade-in duration-500',
+                                currentStepId === 'personal'
+                                    ? 'block'
+                                    : 'hidden',
                             )}
                         >
                             <div className="flex justify-center pb-2">
@@ -462,7 +644,7 @@ export default function UserForm({
                                     }
                                     className="relative cursor-pointer group hover:scale-105 transition-all"
                                 >
-                                    <Avatar className="h-16 w-16 border-4 border-white shadow-sm bg-slate-50">
+                                    <Avatar className="h-20 w-20 border-4 border-white shadow-lg bg-slate-50">
                                         {imagePreview && (
                                             <AvatarImage
                                                 src={imagePreview}
@@ -471,39 +653,40 @@ export default function UserForm({
                                         )}
                                         <AvatarFallback className="bg-indigo-50">
                                             <Camera
-                                                className="text-indigo-300"
-                                                size={20}
+                                                className="text-indigo-400"
+                                                size={24}
                                             />
                                         </AvatarFallback>
                                     </Avatar>
-                                    <div className="absolute inset-0 bg-slate-900/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-slate-900/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
                                         <Camera
-                                            size={14}
+                                            size={18}
                                             className="text-white"
                                         />
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-0 mt-1">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                                 <FormField
                                     control={form.control}
                                     name="firstName"
                                     render={({ field }) => (
-                                        <FormItem className={formItemClass}>
+                                        <FormItem className={styles.formItem}>
                                             <FormLabel
-                                                className={formLabelClass}
+                                                className={styles.formLabel}
                                             >
                                                 First Name *
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    className={formInputClass}
+                                                    className={styles.formInput}
                                                     {...field}
+                                                    disabled={isLoading}
                                                 />
                                             </FormControl>
                                             <FormMessage
-                                                className={formMessageClass}
+                                                className={styles.formMessage}
                                             />
                                         </FormItem>
                                     )}
@@ -512,20 +695,21 @@ export default function UserForm({
                                     control={form.control}
                                     name="middleName"
                                     render={({ field }) => (
-                                        <FormItem className={formItemClass}>
+                                        <FormItem className={styles.formItem}>
                                             <FormLabel
-                                                className={formLabelClass}
+                                                className={styles.formLabel}
                                             >
                                                 Middle Name
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    className={formInputClass}
+                                                    className={styles.formInput}
                                                     {...field}
+                                                    disabled={isLoading}
                                                 />
                                             </FormControl>
                                             <FormMessage
-                                                className={formMessageClass}
+                                                className={styles.formMessage}
                                             />
                                         </FormItem>
                                     )}
@@ -534,138 +718,335 @@ export default function UserForm({
                                     control={form.control}
                                     name="lastName"
                                     render={({ field }) => (
-                                        <FormItem className={formItemClass}>
+                                        <FormItem className={styles.formItem}>
                                             <FormLabel
-                                                className={formLabelClass}
+                                                className={styles.formLabel}
                                             >
                                                 Last Name *
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    className={formInputClass}
+                                                    className={styles.formInput}
                                                     {...field}
+                                                    disabled={isLoading}
                                                 />
                                             </FormControl>
                                             <FormMessage
-                                                className={formMessageClass}
+                                                className={styles.formMessage}
                                             />
                                         </FormItem>
                                     )}
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                                 <FormField
                                     control={form.control}
                                     name="dateOfBirth"
                                     render={({ field }) => (
-                                        <FormItem className={formItemClass}>
+                                        <FormItem className={styles.formItem}>
                                             <FormLabel
-                                                className={formLabelClass}
+                                                className={styles.formLabel}
                                             >
                                                 Date of Birth *
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
                                                     type="date"
-                                                    className={formInputClass}
+                                                    className={styles.formInput}
                                                     {...field}
+                                                    disabled={isLoading}
                                                 />
                                             </FormControl>
                                             <FormMessage
-                                                className={formMessageClass}
+                                                className={styles.formMessage}
+                                            />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="gender"
+                                    render={({ field }) => (
+                                        <FormItem className={styles.formItem}>
+                                            <FormLabel
+                                                className={styles.formLabel}
+                                            >
+                                                Gender *
+                                            </FormLabel>
+                                            <FormControl>
+                                                <div className="flex gap-3">
+                                                    <label className="flex-1 cursor-pointer">
+                                                        <input
+                                                            type="radio"
+                                                            value="male"
+                                                            checked={
+                                                                field.value ===
+                                                                'male'
+                                                            }
+                                                            onChange={() =>
+                                                                field.onChange(
+                                                                    'male',
+                                                                )
+                                                            }
+                                                            disabled={isLoading}
+                                                            className="sr-only peer"
+                                                        />
+                                                        <div className="h-11 flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-bold text-slate-400 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 peer-checked:text-indigo-700 hover:border-indigo-200 hover:bg-white hover:text-slate-600 shadow-inner peer-checked:shadow-sm">
+                                                            Male
+                                                        </div>
+                                                    </label>
+                                                    <label className="flex-1 cursor-pointer">
+                                                        <input
+                                                            type="radio"
+                                                            value="female"
+                                                            checked={
+                                                                field.value ===
+                                                                'female'
+                                                            }
+                                                            onChange={() =>
+                                                                field.onChange(
+                                                                    'female',
+                                                                )
+                                                            }
+                                                            disabled={isLoading}
+                                                            className="sr-only peer"
+                                                        />
+                                                        <div className="h-11 flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-bold text-slate-400 transition-all peer-checked:border-pink-500 peer-checked:bg-pink-50 peer-checked:text-pink-700 hover:border-pink-200 hover:bg-white hover:text-slate-600 shadow-inner peer-checked:shadow-sm">
+                                                            Female
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </FormControl>
+                                            <FormMessage
+                                                className={styles.formMessage}
+                                            />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {isStudent && (
+                                    <FormField
+                                        control={form.control}
+                                        name="diagnosis"
+                                        render={({ field }) => (
+                                            <FormItem
+                                                className={styles.formItem}
+                                            >
+                                                <FormLabel
+                                                    className={styles.formLabel}
+                                                >
+                                                    Diagnosis *
+                                                </FormLabel>
+                                                <Select
+                                                    onValueChange={
+                                                        field.onChange
+                                                    }
+                                                    defaultValue={
+                                                        field.value || undefined
+                                                    }
+                                                    disabled={isLoading}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger
+                                                            className={cn(
+                                                                styles.formInput,
+                                                                'h-10',
+                                                            )}
+                                                        >
+                                                            <SelectValue placeholder="Select diagnosis" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent className="rounded-xl shadow-xl">
+                                                        <SelectItem
+                                                            value="ADHD"
+                                                            className="font-medium text-sm"
+                                                        >
+                                                            ADHD
+                                                        </SelectItem>
+                                                        <SelectItem
+                                                            value="Autism"
+                                                            className="font-medium text-sm"
+                                                        >
+                                                            Autism
+                                                        </SelectItem>
+                                                        <SelectItem
+                                                            value="N/A"
+                                                            className="font-medium text-sm text-slate-500"
+                                                        >
+                                                            N/A
+                                                        </SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage
+                                                    className={
+                                                        styles.formMessage
+                                                    }
+                                                />
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* --- STEP 3: ACCOUNT (Non-Student Only) --- */}
+                        {!isStudent && (
+                            <div
+                                className={cn(
+                                    'space-y-4 animate-in slide-in-from-right-4 fade-in duration-500',
+                                    currentStepId === 'account'
+                                        ? 'block'
+                                        : 'hidden',
+                                )}
+                            >
+                                <FormField
+                                    control={form.control}
+                                    name="username"
+                                    render={({ field }) => (
+                                        <FormItem className={styles.formItem}>
+                                            <FormLabel
+                                                className={styles.formLabel}
+                                            >
+                                                Username *
+                                            </FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    className={styles.formInput}
+                                                    {...field}
+                                                    disabled={isLoading}
+                                                />
+                                            </FormControl>
+                                            <FormMessage
+                                                className={styles.formMessage}
                                             />
                                         </FormItem>
                                     )}
                                 />
                                 <FormField
                                     control={form.control}
-                                    name="gender"
+                                    name="email"
                                     render={({ field }) => (
-                                        <FormItem className={formItemClass}>
+                                        <FormItem className={styles.formItem}>
                                             <FormLabel
-                                                className={formLabelClass}
+                                                className={styles.formLabel}
                                             >
-                                                Gender *
+                                                Email Address *
                                             </FormLabel>
-                                            <Select
-                                                onValueChange={field.onChange}
-                                                defaultValue={field.value}
-                                                disabled={isLoading}
-                                            >
-                                                <FormControl>
-                                                    <SelectTrigger
-                                                        className={
-                                                            formInputClass
-                                                        }
-                                                    >
-                                                        <SelectValue placeholder="Select gender" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="male">
-                                                        Male
-                                                    </SelectItem>
-                                                    <SelectItem value="female">
-                                                        Female
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <FormControl>
+                                                <Input
+                                                    type="email"
+                                                    className={styles.formInput}
+                                                    {...field}
+                                                    disabled={isLoading}
+                                                />
+                                            </FormControl>
                                             <FormMessage
-                                                className={formMessageClass}
+                                                className={styles.formMessage}
+                                            />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="password"
+                                    render={({ field }) => (
+                                        <FormItem className={styles.formItem}>
+                                            <FormLabel
+                                                className={styles.formLabel}
+                                            >
+                                                {isEditing
+                                                    ? 'New Password (Optional)'
+                                                    : 'Password *'}
+                                            </FormLabel>
+                                            <div className="relative">
+                                                <FormControl>
+                                                    <Input
+                                                        type={
+                                                            showPassword
+                                                                ? 'text'
+                                                                : 'password'
+                                                        }
+                                                        className={cn(
+                                                            styles.formInput,
+                                                            'pr-10',
+                                                        )}
+                                                        {...field}
+                                                        disabled={isLoading}
+                                                    />
+                                                </FormControl>
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setShowPassword(
+                                                            !showPassword,
+                                                        )
+                                                    }
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-500 transition-colors"
+                                                >
+                                                    <EyeIcon size={16} />
+                                                </button>
+                                            </div>
+                                            <FormMessage
+                                                className={styles.formMessage}
                                             />
                                         </FormItem>
                                     )}
                                 />
                             </div>
-                        </div>
+                        )}
 
-                        {/* --- STEP 3: ADDRESS --- */}
+                        {/* --- STEP 4/3: ADDRESS --- */}
                         <div
                             className={cn(
-                                'animate-in fade-in duration-300',
-                                step === 3 ? 'block' : 'hidden',
+                                'space-y-4 animate-in slide-in-from-right-4 fade-in duration-500',
+                                currentStepId === 'address'
+                                    ? 'block'
+                                    : 'hidden',
                             )}
                         >
                             <FormField
                                 control={form.control}
                                 name="streetAddress"
                                 render={({ field }) => (
-                                    <FormItem className={formItemClass}>
-                                        <FormLabel className={formLabelClass}>
+                                    <FormItem className={styles.formItem}>
+                                        <FormLabel className={styles.formLabel}>
                                             Street Address
                                         </FormLabel>
                                         <FormControl>
                                             <Input
-                                                className={formInputClass}
+                                                className={styles.formInput}
                                                 {...field}
+                                                disabled={isLoading}
                                             />
                                         </FormControl>
                                         <FormMessage
-                                            className={formMessageClass}
+                                            className={styles.formMessage}
                                         />
                                     </FormItem>
                                 )}
                             />
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-0">
+                            <div className="grid grid-cols-2 gap-4 items-start">
                                 <FormField
                                     control={form.control}
                                     name="city"
                                     render={({ field }) => (
-                                        <FormItem className={formItemClass}>
+                                        <FormItem className={styles.formItem}>
                                             <FormLabel
-                                                className={formLabelClass}
+                                                className={styles.formLabel}
                                             >
                                                 City
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    className={formInputClass}
+                                                    className={styles.formInput}
                                                     {...field}
+                                                    disabled={isLoading}
                                                 />
                                             </FormControl>
                                             <FormMessage
-                                                className={formMessageClass}
+                                                className={styles.formMessage}
                                             />
                                         </FormItem>
                                     )}
@@ -674,20 +1055,21 @@ export default function UserForm({
                                     control={form.control}
                                     name="stateProvince"
                                     render={({ field }) => (
-                                        <FormItem className={formItemClass}>
+                                        <FormItem className={styles.formItem}>
                                             <FormLabel
-                                                className={formLabelClass}
+                                                className={styles.formLabel}
                                             >
-                                                State
+                                                State / Province
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    className={formInputClass}
+                                                    className={styles.formInput}
                                                     {...field}
+                                                    disabled={isLoading}
                                                 />
                                             </FormControl>
                                             <FormMessage
-                                                className={formMessageClass}
+                                                className={styles.formMessage}
                                             />
                                         </FormItem>
                                     )}
@@ -696,20 +1078,21 @@ export default function UserForm({
                                     control={form.control}
                                     name="postalCode"
                                     render={({ field }) => (
-                                        <FormItem className={formItemClass}>
+                                        <FormItem className={styles.formItem}>
                                             <FormLabel
-                                                className={formLabelClass}
+                                                className={styles.formLabel}
                                             >
                                                 Zip Code
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
-                                                    className={formInputClass}
+                                                    className={styles.formInput}
                                                     {...field}
+                                                    disabled={isLoading}
                                                 />
                                             </FormControl>
                                             <FormMessage
-                                                className={formMessageClass}
+                                                className={styles.formMessage}
                                             />
                                         </FormItem>
                                     )}
@@ -718,25 +1101,26 @@ export default function UserForm({
                                     control={form.control}
                                     name="countryCode"
                                     render={({ field }) => (
-                                        <FormItem className={formItemClass}>
+                                        <FormItem className={styles.formItem}>
                                             <FormLabel
-                                                className={formLabelClass}
+                                                className={styles.formLabel}
                                             >
-                                                Country
+                                                Country Code
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
                                                     placeholder="US"
                                                     className={cn(
-                                                        formInputClass,
+                                                        styles.formInput,
                                                         'uppercase',
                                                     )}
                                                     maxLength={2}
                                                     {...field}
+                                                    disabled={isLoading}
                                                 />
                                             </FormControl>
                                             <FormMessage
-                                                className={formMessageClass}
+                                                className={styles.formMessage}
                                             />
                                         </FormItem>
                                     )}
@@ -744,35 +1128,42 @@ export default function UserForm({
                             </div>
                         </div>
 
-                        {/* --- STEP 4: GUARDIAN (CONDITIONAL) --- */}
+                        {/* --- STEP 5/4: GUARDIAN (Student Only) --- */}
                         {isStudent && (
                             <div
                                 className={cn(
-                                    'animate-in fade-in duration-300',
-                                    step === 4 ? 'block' : 'hidden',
+                                    'space-y-4 animate-in slide-in-from-right-4 fade-in duration-500',
+                                    currentStepId === 'guardian'
+                                        ? 'block'
+                                        : 'hidden',
                                 )}
                             >
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
                                     <FormField
                                         control={form.control}
                                         name="guardianName"
                                         render={({ field }) => (
-                                            <FormItem className={formItemClass}>
+                                            <FormItem
+                                                className={styles.formItem}
+                                            >
                                                 <FormLabel
-                                                    className={formLabelClass}
+                                                    className={styles.formLabel}
                                                 >
-                                                    Guardian Name
+                                                    Guardian Name *
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Input
                                                         className={
-                                                            formInputClass
+                                                            styles.formInput
                                                         }
                                                         {...field}
+                                                        disabled={isLoading}
                                                     />
                                                 </FormControl>
                                                 <FormMessage
-                                                    className={formMessageClass}
+                                                    className={
+                                                        styles.formMessage
+                                                    }
                                                 />
                                             </FormItem>
                                         )}
@@ -781,23 +1172,28 @@ export default function UserForm({
                                         control={form.control}
                                         name="guardianRelationship"
                                         render={({ field }) => (
-                                            <FormItem className={formItemClass}>
+                                            <FormItem
+                                                className={styles.formItem}
+                                            >
                                                 <FormLabel
-                                                    className={formLabelClass}
+                                                    className={styles.formLabel}
                                                 >
-                                                    Relationship
+                                                    Relationship *
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Input
                                                         placeholder="e.g. Mother, Father"
                                                         className={
-                                                            formInputClass
+                                                            styles.formInput
                                                         }
                                                         {...field}
+                                                        disabled={isLoading}
                                                     />
                                                 </FormControl>
                                                 <FormMessage
-                                                    className={formMessageClass}
+                                                    className={
+                                                        styles.formMessage
+                                                    }
                                                 />
                                             </FormItem>
                                         )}
@@ -806,23 +1202,28 @@ export default function UserForm({
                                         control={form.control}
                                         name="guardianContact"
                                         render={({ field }) => (
-                                            <FormItem className={formItemClass}>
+                                            <FormItem
+                                                className={styles.formItem}
+                                            >
                                                 <FormLabel
-                                                    className={formLabelClass}
+                                                    className={styles.formLabel}
                                                 >
-                                                    Contact Number
+                                                    Contact Number *
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Input
                                                         type="tel"
                                                         className={
-                                                            formInputClass
+                                                            styles.formInput
                                                         }
                                                         {...field}
+                                                        disabled={isLoading}
                                                     />
                                                 </FormControl>
                                                 <FormMessage
-                                                    className={formMessageClass}
+                                                    className={
+                                                        styles.formMessage
+                                                    }
                                                 />
                                             </FormItem>
                                         )}
@@ -831,9 +1232,11 @@ export default function UserForm({
                                         control={form.control}
                                         name="guardianEmail"
                                         render={({ field }) => (
-                                            <FormItem className={formItemClass}>
+                                            <FormItem
+                                                className={styles.formItem}
+                                            >
                                                 <FormLabel
-                                                    className={formLabelClass}
+                                                    className={styles.formLabel}
                                                 >
                                                     Email Address
                                                 </FormLabel>
@@ -841,13 +1244,16 @@ export default function UserForm({
                                                     <Input
                                                         type="email"
                                                         className={
-                                                            formInputClass
+                                                            styles.formInput
                                                         }
                                                         {...field}
+                                                        disabled={isLoading}
                                                     />
                                                 </FormControl>
                                                 <FormMessage
-                                                    className={formMessageClass}
+                                                    className={
+                                                        styles.formMessage
+                                                    }
                                                 />
                                             </FormItem>
                                         )}
@@ -858,13 +1264,13 @@ export default function UserForm({
                     </div>
 
                     {/* --- ACTIONS --- */}
-                    <div className="flex gap-2 pt-2 border-t border-slate-100 mt-auto">
+                    <div className="flex gap-3 pt-6 border-t border-slate-100 mt-auto">
                         {step === 1 ? (
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={onCancel}
-                                className="flex-1 h-10 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-sm"
+                                className="flex-1 h-12 rounded-xl text-xs font-bold uppercase tracking-widest shadow-sm hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors"
                             >
                                 Cancel
                             </Button>
@@ -873,41 +1279,42 @@ export default function UserForm({
                                 type="button"
                                 variant="outline"
                                 onClick={() => setStep(step - 1)}
-                                className="flex-1 h-10 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-sm"
+                                className="flex-1 h-12 rounded-xl text-xs font-bold uppercase tracking-widest shadow-sm"
                             >
-                                <ChevronLeft className="w-3.5 h-3.5 mr-1" />{' '}
-                                Back
+                                <ChevronLeft className="w-4 h-4 mr-1.5" /> Back
                             </Button>
                         )}
 
-                        {(step === 3 || step === 4) && (
+                        {currentStepId === 'address' && (
                             <Button
                                 type="button"
                                 variant="secondary"
                                 onClick={handleSkip}
                                 disabled={isLoading}
-                                className="flex-1 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest"
+                                className="flex-1 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold uppercase tracking-widest"
                             >
-                                Skip
+                                Skip Address
                             </Button>
                         )}
 
                         {step < STEPS.length ? (
                             <Button
                                 type="submit"
-                                className="flex-1 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold uppercase tracking-widest shadow-sm"
+                                className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-widest shadow-md transition-all active:scale-95"
                             >
                                 Continue{' '}
-                                <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                                <ChevronRight className="w-4 h-4 ml-1.5" />
                             </Button>
                         ) : (
                             <Button
                                 type="submit"
                                 disabled={isLoading}
-                                className="flex-[1.5] h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold uppercase tracking-widest shadow-md shadow-indigo-100"
+                                className="flex-[1.5] h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-widest shadow-lg shadow-indigo-200 transition-all active:scale-95"
                             >
                                 {isLoading ? (
                                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                                ) : isEditing ? (
+                                    'Save Changes'
                                 ) : (
                                     'Complete Setup'
                                 )}
