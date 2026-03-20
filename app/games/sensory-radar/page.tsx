@@ -399,7 +399,8 @@ export default function SensoryRadarGame() {
         let foundItem: SandboxItem | null = null;
         let minD = 999;
 
-        items.forEach((item) => {
+        // Swapped .forEach for a for...of loop to fix TypeScript scoping
+        for (const item of items) {
             const tx = box.left + (item.x / 100) * box.width;
             const ty = box.top + (item.y / 100) * box.height;
             const d = Math.sqrt(
@@ -409,7 +410,7 @@ export default function SensoryRadarGame() {
                 minD = d;
                 foundItem = item;
             }
-        });
+        }
 
         const bw = box.width;
         if (minD < bw * 0.12) {

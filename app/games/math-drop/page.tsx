@@ -373,7 +373,7 @@ export default function MathDropGame({
                             <motion.span
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
-                                type="spring"
+                                transition={{ type: 'spring' }}
                                 className="text-[5.5rem] md:text-[8rem] font-black text-emerald-500"
                             >
                                 {targetAnswer}
