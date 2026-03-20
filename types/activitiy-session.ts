@@ -65,6 +65,8 @@ export interface ActivitySessionResponse {
     aiAccuracy: number;
     telemetryAnalysis: TelemetryAnalysis[];
     extraTimeSeconds: number;
+    nextActivitySession: ActivitySessionResponse | null;
+    previousActivitySession: ActivitySessionResponse | null;
 }
 
 export type ActivitySessionEntry = Omit<
@@ -89,12 +91,14 @@ export type ActivitySessionEntry = Omit<
 };
 
 export type CreateActivitySessionPayload = {
-    startAt: string;
-    endAt: string;
+    startAt?: string;
+    endAt?: string;
     clinicalObservations?: string;
+    activitySessionStatus?: ActivitySessionStatus;
     durationMinutes?: number;
     student: number;
     activity: string;
+    previousActivitySession?: string | null;
 };
 
 export type UpdatectivitySessionPayload = {
@@ -111,4 +115,6 @@ export type UpdatectivitySessionPayload = {
     rawTelemetry?: unknown[];
     timeLogs?: TimeLog[];
     enableLearnerControls?: boolean;
+    nextActivitySession?: number | string | null;
+    previousActivitySession?: number | string | null;
 };

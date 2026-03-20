@@ -57,7 +57,7 @@ import {
     triggerActivitySessionRecommendation,
     updateActivitySession,
     createActivitySession,
-    getActivitySessionsNew, // ✅ Added Import
+    getActivitySessionsNew,
 } from '@/api/activity-session';
 import { getActivity } from '@/api/activity';
 import { cn } from '@/lib/utils';
@@ -440,15 +440,14 @@ export default function ActivitySessionDashboard({
             }
 
             const newSession = await createActivitySession({
-                activity: suggestedActivity.documentId || suggestedActivity.id,
-                student: session.student.documentId || session.student.id,
-                activitySessionStatus: 'in_progress',
-                startAt: new Date().toISOString(),
+                activity: suggestedActivity.documentId,
+                student: session.student.id,
+                activitySessionStatus: ActivitySessionStatus.InProgress,
                 previousActivitySession: session.documentId,
             });
 
             await updateActivitySession(session.documentId, {
-                nextActivitySession: newSession.documentId || newSession.id,
+                nextActivitySession: newSession.documentId,
             });
 
             return newSession;
