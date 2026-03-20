@@ -983,7 +983,7 @@ export default function AppAdminDashboard() {
                                                             size="sm"
                                                             className="h-8 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg px-3"
                                                         >
-                                                            Review
+                                                            View
                                                         </Button>
                                                     </td>
                                                 </tr>
