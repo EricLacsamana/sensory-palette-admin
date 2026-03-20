@@ -35,12 +35,10 @@ export const useSessionPlan = ({
         setFuture([]);
     }
 
-    // --- UPDATED: Date boundaries for fetching ---
     const startOfDay = new Date(endAt);
     startOfDay.setHours(0, 0, 0, 0);
 
     const endOfDay = new Date(endAt);
-    // endOfDay.setHours(23, 59, 59, 999);
 
     const now = new Date();
     const isToday =
@@ -48,12 +46,9 @@ export const useSessionPlan = ({
         startOfDay.getMonth() === now.getMonth() &&
         startOfDay.getDate() === now.getDate();
 
-    // If viewing today, only fetch from this exact moment onward.
-    // If viewing a future date, fetch the whole day.
     const queryStartBound = isToday
         ? now.toISOString()
         : startOfDay.toISOString();
-    // ----------------------------------------------
 
     const { data: activitySessions, isLoading: isQueryLoading } = useQuery({
         queryKey: [
@@ -109,8 +104,8 @@ export const useSessionPlan = ({
                     instanceId:
                         s.documentId || s.id?.toString() || crypto.randomUUID(),
                     student: s.student,
-                    rawTelemetry: s.rawTelemetry || [], // <-- FIX 1: Ensure API data has it
-                } as ActivitySessionEntry; // <-- Safely tell TS this matches the interface
+                    rawTelemetry: s.rawTelemetry || [],
+                } as ActivitySessionEntry;
             });
     }, [localDraft, activitySessions]);
 
@@ -292,6 +287,13 @@ export const useSessionPlan = ({
         [startAt, commitChange],
     );
 
+    const generateId = () => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        return `id-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    };
+
     const addActivity = useCallback(
         (activity: Activity) => {
             const duration = activity.durationMinutes || 30;
@@ -308,7 +310,7 @@ export const useSessionPlan = ({
             }
 
             const entry: ActivitySessionEntry = {
-                instanceId: crypto.randomUUID(),
+                instanceId: generateId(),
                 activity,
                 durationMinutes: duration,
                 isLocked: true,

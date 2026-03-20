@@ -1,9 +1,15 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, User, IdCard } from 'lucide-react';
+import { Search, User, IdCard, Clock, Plus } from 'lucide-react';
 import { Reorder, AnimatePresence, motion } from 'framer-motion';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    DialogFooter,
+    DialogDescription,
+} from '@/components/ui/dialog';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -38,9 +44,8 @@ import { FormatService } from '@/utils/helpers';
 import { Input } from '@base-ui/react';
 import { UserResponse } from '@/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { ActivitySessionEntry } from '@/types/activitiy-session';
+import { Activity } from '@/types/actitivity';
 
-// --- SINGLE SOURCE OF TRUTH FOR OPERATING HOURS ---
 export const getOperatingHoursForDate = (targetDate: Date | string) => {
     const base = new Date(targetDate);
     const startStr = process.env.NEXT_PUBLIC_OPERATING_START || '08:00';
@@ -62,41 +67,23 @@ export const getOperatingHoursForDate = (targetDate: Date | string) => {
         s.getDate() === now.getDate();
 
     if (isToday) {
-        const coeff = 1000 * 60 * 5; // 5-minute rounding
+        const coeff = 1000 * 60 * 5;
         const roundedNow = new Date(Math.ceil(now.getTime() / coeff) * coeff);
         if (roundedNow > s) {
             s.setTime(roundedNow.getTime());
         }
     }
 
-    // FIX: Always use the exact operating end time instead of a +2 hour padding
     let finalEnd = new Date(e);
+    if (s > e) s.setTime(e.getTime());
 
-    // Failsafe: if the start time somehow gets pushed past the operating end time
-    if (s > e) {
-        s.setTime(e.getTime());
-    }
-
-    return {
-        start: s.toISOString(),
-        end: finalEnd.toISOString(),
-    };
+    return { start: s.toISOString(), end: finalEnd.toISOString() };
 };
-// --------------------------------------------------
 
 const timelineVariants = {
-    enter: (direction: number) => ({
-        x: direction > 0 ? 40 : -40,
-        opacity: 0,
-    }),
-    center: {
-        x: 0,
-        opacity: 1,
-    },
-    exit: (direction: number) => ({
-        x: direction < 0 ? 40 : -40,
-        opacity: 0,
-    }),
+    enter: (direction: number) => ({ x: direction > 0 ? 60 : -60, opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (direction: number) => ({ x: direction < 0 ? 60 : -60, opacity: 0 }),
 };
 
 const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
@@ -107,26 +94,26 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const queryClient = useQueryClient();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [showExitConfirm, setShowExitConfirm] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [isShowOtherStudents, setIsShowOtherStudents] = useState(true);
     const [slideDirection, setSlideDirection] = useState(0);
 
+    const [mobileSelectedActivity, setMobileSelectedActivity] =
+        useState<Activity | null>(null);
+
     const studentId = useMemo(() => {
         const id = params?.id || searchParams.get('studentId');
         return id ? Number(id) : null;
     }, [params?.id, searchParams]);
 
-    const initialIso = useMemo(() => {
-        return getOperatingHoursForDate(new Date());
-    }, []);
+    const initialIso = useMemo(() => getOperatingHoursForDate(new Date()), []);
 
     const [startAt, setStartAt] = useState(initialIso.start);
     const [endAt, setEndAt] = useState(initialIso.end);
 
-    const { data: student, isLoading: isLoadingStudent } = useQuery({
+    const { data: student } = useQuery({
         queryKey: ['student', studentId],
         queryFn: getStudent,
         enabled: !!studentId,
@@ -170,11 +157,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
                 e.preventDefault();
-                if (e.shiftKey) {
-                    if (canRedo) redo();
-                } else {
-                    if (canUndo) undo();
-                }
+                e.shiftKey ? canRedo && redo() : canUndo && undo();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -192,33 +175,22 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         queryClient.invalidateQueries({ queryKey: ['activity-sessions'] });
     };
 
-    const handleRequestClose = () => {
-        if (isDirty) {
-            setShowExitConfirm(true);
-        } else {
-            performClose();
-        }
-    };
+    const handleRequestClose = () =>
+        isDirty ? setShowExitConfirm(true) : performClose();
 
     const handleSubmit = async () => {
         if (isSubmitting) return;
         setIsSubmitting(true);
-
         try {
-            for (const id of deletedDocumentIds) {
+            for (const id of deletedDocumentIds)
                 await deleteActivitySession(id);
-            }
-
             for (const session of draft) {
                 const payload = {
                     startAt: session.startAt,
                     endAt: session.endAt,
                 };
-
-                const targetId = session.documentId;
-
-                if (targetId) {
-                    await updateActivitySession(targetId, payload);
+                if (session.documentId) {
+                    await updateActivitySession(session.documentId, payload);
                 } else if (session.student?.id) {
                     await createActivitySession({
                         ...payload,
@@ -227,11 +199,10 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                     });
                 }
             }
-
             toast.success('Session plan synchronized successfully');
             performClose();
         } catch (error) {
-            console.error('Critical Save Error:', error);
+            console.error('Save Error:', error);
             toast.error('Failed to sync schedule. Check connection.');
         } finally {
             setIsSubmitting(false);
@@ -245,26 +216,28 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
             try {
                 addActivity(JSON.parse(data));
             } catch (err) {
-                console.error('Drop parse error', err);
+                console.error('Drop error', err);
             }
         }
         setIsDragging(false);
     };
 
-    const handleTimeChange = (
-        type: 'start' | 'end' | 'date',
-        val1: string,
-        val2?: string,
-    ) => {
+    const handleMobileAdd = () => {
+        if (mobileSelectedActivity) {
+            addActivity(mobileSelectedActivity);
+            setMobileSelectedActivity(null);
+        }
+    };
+
+    const handleTimeChange = (type: 'start' | 'end' | 'date', val1: string) => {
+        const oldDateNum = new Date(startAt).setHours(0, 0, 0, 0);
+
         if (type === 'date' && val1) {
             const newBounds = getOperatingHoursForDate(val1);
-
-            const oldDateNum = new Date(startAt).setHours(0, 0, 0, 0);
             const newDateNum = new Date(newBounds.start).setHours(0, 0, 0, 0);
 
-            if (oldDateNum !== newDateNum) {
+            if (oldDateNum !== newDateNum)
                 setSlideDirection(newDateNum > oldDateNum ? 1 : -1);
-            }
 
             const now = new Date();
             const originalStartStr =
@@ -289,9 +262,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
             return;
         }
 
-        // Fallbacks for any remaining inner-component overrides (if any)
         let newDate = new Date(val1);
-
         if (type === 'start') {
             const now = new Date();
             const isToday =
@@ -308,47 +279,21 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                 newDate = new Date(Math.ceil(now.getTime() / coeff) * coeff);
             }
 
-            const oldDateNum = new Date(startAt).setHours(0, 0, 0, 0);
             const newDateNum = new Date(newDate).setHours(0, 0, 0, 0);
-
-            if (oldDateNum !== newDateNum) {
+            if (oldDateNum !== newDateNum)
                 setSlideDirection(newDateNum > oldDateNum ? 1 : -1);
-            }
 
             setStartAt(newDate.toISOString());
-
             let currentEnd = new Date(endAt);
             currentEnd.setFullYear(
                 newDate.getFullYear(),
                 newDate.getMonth(),
                 newDate.getDate(),
             );
-
-            if (newDate >= currentEnd) {
+            if (newDate >= currentEnd)
                 currentEnd = new Date(newDate.getTime() + 2 * 60 * 60 * 1000);
-            }
-
-            const endStr = process.env.NEXT_PUBLIC_OPERATING_END || '18:00';
-            const [endHour, endMin] = endStr.split(':').map(Number);
-            const absoluteEnd = new Date(currentEnd);
-            absoluteEnd.setHours(endHour, endMin, 0, 0);
-
-            if (currentEnd > absoluteEnd) {
-                currentEnd.setTime(absoluteEnd.getTime());
-            }
-
             setEndAt(currentEnd.toISOString());
         } else if (type === 'end') {
-            const currentStart = new Date(startAt);
-
-            if (newDate <= currentStart) {
-                const autoFixedEnd = new Date(
-                    currentStart.getTime() + 2 * 60 * 60 * 1000,
-                );
-                setEndAt(autoFixedEnd.toISOString());
-                return;
-            }
-
             setEndAt(newDate.toISOString());
         }
     };
@@ -356,7 +301,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const renderMainContent = () => {
         if (!studentId) {
             return (
-                <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden">
+                <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden w-full">
                     <div
                         className="absolute inset-0 pointer-events-none opacity-[0.4]"
                         style={{
@@ -366,31 +311,30 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                         }}
                     />
 
-                    <div className="relative z-10 flex flex-col h-full max-w-5xl mx-auto w-full p-12">
-                        <div className="flex flex-col items-center text-center space-y-4 mb-10">
-                            <div className="h-16 w-16 rounded-2xl bg-white border border-slate-200 shadow-xl flex items-center justify-center mb-2">
+                    <div className="relative z-10 flex flex-col h-full max-w-5xl mx-auto w-full p-6 sm:p-12">
+                        <div className="flex flex-col items-center text-center space-y-4 mb-6 sm:mb-10">
+                            <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-white border border-slate-200 shadow-xl flex items-center justify-center mb-2">
                                 <User
                                     size={32}
-                                    className="text-indigo-600"
+                                    className="text-indigo-600 max-sm:scale-75"
                                     strokeWidth={1.5}
                                 />
                             </div>
                             <div className="space-y-2">
-                                <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
+                                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
                                     Select Learner
                                 </h2>
-                                <p className="text-slate-500 font-medium">
+                                <p className="text-sm sm:text-base text-slate-500 font-medium px-4">
                                     Initiate a planning session by selecting a
                                     target profile
                                 </p>
                             </div>
-
-                            <div className="w-full max-w-md relative group">
+                            <div className="w-full max-w-md relative group mt-2">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Search className="h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                                 </div>
                                 <Input
-                                    className="pl-10 h-12 bg-white border-slate-200 shadow-sm rounded-xl focus:ring-2 focus:ring-indigo-100 transition-all text-base w-full"
+                                    className="pl-10 h-12 bg-white border-slate-200 shadow-sm rounded-xl focus:ring-2 focus:ring-indigo-100 transition-all text-base w-full touch-auto select-text"
                                     placeholder="Search by name or ID..."
                                     value={searchQuery}
                                     onChange={(e) =>
@@ -401,7 +345,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pb-20 pr-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 overflow-y-auto pb-20 pr-2">
                             {filteredStudents.map((s: UserResponse) => (
                                 <button
                                     key={s.id}
@@ -414,30 +358,29 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                             `${pathname}?${p.toString()}`,
                                         );
                                     }}
-                                    className="group relative flex items-start gap-4 p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-500 hover:shadow-lg transition-all duration-200 text-left"
+                                    className="group relative flex items-center sm:items-start gap-4 p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-500 hover:shadow-lg transition-all duration-200 text-left"
                                 >
-                                    <Avatar className="h-12 w-12 rounded-lg border border-slate-100 shadow-sm group-hover:scale-105 transition-transform">
+                                    <Avatar className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg border border-slate-100 shadow-sm group-hover:scale-105 transition-transform shrink-0">
                                         <AvatarImage
                                             src={FormatService.formatStrapiMedia(
                                                 s.profilePicture,
                                                 'thumbnail',
                                             )}
                                         />
-                                        <AvatarFallback className="bg-slate-50 text-slate-600 font-bold rounded-lg">
+                                        <AvatarFallback className="bg-slate-50 text-slate-600 font-bold rounded-lg text-sm">
                                             {s.fullName?.charAt(0)}
                                         </AvatarFallback>
                                     </Avatar>
-
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="font-bold text-slate-900 truncate pr-2 group-hover:text-indigo-700 transition-colors">
+                                        <h3 className="font-bold text-sm sm:text-base text-slate-900 truncate pr-2 group-hover:text-indigo-700 transition-colors">
                                             {s.fullName}
                                         </h3>
-                                        <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
                                             <IdCard
                                                 size={12}
                                                 className="text-slate-400"
                                             />
-                                            <span className="text-xs font-mono text-slate-500">
+                                            <span className="text-[10px] sm:text-xs font-mono text-slate-500">
                                                 ID:{' '}
                                                 {s.id
                                                     .toString()
@@ -454,26 +397,25 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         }
 
         return (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full relative">
                 <Header
                     undo={undo}
                     redo={redo}
                     canRedo={canRedo}
                     canUndo={canUndo}
                     user={student}
-                    isSidebarOpen={isSidebarOpen}
-                    setIsSidebarOpen={setIsSidebarOpen}
                     startAt={startAt}
                     endAt={endAt}
                     onChange={handleTimeChange}
                     isDirty={isDirty}
                     isShowOtherUsers={isShowOtherStudents}
                     setIsShowOtherUsers={setIsShowOtherStudents}
+                    onClose={handleRequestClose}
                 />
-                <div className="flex-1 flex overflow-hidden">
+
+                <div className="flex-1 flex flex-row overflow-hidden relative">
                     <ActivitiesSiderbar
                         remainingMinutes={capacityMetrics.remainingMinutes}
-                        isOpen={isSidebarOpen}
                         onDragStart={(e, a) => {
                             e.dataTransfer.setData(
                                 'newActivity',
@@ -482,19 +424,25 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                             setIsDragging(true);
                         }}
                         onDragEnd={() => setIsDragging(false)}
+                        onActivityTap={(act) => setMobileSelectedActivity(act)}
                     />
+
                     <main
-                        className="flex-1 flex flex-col bg-white overflow-hidden relative"
+                        className="flex-1 flex flex-col bg-white overflow-hidden relative min-w-0"
                         onDragOver={(e) => {
                             e.preventDefault();
                             e.dataTransfer.dropEffect = 'move';
                         }}
+                        onDragEnter={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }}
                         onDrop={handleExternalDrop}
                     >
-                        <div className="h-16 border-b border-slate-100 flex justify-between bg-white items-center shrink-0 px-6 z-40">
+                        <div className="h-14 border-b border-slate-100 flex justify-between bg-white items-center shrink-0 px-3 sm:px-6 z-30">
                             <CapacityGauge
                                 percent={capacityMetrics.percentUsed}
-                                className="max-w-[200px] w-full"
+                                className="max-w-[130px] sm:max-w-[200px] w-full"
                             />
                             <div className="flex items-center gap-3 font-mono text-xs font-semibold text-slate-700">
                                 {FormatService.formatTime(endAt, '12h-simple')}
@@ -503,7 +451,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
 
                         <div className="flex-1 bg-slate-50/30 relative overflow-hidden">
                             <AnimatePresence
-                                mode="wait"
+                                mode="popLayout"
                                 custom={slideDirection}
                                 initial={false}
                             >
@@ -515,13 +463,13 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                     animate="center"
                                     exit="exit"
                                     transition={{
-                                        duration: 0.25,
-                                        ease: 'easeInOut',
+                                        type: 'spring',
+                                        stiffness: 300,
+                                        damping: 30,
                                     }}
-                                    className="w-full h-full overflow-y-auto"
+                                    className="w-full h-full overflow-y-auto touch-pan-y"
                                 >
-                                    <div className="w-full max-w-3xl mx-auto pl-2 pr-6 py-8 relative z-10">
-                                        <div className="absolute left-[80px] top-0 bottom-0 w-px bg-slate-200/50 z-0" />
+                                    <div className="w-full max-w-4xl mx-auto pl-1 pr-2 sm:pr-4 lg:pr-6 py-4 sm:py-8 relative z-10">
                                         <AnimatePresence mode="popLayout">
                                             <Reorder.Group
                                                 axis="y"
@@ -587,11 +535,11 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                                                     )
                                                                 }
                                                                 onGapDrop={(
-                                                                    activity,
+                                                                    act,
                                                                 ) =>
                                                                     insertAtGap(
                                                                         item.instanceId,
-                                                                        activity,
+                                                                        act,
                                                                     )
                                                                 }
                                                                 onTimeChange={(
@@ -601,9 +549,6 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                                                         item.instanceId,
                                                                         time,
                                                                     )
-                                                                }
-                                                                showDetails={
-                                                                    !isSidebarOpen
                                                                 }
                                                             />
                                                         ))}
@@ -622,14 +567,16 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                             </AnimatePresence>
                         </div>
 
-                        <div className="h-20 border-t border-slate-100 flex items-center justify-end px-8 bg-white shrink-0 z-50 gap-3">
+                        <div className="h-16 sm:h-20 border-t border-slate-100 flex items-center justify-end px-4 sm:px-8 bg-white shrink-0 z-50 gap-2 sm:gap-3">
                             <Button
                                 variant="ghost"
+                                size="sm"
                                 onClick={handleRequestClose}
                             >
                                 Cancel
                             </Button>
                             <Button
+                                size="sm"
                                 onClick={handleSubmit}
                                 disabled={!isDirty || isSubmitting}
                             >
@@ -649,12 +596,9 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                 richColors
                 toastOptions={{ style: { zIndex: 9999 }, duration: 4000 }}
             />
-            <Dialog
-                open
-                onOpenChange={(open) => {
-                    if (!open) handleRequestClose();
-                }}
-            >
+
+            <Dialog open onOpenChange={(open) => !open && handleRequestClose()}>
+                {/* Reduced maximum width here to 1152px (max-w-6xl) for a more pleasant card size */}
                 <DialogContent
                     onPointerDownOutside={(e) => {
                         if (isDirty) e.preventDefault();
@@ -662,7 +606,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                     onEscapeKeyDown={(e) => {
                         if (isDirty) e.preventDefault();
                     }}
-                    className="!max-w-[1400px] !w-[65vw] h-[92vh] p-0 flex flex-col bg-white overflow-hidden sm:rounded-3xl shadow-2xl border-none [&>button]:cursor-pointer [&>button]:z-[100] [&>button]:p-2 [&>button]:rounded-full [&>button]:bg-white/50 [&>button]:hover:bg-white [&>button]:transition-all"
+                    className="!max-w-[900px] w-full sm:!w-[95vw] h-[100dvh] sm:h-[92vh] p-0 flex flex-col bg-white overflow-hidden rounded-none sm:rounded-3xl shadow-2xl border-none"
                 >
                     <DialogTitle className="sr-only">
                         Session Planner
@@ -670,22 +614,83 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                     {renderMainContent()}
                 </DialogContent>
             </Dialog>
+
+            <Dialog
+                open={!!mobileSelectedActivity}
+                onOpenChange={(o) => !o && setMobileSelectedActivity(null)}
+            >
+                <DialogContent className="w-[85vw] max-w-sm rounded-[24px] p-0 overflow-hidden bg-white border-none shadow-2xl gap-0">
+                    <div className="w-full h-36 sm:h-40 bg-slate-100 relative shrink-0">
+                        {mobileSelectedActivity?.banner ? (
+                            <img
+                                src={FormatService.formatStrapiMedia(
+                                    mobileSelectedActivity.banner,
+                                    'medium',
+                                )}
+                                className="w-full h-full object-cover"
+                                alt=""
+                            />
+                        ) : (
+                            <div className="absolute inset-0 bg-indigo-50 flex items-center justify-center">
+                                <Plus size={32} className="text-indigo-200" />
+                            </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    </div>
+
+                    <div className="px-5 pb-5 flex flex-col items-center text-center relative z-10 -mt-5">
+                        <div className="bg-white p-1 rounded-full shadow-md mb-2">
+                            <div className="bg-indigo-100 text-indigo-700 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                                <Clock size={12} strokeWidth={3} />{' '}
+                                {mobileSelectedActivity?.durationMinutes || 30}{' '}
+                                Min
+                            </div>
+                        </div>
+                        <DialogTitle className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-tight mt-1">
+                            {mobileSelectedActivity?.name}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs sm:text-sm font-medium text-slate-500 mt-2 px-2">
+                            Tap below to insert this activity into the current
+                            session timeline.
+                        </DialogDescription>
+                    </div>
+
+                    <DialogFooter className="px-5 pb-5 flex flex-row gap-2 sm:gap-3">
+                        <Button
+                            variant="secondary"
+                            className="flex-1 rounded-xl h-12 font-bold bg-slate-100 hover:bg-slate-200 text-slate-700"
+                            onClick={() => setMobileSelectedActivity(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            className="flex-[2] gap-2 rounded-xl h-12 font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200"
+                            onClick={handleMobileAdd}
+                        >
+                            Add to Schedule
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <AlertDialog
                 open={showExitConfirm}
                 onOpenChange={setShowExitConfirm}
             >
-                <AlertDialogContent className="rounded-2xl">
+                <AlertDialogContent className="rounded-2xl w-[90vw] max-w-sm">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Discard Changes?</AlertDialogTitle>
                         <AlertDialogDescription>
                             Your current draft has unsaved changes.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Stay</AlertDialogCancel>
+                    <AlertDialogFooter className="max-sm:flex-col gap-2">
+                        <AlertDialogCancel className="mt-0">
+                            Stay
+                        </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={performClose}
-                            className="bg-red-600 text-white"
+                            className="bg-red-600 text-white hover:bg-red-700"
                         >
                             Discard
                         </AlertDialogAction>

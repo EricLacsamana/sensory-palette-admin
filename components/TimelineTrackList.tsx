@@ -15,7 +15,6 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ActivitySessionResponse } from '@/types/activitiy-session';
 
-// --- Animation Variants ---
 const listVariants: Variants = {
     hidden: { opacity: 0 },
     show: {
@@ -34,7 +33,6 @@ const itemVariants: Variants = {
     },
 };
 
-// --- Sub-component: Individual Timeline Item ---
 const TimelineTrackItem = ({
     item,
     isLast,
@@ -42,7 +40,6 @@ const TimelineTrackItem = ({
     item: ActivitySessionResponse;
     isLast: boolean;
 }) => {
-    // 1. Live Timer State
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
     const status = item.activitySessionStatus || 'pending';
@@ -50,7 +47,6 @@ const TimelineTrackItem = ({
     const isInProgress = status === 'in_progress';
     const isUpcoming = status === 'pending';
 
-    // 2. Timer Logic (Only runs if active and has a start time)
     useEffect(() => {
         if (!isInProgress || !item.actualStartAt) return;
 
@@ -62,20 +58,18 @@ const TimelineTrackItem = ({
             setElapsedSeconds(difference > 0 ? difference : 0);
         };
 
-        updateTimer(); // Initial call to avoid 1s delay
+        updateTimer();
         const intervalId = setInterval(updateTimer, 1000);
 
         return () => clearInterval(intervalId);
     }, [isInProgress, item.actualStartAt]);
 
-    // 3. Format Timer Output
     const formatElapsed = (totalSeconds: number) => {
         const m = Math.floor(totalSeconds / 60);
         const s = totalSeconds % 60;
         return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     };
 
-    // 4. Standard Date Formatting
     let timeDisplay = '--:--';
     let ampm = '';
     const timeToFormat = item.actualStartAt || item.startAt;
@@ -95,11 +89,10 @@ const TimelineTrackItem = ({
             variants={itemVariants}
             className="group relative flex w-full"
         >
-            {/* Time Column (Fixed Width) */}
-            <div className="w-[60px] flex flex-col items-end pt-3.5 pr-4 shrink-0">
+            <div className="w-[60px] md:w-[80px] flex flex-col items-end pt-3.5 pr-4 shrink-0">
                 <span
                     className={cn(
-                        'text-[13px] font-black tabular-nums leading-none tracking-tight',
+                        'text-[13px] md:text-sm font-black tabular-nums leading-none tracking-tight',
                         isInProgress
                             ? 'text-indigo-600'
                             : isCompleted
@@ -111,7 +104,7 @@ const TimelineTrackItem = ({
                 </span>
                 <span
                     className={cn(
-                        'text-[9px] font-bold uppercase tracking-widest mt-1',
+                        'text-[9px] md:text-[10px] font-bold uppercase tracking-widest mt-1',
                         isInProgress ? 'text-indigo-400' : 'text-slate-400',
                     )}
                 >
@@ -119,7 +112,6 @@ const TimelineTrackItem = ({
                 </span>
             </div>
 
-            {/* Timeline Spine */}
             <div className="relative flex flex-col items-center shrink-0 w-6">
                 <div className="w-0.5 h-3.5 bg-slate-100" />
 
@@ -148,7 +140,6 @@ const TimelineTrackItem = ({
                 )}
             </div>
 
-            {/* Card Content Column */}
             <div className="flex-1 pb-4 pl-4 min-w-0">
                 <div
                     className={cn(
@@ -163,7 +154,7 @@ const TimelineTrackItem = ({
                     <div className="flex flex-col gap-1.5 overflow-hidden pr-4">
                         <h5
                             className={cn(
-                                'text-sm font-black truncate tracking-tight',
+                                'text-sm md:text-base font-black truncate tracking-tight',
                                 isInProgress
                                     ? 'text-indigo-900'
                                     : 'text-slate-900',
@@ -173,34 +164,32 @@ const TimelineTrackItem = ({
                         </h5>
 
                         <div className="flex items-center gap-3">
-                            {/* LIVE TIMER BADGE */}
                             {isInProgress && (
                                 <div className="flex items-center gap-1.5 bg-indigo-600 text-white px-2.5 py-0.5 rounded-md shadow-sm shadow-indigo-200">
                                     <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
-                                    <span className="text-[11px] font-black tracking-widest tabular-nums">
+                                    <span className="text-[11px] md:text-xs font-black tracking-widest tabular-nums">
                                         {formatElapsed(elapsedSeconds)}
                                     </span>
                                 </div>
                             )}
 
                             {isCompleted && (
-                                <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
+                                <div className="flex items-center gap-1 text-[10px] md:text-[11px] font-bold text-emerald-600 uppercase tracking-widest">
                                     <CheckCircle2 size={12} strokeWidth={3} />
                                     <span>Done</span>
                                 </div>
                             )}
                             {isUpcoming && (
-                                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                <div className="flex items-center gap-1 text-[10px] md:text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                                     <Clock size={12} />
                                     <span>Pending</span>
                                 </div>
                             )}
 
-                            {/* Duration Target Indicator */}
                             {item.activity?.durationMinutes && (
                                 <>
                                     <span className="text-slate-300">•</span>
-                                    <span className="text-[10px] font-bold text-slate-400 font-mono">
+                                    <span className="text-[10px] md:text-[11px] font-bold text-slate-400 font-mono">
                                         {item.activity.durationMinutes} MIN GOAL
                                     </span>
                                 </>
@@ -208,18 +197,17 @@ const TimelineTrackItem = ({
                         </div>
                     </div>
 
-                    {/* Action Area */}
                     <div className="shrink-0 flex items-center justify-center">
                         {isInProgress ? (
-                            <div className="h-10 w-10 rounded-[14px] bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200 animate-pulse">
+                            <div className="h-10 w-10 md:h-12 md:w-12 rounded-[14px] bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200 animate-pulse">
                                 <Activity size={18} />
                             </div>
                         ) : isCompleted ? (
-                            <div className="h-10 w-10 flex items-center justify-center rounded-[14px] bg-slate-50 text-emerald-500">
+                            <div className="h-10 w-10 md:h-12 md:w-12 flex items-center justify-center rounded-[14px] bg-slate-50 text-emerald-500">
                                 <CheckCircle2 size={18} />
                             </div>
                         ) : (
-                            <div className="h-10 w-10 flex items-center justify-center rounded-[14px] bg-slate-50 text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors">
+                            <div className="h-10 w-10 md:h-12 md:w-12 flex items-center justify-center rounded-[14px] bg-slate-50 text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors">
                                 <ArrowRight size={18} />
                             </div>
                         )}
@@ -230,7 +218,6 @@ const TimelineTrackItem = ({
     );
 };
 
-// --- MAIN EXPORT COMPONENT ---
 export const TimelineTrackList = ({
     data = [],
     className,

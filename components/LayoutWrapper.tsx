@@ -150,7 +150,8 @@ export default function LayoutWrapper({
             <main
                 className={cn(
                     'flex flex-col flex-1 h-full min-w-0 overflow-y-auto transition-all duration-300 relative',
-                    isCollapsed ? 'md:ml-[72px]' : 'md:ml-[260px]',
+                    // Using 'pl' (padding) instead of 'ml' (margin) prevents horizontal overflow bugs
+                    isCollapsed ? 'pl-[72px]' : 'pl-[260px]',
                 )}
             >
                 <div className="flex flex-col flex-1 w-full h-full max-w-[1600px] mx-auto">

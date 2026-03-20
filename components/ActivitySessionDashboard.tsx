@@ -40,7 +40,9 @@ import {
     Gamepad2,
     Lightbulb,
     ArrowRight,
+    ArrowLeft,
     Play,
+    Link as LinkIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -54,6 +56,8 @@ import { Textarea } from '@/components/ui/textarea';
 import {
     triggerActivitySessionRecommendation,
     updateActivitySession,
+    createActivitySession,
+    getActivitySessionsNew, // ✅ Added Import
 } from '@/api/activity-session';
 import { getActivity } from '@/api/activity';
 import { cn } from '@/lib/utils';
@@ -318,11 +322,16 @@ function SessionMetricsSummary({
     );
 }
 
-// Ensure ActivitySessionResponse has `aiRecommendationId?: string;`
 export default function ActivitySessionDashboard({
     session,
 }: {
-    session: ActivitySessionResponse & { aiRecommendationId?: string };
+    session: ActivitySessionResponse & {
+        aiRecommendationId?: string;
+        isGeneratingAI?: boolean;
+        aiRecommendationRationale?: string;
+        previousActivitySession?: any;
+        nextActivitySession?: any;
+    };
 }) {
     const queryClient = useQueryClient();
     const router = useRouter();
@@ -331,11 +340,11 @@ export default function ActivitySessionDashboard({
     const [notesContent, setNotesContent] = useState(
         session.clinicalObservations || '',
     );
+    const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
 
     const isGameActivity =
         session.activity?.activityType?.toLowerCase() === 'game';
 
-    // Direct access to Strapi documentId
     const targetActivityId = session.aiRecommendationId;
 
     // Fetch the suggested activity using the extracted ID
@@ -347,6 +356,39 @@ export default function ActivitySessionDashboard({
         },
     );
 
+    // ✅ ADDED: Fetch Active Sessions to check for locks
+    const { data: activeSessions = [] } = useQuery({
+        queryKey: [
+            'active-sessions',
+            {
+                filters: {
+                    $or: [
+                        {
+                            activitySessionStatus: {
+                                $eq: ActivitySessionStatus.InProgress,
+                            },
+                        },
+                        {
+                            activitySessionStatus: {
+                                $eq: ActivitySessionStatus.Paused,
+                            },
+                        },
+                    ],
+                },
+                populate: {
+                    activity: { populate: '*' },
+                    student: { populate: '*' },
+                },
+            },
+        ],
+        placeholderData: [],
+        queryFn: getActivitySessionsNew,
+        refetchInterval: 3000,
+    });
+
+    const isLocked = activeSessions?.length > 0;
+    const currentlyActiveSession = isLocked ? activeSessions[0] : null;
+
     const aiMutation = useMutation({
         mutationFn: triggerActivitySessionRecommendation,
         onSuccess: () => {
@@ -356,6 +398,8 @@ export default function ActivitySessionDashboard({
             });
         },
     });
+
+    const isAIGenerating = aiMutation.isPending || session.isGeneratingAI;
 
     const updateNotesMutation = useMutation({
         mutationFn: (newNotes: string) =>
@@ -388,6 +432,48 @@ export default function ActivitySessionDashboard({
         },
     });
 
+    // Quick Launch Mutation for the suggested next step
+    const quickLaunchMutation = useMutation({
+        mutationFn: async () => {
+            if (!suggestedActivity || !session.student) {
+                throw new Error('Missing required data for quick launch.');
+            }
+
+            const newSession = await createActivitySession({
+                activity: suggestedActivity.documentId || suggestedActivity.id,
+                student: session.student.documentId || session.student.id,
+                activitySessionStatus: 'in_progress',
+                startAt: new Date().toISOString(),
+                previousActivitySession: session.documentId,
+            });
+
+            await updateActivitySession(session.documentId, {
+                nextActivitySession: newSession.documentId || newSession.id,
+            });
+
+            return newSession;
+        },
+        onSuccess: (data: any) => {
+            toast.success('Session launched and linked successfully!');
+            setIsLaunchModalOpen(false);
+            queryClient.invalidateQueries({
+                queryKey: ['activity-session', session.documentId],
+            });
+            // Automatically route to the newly created session dashboard
+            if (data?.documentId) {
+                router.push(`/activity-sessions/${data.documentId}`);
+            } else {
+                router.push('/');
+            }
+        },
+        onError: () => {
+            toast.error(
+                'Failed to launch and link the session. Please try again.',
+            );
+            setIsLaunchModalOpen(false);
+        },
+    });
+
     const handleLaunchOrResume = (status: ActivitySessionStatus) => {
         const toastId = toast.loading(
             status === ActivitySessionStatus.InProgress
@@ -397,6 +483,24 @@ export default function ActivitySessionDashboard({
         launchMutation.mutate(status, {
             onSettled: () => toast.dismiss(toastId),
         });
+    };
+
+    // ✅ ADDED: Intercept click to check for active sessions before opening modal
+    const handleOpenLaunchModal = () => {
+        if (isLocked) {
+            toast.error('You have an ongoing session.', {
+                description:
+                    'Please complete or end your current session before launching a new one.',
+                action: currentlyActiveSession
+                    ? {
+                          label: 'Resume Session',
+                          onClick: () => router.push('/'),
+                      }
+                    : undefined,
+            });
+            return;
+        }
+        setIsLaunchModalOpen(true);
     };
 
     const formatOnlyDate = (dateString: string) => {
@@ -436,18 +540,20 @@ export default function ActivitySessionDashboard({
             return (
                 <Button
                     onClick={() => aiMutation.mutate(session.documentId)}
-                    disabled={aiMutation.isPending}
-                    className="h-11 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-widest transition-all shadow-md"
+                    disabled={isAIGenerating}
+                    className="h-11 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-widest transition-all shadow-md disabled:opacity-70"
                 >
                     <Sparkles
                         className={cn(
                             'mr-2 h-4 w-4',
-                            aiMutation.isPending && 'animate-spin',
+                            isAIGenerating && 'animate-spin',
                         )}
                     />
-                    {session.aiRecommendation
-                        ? 'Regenerate Analysis'
-                        : 'Run AI Analysis'}
+                    {isAIGenerating
+                        ? 'Analyzing...'
+                        : session.aiRecommendation
+                          ? 'Regenerate Analysis'
+                          : 'Run AI Analysis'}
                 </Button>
             );
         }
@@ -458,11 +564,22 @@ export default function ActivitySessionDashboard({
         ) {
             return (
                 <Button
-                    disabled={launchMutation.isPending}
-                    onClick={() =>
-                        handleLaunchOrResume(ActivitySessionStatus.InProgress)
-                    }
-                    className="h-11 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-100 font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95"
+                    disabled={launchMutation.isPending || isLocked} // Prevents regular launch if locked globally
+                    onClick={() => {
+                        if (isLocked) {
+                            handleOpenLaunchModal(); // Let the toast function handle the warning UI
+                        } else {
+                            handleLaunchOrResume(
+                                ActivitySessionStatus.InProgress,
+                            );
+                        }
+                    }}
+                    className={cn(
+                        'h-11 px-6 rounded-2xl text-white shadow-md font-bold text-[10px] uppercase tracking-widest transition-all',
+                        isLocked
+                            ? 'bg-slate-400 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100 active:scale-95',
+                    )}
                 >
                     {launchMutation.isPending ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -583,10 +700,13 @@ export default function ActivitySessionDashboard({
                     </div>
                 </motion.header>
 
-                {/* --- 4 STATS ROW --- */}
+                {/* --- STATS ROW --- */}
                 <motion.div
                     variants={itemVariants}
-                    className="grid grid-cols-1 md:grid-cols-4 gap-6"
+                    className={cn(
+                        'grid grid-cols-1 gap-6',
+                        isGameActivity ? 'md:grid-cols-4' : 'md:grid-cols-3',
+                    )}
                 >
                     <AnalysisStat
                         label="AI Diagnostics"
@@ -634,17 +754,19 @@ export default function ActivitySessionDashboard({
                         icon={CalendarClock}
                         colorClass="group-hover:text-amber-500"
                     />
-                    <AnalysisStat
-                        label="Telemetry Yield"
-                        value={
-                            session.telemetryAnalysis?.length
-                                ? session.telemetryAnalysis.length.toString()
-                                : '0'
-                        }
-                        subtitle="Data Points Processed"
-                        icon={Network}
-                        colorClass="group-hover:text-emerald-500"
-                    />
+                    {isGameActivity && (
+                        <AnalysisStat
+                            label="Telemetry Yield"
+                            value={
+                                session.telemetryAnalysis?.length
+                                    ? session.telemetryAnalysis.length.toString()
+                                    : '0'
+                            }
+                            subtitle="Data Points Processed"
+                            icon={Network}
+                            colorClass="group-hover:text-emerald-500"
+                        />
+                    )}
                 </motion.div>
 
                 {isGameActivity &&
@@ -667,7 +789,7 @@ export default function ActivitySessionDashboard({
                     >
                         {session.activitySessionStatus === 'completed' && (
                             <AnimatePresence mode="wait">
-                                {aiMutation.isPending ? (
+                                {isAIGenerating ? (
                                     <motion.div
                                         key="generating"
                                         initial={{ opacity: 0, scale: 0.98 }}
@@ -689,7 +811,7 @@ export default function ActivitySessionDashboard({
                                         transition={{ duration: 0.4 }}
                                         className="space-y-6"
                                     >
-                                        {/* AI INSIGHT CARD */}
+                                        {/* AI MAIN INSIGHT CARD */}
                                         <Card className="rounded-[32px] border border-slate-900 bg-slate-950 text-white shadow-xl overflow-hidden relative group">
                                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
                                             <Zap
@@ -700,7 +822,7 @@ export default function ActivitySessionDashboard({
                                                 <div className="h-16 w-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 shrink-0 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
                                                     <BrainCircuit size={32} />
                                                 </div>
-                                                <div className="space-y-4">
+                                                <div className="space-y-4 w-full">
                                                     <div className="flex items-center gap-3">
                                                         <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">
                                                             Gemini Clinical
@@ -714,12 +836,10 @@ export default function ActivitySessionDashboard({
                                                             Verified
                                                         </Badge>
                                                     </div>
-                                                    <p className="text-sm font-medium leading-relaxed text-slate-100">
-                                                        "
+                                                    <p className="text-sm font-medium leading-relaxed text-slate-200 whitespace-pre-wrap">
                                                         {
                                                             session.aiRecommendation
                                                         }
-                                                        "
                                                     </p>
                                                 </div>
                                             </CardContent>
@@ -727,45 +847,34 @@ export default function ActivitySessionDashboard({
 
                                         {/* BESPOKE NEXT SUGGESTED ACTIVITY UI */}
                                         {targetActivityId && (
-                                            <Card className="rounded-[32px] border border-amber-200/60 bg-gradient-to-br from-amber-50 to-white shadow-sm overflow-hidden mt-6">
-                                                <CardContent className="p-6 md:p-8">
-                                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                                        <div className="space-y-2 flex-1">
-                                                            <div className="flex items-center gap-2 text-amber-600">
-                                                                <Lightbulb
-                                                                    size={16}
-                                                                />
-                                                                <h3 className="text-[10px] font-black uppercase tracking-widest">
-                                                                    Recommended
-                                                                    Next Step
-                                                                </h3>
-                                                            </div>
-                                                            <p className="text-sm font-medium text-slate-500">
-                                                                Based on the
-                                                                telemetry
-                                                                pattern, the AI
-                                                                recommends
-                                                                transitioning to
-                                                                this activity
-                                                                next to
-                                                                reinforce
-                                                                learning.
-                                                            </p>
-                                                        </div>
+                                            <Card className="rounded-[32px] border border-amber-200/60 bg-gradient-to-br from-amber-50 to-amber-100/30 shadow-sm overflow-hidden mt-6">
+                                                <CardContent className="p-6 md:p-8 flex flex-col gap-6">
+                                                    <div className="flex items-center gap-2 text-amber-600">
+                                                        <Lightbulb size={16} />
+                                                        <h3 className="text-[10px] font-black uppercase tracking-widest">
+                                                            Recommended Next
+                                                            Step
+                                                        </h3>
+                                                    </div>
 
-                                                        <div className="w-full md:w-auto md:min-w-[380px]">
-                                                            {isLoadingSuggested ? (
-                                                                <div className="flex items-center justify-center h-[76px] w-full border border-slate-200 bg-white rounded-2xl border-dashed">
-                                                                    <Loader2 className="animate-spin text-slate-300 h-5 w-5" />
-                                                                </div>
-                                                            ) : suggestedActivity ? (
-                                                                <div className="flex items-center gap-4 bg-white p-3 pr-4 rounded-2xl border border-slate-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-200">
-                                                                    <div className="h-14 w-14 rounded-xl overflow-hidden border border-slate-100 shrink-0 bg-slate-50 relative group flex items-center justify-center">
-                                                                        {FormatService.formatStrapiMedia(
-                                                                            suggestedActivity.banner,
-                                                                            'thumbnail',
-                                                                        ) ? (
-                                                                            // eslint-disable-next-line @next/next/no-img-element
+                                                    <div className="w-full">
+                                                        {session.nextActivitySession ? (
+                                                            // ✅ ALREADY LINKED STATE (CLICKABLE)
+                                                            <div
+                                                                onClick={() =>
+                                                                    router.push(
+                                                                        `/activity-sessions/${session.nextActivitySession.documentId}`,
+                                                                    )
+                                                                }
+                                                                className="flex items-center gap-5 bg-emerald-50/50 p-3 pr-5 rounded-2xl border border-emerald-100 shadow-sm cursor-pointer hover:bg-emerald-50 hover:shadow-md hover:border-emerald-200 transition-all group"
+                                                            >
+                                                                <div className="h-16 w-16 rounded-xl overflow-hidden border border-emerald-100 shrink-0 bg-white relative flex items-center justify-center shadow-inner">
+                                                                    {suggestedActivity &&
+                                                                    FormatService.formatStrapiMedia(
+                                                                        suggestedActivity.banner,
+                                                                        'thumbnail',
+                                                                    ) ? (
+                                                                        <>
                                                                             <img
                                                                                 src={FormatService.formatStrapiMedia(
                                                                                     suggestedActivity.banner,
@@ -774,60 +883,195 @@ export default function ActivitySessionDashboard({
                                                                                 alt={
                                                                                     suggestedActivity.name
                                                                                 }
-                                                                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                                                                className="h-full w-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-500"
                                                                             />
-                                                                        ) : (
-                                                                            <div className="w-4 h-4 rounded-full bg-slate-200" />
-                                                                        )}
+                                                                            <div className="absolute inset-0 flex items-center justify-center bg-emerald-900/10">
+                                                                                <CheckCircle2
+                                                                                    size={
+                                                                                        24
+                                                                                    }
+                                                                                    className="text-emerald-600 drop-shadow-md group-hover:scale-110 transition-transform"
+                                                                                />
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <div className="h-full w-full bg-emerald-100 flex items-center justify-center text-emerald-500">
+                                                                            <CheckCircle2
+                                                                                size={
+                                                                                    28
+                                                                                }
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
+                                                                            <LinkIcon
+                                                                                size={
+                                                                                    10
+                                                                                }
+                                                                            />{' '}
+                                                                            Sequence
+                                                                            Active
+                                                                        </span>
                                                                     </div>
-                                                                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                                        <h4 className="text-sm font-bold text-slate-800 truncate leading-tight">
-                                                                            {
+                                                                    <h4 className="text-base font-bold text-slate-800 truncate leading-tight group-hover:text-emerald-700 transition-colors">
+                                                                        {session
+                                                                            .nextActivitySession
+                                                                            .activity
+                                                                            ?.name ||
+                                                                            suggestedActivity?.name ||
+                                                                            'Linked Activity'}
+                                                                    </h4>
+                                                                    <div className="flex items-center gap-2 mt-1.5">
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className={cn(
+                                                                                'border-0 text-[9px] px-2 py-0.5 uppercase tracking-widest',
+                                                                                session
+                                                                                    .nextActivitySession
+                                                                                    .activitySessionStatus ===
+                                                                                    'completed'
+                                                                                    ? 'bg-emerald-200 text-emerald-800'
+                                                                                    : session
+                                                                                            .nextActivitySession
+                                                                                            .activitySessionStatus ===
+                                                                                        'in_progress'
+                                                                                      ? 'bg-amber-200 text-amber-800'
+                                                                                      : 'bg-indigo-100 text-indigo-700',
+                                                                            )}
+                                                                        >
+                                                                            Status:{' '}
+                                                                            {session.nextActivitySession.activitySessionStatus?.replace(
+                                                                                '_',
+                                                                                ' ',
+                                                                            ) ||
+                                                                                'Active'}
+                                                                        </Badge>
+                                                                        <span className="text-[9px] font-bold text-slate-400 font-mono uppercase tracking-widest px-1">
+                                                                            ID:
+                                                                            #
+                                                                            {session.nextActivitySession.documentId?.slice(
+                                                                                0,
+                                                                                6,
+                                                                            )}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="shrink-0 h-10 w-10 rounded-xl bg-emerald-100 group-hover:bg-emerald-500 text-emerald-600 group-hover:text-white transition-colors flex items-center justify-center shadow-sm">
+                                                                    <ArrowRight
+                                                                        size={
+                                                                            18
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ) : isLoadingSuggested ? (
+                                                            // ⏳ LOADING STATE
+                                                            <div className="flex items-center justify-center h-[88px] w-full border border-amber-200/50 bg-white/50 rounded-2xl border-dashed">
+                                                                <Loader2 className="animate-spin text-amber-400 h-5 w-5" />
+                                                            </div>
+                                                        ) : suggestedActivity ? (
+                                                            // ▶️ QUICK LAUNCH STATE
+                                                            <div
+                                                                onClick={
+                                                                    handleOpenLaunchModal
+                                                                }
+                                                                className={cn(
+                                                                    'flex items-center gap-5 bg-white p-3 pr-5 rounded-2xl border border-amber-100 shadow-sm transition-all group',
+                                                                    isLocked
+                                                                        ? 'cursor-not-allowed opacity-80'
+                                                                        : 'hover:shadow-md hover:border-amber-300 cursor-pointer',
+                                                                )}
+                                                            >
+                                                                <div className="h-16 w-16 rounded-xl overflow-hidden border border-slate-100 shrink-0 bg-slate-50 relative flex items-center justify-center">
+                                                                    {FormatService.formatStrapiMedia(
+                                                                        suggestedActivity.banner,
+                                                                        'thumbnail',
+                                                                    ) ? (
+                                                                        // eslint-disable-next-line @next/next/no-img-element
+                                                                        <img
+                                                                            src={FormatService.formatStrapiMedia(
+                                                                                suggestedActivity.banner,
+                                                                                'thumbnail',
+                                                                            )}
+                                                                            alt={
                                                                                 suggestedActivity.name
                                                                             }
-                                                                        </h4>
-                                                                        <div className="flex items-center gap-2 mt-1.5">
-                                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                                                                                {suggestedActivity.durationMinutes ||
-                                                                                    30}{' '}
+                                                                            className={cn(
+                                                                                'h-full w-full object-cover transition-transform duration-500',
+                                                                                !isLocked &&
+                                                                                    'group-hover:scale-110',
+                                                                            )}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="w-4 h-4 rounded-full bg-slate-200" />
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                                    <h4
+                                                                        className={cn(
+                                                                            'text-base font-bold text-slate-800 truncate leading-tight transition-colors',
+                                                                            !isLocked &&
+                                                                                'group-hover:text-amber-600',
+                                                                        )}
+                                                                    >
+                                                                        {
+                                                                            suggestedActivity.name
+                                                                        }
+                                                                    </h4>
+                                                                    <div className="flex items-center gap-2 mt-1.5">
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-0 text-[9px] px-2 py-0.5 uppercase tracking-widest"
+                                                                        >
+                                                                            Suggested
+                                                                            Path
+                                                                        </Badge>
+                                                                        {suggestedActivity.durationMinutes && (
+                                                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                                                                                {
+                                                                                    suggestedActivity.durationMinutes
+                                                                                }{' '}
                                                                                 Min
                                                                             </span>
-                                                                            {suggestedActivity.activityType && (
-                                                                                <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 truncate max-w-[80px]">
-                                                                                    {
-                                                                                        suggestedActivity.activityType
-                                                                                    }
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
+                                                                        )}
                                                                     </div>
-                                                                    <Button
-                                                                        className="shrink-0 h-10 w-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-sm"
-                                                                        size="icon"
-                                                                        onClick={() =>
-                                                                            router.push(
-                                                                                `/activities/${suggestedActivity.documentId}`,
-                                                                            )
+                                                                </div>
+                                                                <div
+                                                                    className={cn(
+                                                                        'shrink-0 h-10 w-10 rounded-xl flex items-center justify-center transition-colors',
+                                                                        isLocked
+                                                                            ? 'bg-slate-100 text-slate-400'
+                                                                            : 'bg-amber-50 group-hover:bg-amber-500 text-amber-600 group-hover:text-white',
+                                                                    )}
+                                                                >
+                                                                    <Play
+                                                                        size={
+                                                                            18
                                                                         }
-                                                                        title="Go to Activity"
-                                                                    >
-                                                                        <ArrowRight
-                                                                            size={
-                                                                                16
-                                                                            }
-                                                                        />
-                                                                    </Button>
+                                                                        className="ml-1 fill-current"
+                                                                    />
                                                                 </div>
-                                                            ) : (
-                                                                <div className="flex items-center justify-center h-[76px] w-full border border-slate-200 bg-slate-50 rounded-2xl">
-                                                                    <span className="text-xs font-medium text-slate-400 italic">
-                                                                        Activity
-                                                                        details
-                                                                        unavailable.
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                            </div>
+                                                        ) : (
+                                                            // ❌ FALLBACK ERROR STATE
+                                                            <div className="flex items-center justify-center h-[88px] w-full border border-slate-200 bg-white/50 rounded-2xl">
+                                                                <span className="text-xs font-medium text-slate-400 italic">
+                                                                    Activity
+                                                                    details
+                                                                    unavailable.
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="bg-white/60 rounded-2xl p-5 border border-amber-100/50">
+                                                        <p className="text-sm font-medium text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                                            {session.aiRecommendationRationale ||
+                                                                'Based on the telemetry pattern, the AI recommends transitioning to this activity next to reinforce specific learning vectors identified in this session.'}
+                                                        </p>
                                                     </div>
                                                 </CardContent>
                                             </Card>
@@ -860,9 +1104,17 @@ export default function ActivitySessionDashboard({
                                                             session.documentId,
                                                         )
                                                     }
-                                                    className="mt-4 h-12 px-8 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-widest shadow-md"
+                                                    disabled={isAIGenerating}
+                                                    className="mt-4 h-12 px-8 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-widest shadow-md disabled:opacity-70"
                                                 >
-                                                    Generate Insight Now
+                                                    {isAIGenerating ? (
+                                                        <>
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                            Generating...
+                                                        </>
+                                                    ) : (
+                                                        'Generate Insight Now'
+                                                    )}
                                                 </Button>
                                             </CardContent>
                                         </Card>
@@ -942,101 +1194,105 @@ export default function ActivitySessionDashboard({
                             </motion.div>
                         )}
 
-                        <Card className="rounded-[32px] border border-slate-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)] bg-white overflow-hidden flex flex-col">
-                            <CardHeader className="p-8 border-b border-slate-50 flex flex-row items-center justify-between shrink-0">
-                                <div className="space-y-1">
-                                    <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-900">
-                                        Activity Telemetry
-                                    </CardTitle>
-                                    <p className="text-xs font-medium text-slate-400">
-                                        AI-interpreted performance markers and
-                                        sequences
-                                    </p>
-                                </div>
-                                <div className="p-2.5 bg-slate-50 rounded-xl">
-                                    <BarChart3
-                                        size={18}
-                                        className="text-slate-400"
-                                    />
-                                </div>
-                            </CardHeader>
-
-                            <CardContent className="p-0 h-[450px] overflow-y-auto custom-scrollbar">
-                                {session.telemetryAnalysis &&
-                                Array.isArray(session.telemetryAnalysis) &&
-                                session.telemetryAnalysis.length > 0 ? (
-                                    <div className="divide-y divide-slate-50">
-                                        {session.telemetryAnalysis.map(
-                                            (event: any, idx: number) => (
-                                                <div
-                                                    key={idx}
-                                                    className="p-6 flex items-start gap-4 hover:bg-slate-50/50 transition-colors"
-                                                >
-                                                    <div className="pt-1">
-                                                        <Clock
-                                                            size={14}
-                                                            className="text-slate-300"
-                                                        />
-                                                    </div>
-                                                    <div className="flex-1 space-y-1.5">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] font-bold text-slate-400 tabular-nums w-12">
-                                                                T+
-                                                                {
-                                                                    event.timestamp
-                                                                }
-                                                            </span>
-                                                            <Badge
-                                                                variant="outline"
-                                                                className={cn(
-                                                                    'text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border-0 rounded-md',
-                                                                    event.status ===
-                                                                        'SUCCESS'
-                                                                        ? 'bg-emerald-50 text-emerald-600'
-                                                                        : event.status ===
-                                                                            'DELAY'
-                                                                          ? 'bg-amber-50 text-amber-600'
-                                                                          : 'bg-rose-50 text-rose-600',
-                                                                )}
-                                                            >
-                                                                {event.status}
-                                                            </Badge>
-                                                        </div>
-                                                        <p className="text-sm font-medium text-slate-700 leading-relaxed">
-                                                            {event.info}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ),
-                                        )}
+                        {isGameActivity && (
+                            <Card className="rounded-[32px] border border-slate-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)] bg-white overflow-hidden flex flex-col">
+                                <CardHeader className="p-8 border-b border-slate-50 flex flex-row items-center justify-between shrink-0">
+                                    <div className="space-y-1">
+                                        <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-900">
+                                            Activity Telemetry
+                                        </CardTitle>
+                                        <p className="text-xs font-medium text-slate-400">
+                                            AI-interpreted performance markers
+                                            and sequences
+                                        </p>
                                     </div>
-                                ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-300 px-10">
-                                        <Activity
-                                            size={48}
-                                            className={cn(
-                                                'mb-6',
-                                                session.rawTelemetry
-                                                    ? 'text-indigo-600/20'
-                                                    : 'opacity-20',
-                                            )}
+                                    <div className="p-2.5 bg-slate-50 rounded-xl">
+                                        <BarChart3
+                                            size={18}
+                                            className="text-slate-400"
                                         />
-                                        <span
-                                            className={cn(
-                                                'text-[10px] font-bold uppercase tracking-[0.3em] px-4 py-2 rounded-full',
-                                                session.rawTelemetry
-                                                    ? 'text-indigo-400 bg-indigo-50'
-                                                    : 'bg-slate-50',
-                                            )}
-                                        >
-                                            {session.rawTelemetry
-                                                ? 'Telemetry Ready - Run Analysis'
-                                                : 'No Telemetry Logged'}
-                                        </span>
                                     </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                </CardHeader>
+
+                                <CardContent className="p-0 h-[450px] overflow-y-auto custom-scrollbar">
+                                    {session.telemetryAnalysis &&
+                                    Array.isArray(session.telemetryAnalysis) &&
+                                    session.telemetryAnalysis.length > 0 ? (
+                                        <div className="divide-y divide-slate-50">
+                                            {session.telemetryAnalysis.map(
+                                                (event: any, idx: number) => (
+                                                    <div
+                                                        key={idx}
+                                                        className="p-6 flex items-start gap-4 hover:bg-slate-50/50 transition-colors"
+                                                    >
+                                                        <div className="pt-1">
+                                                            <Clock
+                                                                size={14}
+                                                                className="text-slate-300"
+                                                            />
+                                                        </div>
+                                                        <div className="flex-1 space-y-1.5">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-bold text-slate-400 tabular-nums w-12">
+                                                                    T+
+                                                                    {
+                                                                        event.timestamp
+                                                                    }
+                                                                </span>
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        'text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border-0 rounded-md',
+                                                                        event.status ===
+                                                                            'SUCCESS'
+                                                                            ? 'bg-emerald-50 text-emerald-600'
+                                                                            : event.status ===
+                                                                                'DELAY'
+                                                                              ? 'bg-amber-50 text-amber-600'
+                                                                              : 'bg-rose-50 text-rose-600',
+                                                                    )}
+                                                                >
+                                                                    {
+                                                                        event.status
+                                                                    }
+                                                                </Badge>
+                                                            </div>
+                                                            <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                                                                {event.info}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ),
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="h-full flex flex-col items-center justify-center text-slate-300 px-10">
+                                            <Activity
+                                                size={48}
+                                                className={cn(
+                                                    'mb-6',
+                                                    session.rawTelemetry
+                                                        ? 'text-indigo-600/20'
+                                                        : 'opacity-20',
+                                                )}
+                                            />
+                                            <span
+                                                className={cn(
+                                                    'text-[10px] font-bold uppercase tracking-[0.3em] px-4 py-2 rounded-full',
+                                                    session.rawTelemetry
+                                                        ? 'text-indigo-400 bg-indigo-50'
+                                                        : 'bg-slate-50',
+                                                )}
+                                            >
+                                                {session.rawTelemetry
+                                                    ? 'Telemetry Ready - Run Analysis'
+                                                    : 'No Telemetry Logged'}
+                                            </span>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
                     </motion.div>
 
                     <motion.aside
@@ -1209,12 +1465,147 @@ export default function ActivitySessionDashboard({
                                             : 'Unassigned'}
                                     </span>
                                 </div>
+
+                                {/* Previous Linked Session UI (Clickable) */}
+                                {session.previousActivitySession && (
+                                    <div className="pt-4 mt-4 border-t border-slate-100 flex flex-col gap-3">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <ArrowLeft size={12} /> Previous
+                                            Link
+                                        </span>
+                                        <div
+                                            onClick={() =>
+                                                router.push(
+                                                    `/activity-sessions/${session.previousActivitySession.documentId}`,
+                                                )
+                                            }
+                                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 cursor-pointer hover:bg-slate-100 hover:border-slate-200 transition-colors group"
+                                        >
+                                            <div className="flex flex-col min-w-0 pr-2">
+                                                <span className="text-xs font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">
+                                                    {session
+                                                        .previousActivitySession
+                                                        .activity?.name ||
+                                                        'Previous Activity'}
+                                                </span>
+                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                                    Status:{' '}
+                                                    {session.previousActivitySession.activitySessionStatus?.replace(
+                                                        '_',
+                                                        ' ',
+                                                    ) || 'Unknown'}
+                                                </span>
+                                            </div>
+                                            <div className="h-6 w-6 rounded-md bg-white border border-slate-200 flex items-center justify-center shadow-sm shrink-0 group-hover:border-indigo-200 group-hover:text-indigo-600 transition-colors">
+                                                <ArrowLeft size={10} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Next Linked Session UI (Clickable) */}
+                                {session.nextActivitySession && (
+                                    <div className="pt-4 mt-4 border-t border-slate-100 flex flex-col gap-3">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            Next Link <ArrowRight size={12} />
+                                        </span>
+                                        <div
+                                            onClick={() =>
+                                                router.push(
+                                                    `/activity-sessions/${session.nextActivitySession.documentId}`,
+                                                )
+                                            }
+                                            className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 cursor-pointer hover:bg-emerald-100 hover:border-emerald-200 transition-colors group"
+                                        >
+                                            <div className="flex flex-col min-w-0 pr-2">
+                                                <span className="text-xs font-bold text-emerald-900 truncate group-hover:text-emerald-700 transition-colors">
+                                                    {session.nextActivitySession
+                                                        .activity?.name ||
+                                                        suggestedActivity?.name ||
+                                                        'Next Activity'}
+                                                </span>
+                                                <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mt-0.5">
+                                                    Status:{' '}
+                                                    {session.nextActivitySession.activitySessionStatus?.replace(
+                                                        '_',
+                                                        ' ',
+                                                    ) || 'Pending'}
+                                                </span>
+                                            </div>
+                                            <div className="h-6 w-6 rounded-md bg-emerald-100 border border-emerald-200 text-emerald-600 flex items-center justify-center shadow-sm shrink-0 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                                                <ArrowRight size={10} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </motion.aside>
                 </div>
                 <footer className="h-16 w-full shrink-0" aria-hidden="true" />
             </motion.div>
+
+            {/* Quick Launch Confirmation Modal */}
+            <AnimatePresence>
+                {isLaunchModalOpen && suggestedActivity && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() =>
+                                !quickLaunchMutation.isPending &&
+                                setIsLaunchModalOpen(false)
+                            }
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden p-8 text-center border border-slate-100"
+                        >
+                            <div className="mx-auto bg-amber-50 w-16 h-16 rounded-full flex items-center justify-center mb-6">
+                                <Play
+                                    className="text-amber-500 fill-current"
+                                    size={24}
+                                />
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-900 mb-2 tracking-tight">
+                                Launch Sequence?
+                            </h2>
+                            <p className="text-slate-500 font-medium mb-8 leading-relaxed">
+                                You are about to initiate a new session of{' '}
+                                <span className="text-slate-900 font-bold">
+                                    {suggestedActivity.name}
+                                </span>{' '}
+                                for{' '}
+                                <span className="text-slate-900 font-bold">
+                                    {session.student?.firstName}
+                                </span>
+                                .
+                            </p>
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="outline"
+                                    className="flex-1 h-12 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-500 border-slate-200 hover:bg-slate-50"
+                                    onClick={() => setIsLaunchModalOpen(false)}
+                                    disabled={quickLaunchMutation.isPending}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    className="flex-1 h-12 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-amber-200"
+                                    onClick={() => quickLaunchMutation.mutate()}
+                                    disabled={quickLaunchMutation.isPending}
+                                >
+                                    {quickLaunchMutation.isPending ? (
+                                        <Loader2 className="animate-spin w-4 h-4 mr-2" />
+                                    ) : null}
+                                    Confirm Launch
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

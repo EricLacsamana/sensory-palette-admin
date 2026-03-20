@@ -73,10 +73,7 @@ const STATUS_CONFIG: Record<
     interrupted: { icon: PauseCircle, label: 'Interrupted' },
     abandoned: { icon: AlertCircle, label: 'Abandoned' },
     reschedule: { icon: CalendarClock, label: 'Reschedule' },
-    queued: {
-        icon: 'symbol',
-        label: '',
-    },
+    queued: { icon: 'symbol', label: '' },
 };
 
 const ItemCard = ({
@@ -113,13 +110,13 @@ const ItemCard = ({
     const renderStudentBadge = (isForeignBadge: boolean = false) => (
         <div
             className={cn(
-                'flex items-center gap-1.5 px-2 py-0.5 rounded-full border shadow-sm shrink-0 transition-all duration-300',
+                'flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 rounded-full border shadow-sm shrink-0 transition-all duration-300 min-w-0',
                 isForeignBadge
                     ? 'bg-white border-slate-200'
                     : cn(colors.bg, colors.border),
             )}
         >
-            <Avatar className="h-3.5 w-3.5">
+            <Avatar className="h-3 w-3 sm:h-4 sm:w-4 shrink-0">
                 <AvatarImage
                     src={FormatService.formatStrapiMedia(
                         student?.profilePicture,
@@ -128,7 +125,7 @@ const ItemCard = ({
                 />
                 <AvatarFallback
                     className={cn(
-                        'text-[7px] font-bold',
+                        'text-[6px] sm:text-[8px] font-bold flex items-center justify-center',
                         isForeignBadge
                             ? 'bg-slate-100 text-slate-600'
                             : cn('bg-white', colors.text),
@@ -139,12 +136,11 @@ const ItemCard = ({
             </Avatar>
             <span
                 className={cn(
-                    'text-[9px] font-bold truncate transition-all duration-300',
+                    'text-[8px] sm:text-[10px] font-bold truncate transition-all duration-300 max-w-[40px] sm:max-w-[100px]',
                     isForeignBadge ? 'text-slate-600' : colors.text,
-                    showDetails ? 'max-w-[120px]' : 'max-w-[60px]',
                 )}
             >
-                {student?.firstName} {showDetails && student?.lastName}
+                {student?.firstName}
             </span>
         </div>
     );
@@ -153,7 +149,7 @@ const ItemCard = ({
         return (
             <div
                 className={cn(
-                    'relative flex items-center gap-3 p-2.5 rounded-xl border w-full select-none group transition-all min-h-[64px]',
+                    'relative flex items-center gap-1.5 sm:gap-3 p-1.5 sm:p-2.5 rounded-xl border w-full select-none group transition-all min-h-[52px] sm:min-h-[64px]',
                     'bg-slate-50/50 border-slate-200',
                     isCancelled
                         ? 'opacity-50 grayscale'
@@ -167,7 +163,6 @@ const ItemCard = ({
                             'repeating-linear-gradient(-45deg, #000, #000 1px, transparent 1px, transparent 10px)',
                     }}
                 />
-
                 <div
                     className={cn(
                         'absolute left-0 top-0 bottom-0 w-1 rounded-l-xl',
@@ -175,7 +170,7 @@ const ItemCard = ({
                     )}
                 />
 
-                <div className="ml-3 h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 grayscale opacity-70">
+                <div className="ml-1 sm:ml-3 h-8 w-8 sm:h-10 sm:w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 grayscale opacity-70">
                     {imageSrc ? (
                         <img
                             src={imageSrc}
@@ -184,32 +179,36 @@ const ItemCard = ({
                         />
                     ) : (
                         <div className="bg-slate-200 w-full h-full flex items-center justify-center">
-                            <User size={14} className="text-slate-400" />
+                            <User
+                                size={12}
+                                className="text-slate-400 sm:w-4 sm:h-4"
+                            />
                         </div>
                     )}
                 </div>
 
-                <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-                    <h4 className="text-sm font-semibold text-slate-500 truncate">
+                <div className="flex-1 min-w-0 flex flex-col justify-center py-0.5 gap-0.5 sm:gap-1">
+                    <h4 className="text-[10px] sm:text-sm font-semibold text-slate-500 truncate">
                         {title}
                     </h4>
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-white/50 px-1.5 py-0.5 rounded border border-slate-200/50">
-                            <Clock size={10} />
-                            <span className="tabular-nums">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                        <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-medium text-slate-400 bg-white/50 px-1.5 py-0.5 rounded border border-slate-200/50 shrink-0">
+                            <Clock size={9} className="sm:w-3 sm:h-3" />
+                            <span className="tabular-nums whitespace-nowrap">
                                 {startTime} - {endTime}
                             </span>
                         </div>
-                        <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-white/50 border-slate-200 text-slate-400">
-                            <StatusIcon size={10} />
-                            {s.label}
+                        <div className="flex items-center gap-0.5 sm:gap-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider px-1 sm:px-1.5 py-0.5 rounded border bg-white/50 border-slate-200 text-slate-400 shrink-0">
+                            <StatusIcon size={9} className="sm:w-3 sm:h-3" />
+                            <span className="hidden sm:inline">{s.label}</span>
                         </div>
                     </div>
                 </div>
-                <div className="flex flex-col items-end justify-center">
+
+                <div className="flex flex-col items-end justify-center shrink-0 pl-1.5 sm:pl-2">
                     {renderStudentBadge(true)}
-                    <span className="text-[8px] text-slate-400 mt-1 italic mr-1">
-                        Other student
+                    <span className="text-[7px] sm:text-[9px] text-slate-400 mt-0.5 sm:mt-1 italic mr-0.5 sm:mr-1">
+                        Foreign
                     </span>
                 </div>
             </div>
@@ -219,7 +218,7 @@ const ItemCard = ({
     return (
         <div
             className={cn(
-                'group relative flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-200 w-full select-none min-h-[64px]',
+                'group relative flex items-center gap-1.5 sm:gap-3 p-1.5 sm:p-2.5 rounded-xl border transition-all duration-200 w-full select-none min-h-[52px] sm:min-h-[64px] overflow-hidden',
                 error
                     ? 'border-rose-300 bg-rose-50/50 shadow-[0_0_0_1px_rgba(253,164,175,0.5)] z-20'
                     : isLocked
@@ -237,7 +236,6 @@ const ItemCard = ({
                     }}
                 />
             )}
-
             {!error && !isLocked && (
                 <div
                     className={cn(
@@ -251,20 +249,20 @@ const ItemCard = ({
                 <div
                     onPointerDown={(e) => dragControls?.start(e)}
                     className={cn(
-                        'absolute left-1 top-1/2 -translate-y-1/2 p-1.5 cursor-grab active:cursor-grabbing text-slate-300 hover:text-indigo-500 transition-all hover:bg-slate-100 rounded-md z-30',
+                        'cursor-grab active:cursor-grabbing p-0.5 sm:p-1 text-slate-300 hover:text-indigo-500 hover:bg-slate-100 rounded-md transition-all z-30 shrink-0',
                         mode === 'delete'
-                            ? 'opacity-0 group-hover:opacity-100'
+                            ? 'opacity-100 sm:opacity-0 group-hover:opacity-100'
                             : 'opacity-100',
                     )}
                 >
-                    <GripVertical size={14} />
+                    <GripVertical size={12} className="sm:w-4 sm:h-4" />
                 </div>
             )}
 
+            {/* Compact Mobile Image */}
             <div
                 className={cn(
-                    'h-10 w-10 rounded-lg overflow-hidden border shrink-0 flex items-center justify-center bg-slate-100 relative z-10',
-                    mode !== 'view' ? 'ml-5' : 'ml-0',
+                    'h-8 w-8 sm:h-10 sm:w-10 rounded-md sm:rounded-lg overflow-hidden border shrink-0 flex items-center justify-center bg-slate-100 relative z-10',
                     error ? 'border-rose-200' : 'border-slate-100',
                 )}
             >
@@ -275,17 +273,18 @@ const ItemCard = ({
                         alt=""
                     />
                 ) : (
-                    <div className="text-slate-300">
-                        <div className="w-4 h-4 rounded-full bg-current opacity-20" />
+                    <div className="text-slate-300 flex items-center justify-center">
+                        <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-current opacity-20" />
                     </div>
                 )}
             </div>
 
-            <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-                <div className="flex items-center gap-2">
+            {/* Central Content Column - Strict min-w-0 to force truncation over overlapping */}
+            <div className="flex-1 min-w-0 flex flex-col justify-center py-0.5 gap-0.5 sm:gap-1">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                     <h4
                         className={cn(
-                            'text-sm font-bold truncate leading-none',
+                            'text-[11px] sm:text-sm font-bold truncate leading-none min-w-0',
                             error ? 'text-rose-700' : 'text-slate-800',
                             isLocked && 'text-slate-600',
                             isCancelled && 'line-through text-slate-500',
@@ -295,41 +294,51 @@ const ItemCard = ({
                     </h4>
 
                     {!isPending && !error && (
-                        <div
-                            className={cn(
-                                'flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500',
-                            )}
-                        >
-                            <StatusIcon size={10} strokeWidth={2.5} />
-                            {s.label}
+                        <div className="flex items-center gap-0.5 sm:gap-1 text-[7px] sm:text-[9px] font-black uppercase tracking-wider px-1 sm:px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500 shrink-0">
+                            <StatusIcon
+                                size={9}
+                                strokeWidth={2.5}
+                                className="sm:w-3 sm:h-3"
+                            />
+                            {/* Hide text on mobile to save space */}
+                            <span className="hidden sm:inline">{s.label}</span>
                         </div>
                     )}
-
                     {error && (
-                        <div className="flex items-center gap-1 text-[8px] font-black text-rose-600 bg-rose-100 px-1 py-0.5 rounded uppercase tracking-wider shrink-0">
-                            <AlertOctagon size={8} strokeWidth={3} /> Conflict
+                        <div className="flex items-center gap-0.5 sm:gap-1 text-[7px] sm:text-[9px] font-black text-rose-600 bg-rose-100 px-1 sm:px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
+                            <AlertOctagon
+                                size={9}
+                                strokeWidth={3}
+                                className="sm:w-3 sm:h-3"
+                            />
+                            <span className="hidden sm:inline">Conflict</span>
                         </div>
                     )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* FLEX WRAP: Badges wrap dynamically if they hit the max width */}
+                <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
                     {(startTime || endTime) && (
-                        <div className="relative group/time-badge">
+                        <div className="relative group/time-badge shrink-0 max-w-[85px] sm:max-w-none">
                             <div
                                 className={cn(
-                                    'flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border transition-colors cursor-pointer',
+                                    'flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors cursor-pointer min-w-0',
                                     isLocked
                                         ? 'bg-amber-100/50 border-amber-200 text-amber-700'
                                         : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200',
                                 )}
                             >
-                                <Clock size={10} />
-                                <span className="tabular-nums tracking-tight">
-                                    {startTime} - {endTime}
+                                <Clock
+                                    size={9}
+                                    className="shrink-0 sm:w-3 sm:h-3"
+                                />
+                                {/* Time fits safely, truncates strictly if forced */}
+                                <span className="tabular-nums tracking-tight truncate">
+                                    {startTime}-{endTime}
                                 </span>
                                 <ChevronDown
                                     size={8}
-                                    className="opacity-0 group-hover/time-badge:opacity-100 transition-opacity ml-0.5"
+                                    className="opacity-0 group-hover/time-badge:opacity-100 transition-opacity hidden sm:block"
                                 />
                             </div>
                             <select
@@ -362,7 +371,7 @@ const ItemCard = ({
 
                     <div
                         className={cn(
-                            'flex items-center text-[10px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 transition-all duration-300',
+                            'flex items-center text-[9px] sm:text-[10px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 transition-all duration-300 shrink-0 max-w-[40px] sm:max-w-none truncate',
                             showDetails
                                 ? 'font-normal text-slate-500'
                                 : 'font-semibold',
@@ -372,31 +381,26 @@ const ItemCard = ({
                     </div>
 
                     {isSaved && !error && (
-                        <div className="flex items-center gap-1 text-[9px] font-medium text-emerald-600/80 ml-1 transition-all">
-                            <Database size={9} />
+                        <div className="flex items-center gap-0.5 sm:gap-1 text-[8px] sm:text-[9px] font-medium text-emerald-600/80 shrink-0">
+                            <Database size={8} className="sm:w-3 sm:h-3" />
                             {showDetails && (
                                 <span className="hidden sm:inline">Saved</span>
                             )}
                         </div>
                     )}
                 </div>
-
                 {error && (
-                    <span className="text-[10px] text-rose-500 font-medium leading-none">
+                    <span className="text-[8px] sm:text-[10px] text-rose-500 font-medium leading-none truncate w-full block">
                         {conflictReason}
                     </span>
                 )}
             </div>
 
-            <div
-                className={cn(
-                    'flex flex-col items-end gap-1.5 shrink-0 pl-2 border-l border-slate-50 transition-all duration-300',
-                    showDetails ? 'min-w-[140px]' : 'min-w-[70px]',
-                )}
-            >
+            {/* Right Action Column */}
+            <div className="flex flex-col items-end justify-center gap-1 sm:gap-1.5 shrink-0 pl-1.5 sm:pl-3 border-l border-slate-100/50 min-w-0">
                 {student?.firstName && renderStudentBadge(false)}
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5 sm:gap-1 mt-0.5 sm:mt-0">
                     <Button
                         variant="ghost"
                         size="icon"
@@ -406,20 +410,22 @@ const ItemCard = ({
                         }}
                         disabled={isCancelled}
                         className={cn(
-                            'h-6 w-6 rounded-md border transition-all duration-200 cursor-pointer',
+                            'h-5 w-5 sm:h-6 sm:w-6 rounded border transition-all duration-200 cursor-pointer shrink-0',
                             isLocked
                                 ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100 shadow-sm'
-                                : 'bg-white border-slate-100 text-slate-300 hover:text-indigo-500 hover:border-indigo-200 hover:shadow-sm opacity-0 group-hover:opacity-100',
+                                : 'bg-white border-slate-100 text-slate-400 hover:text-indigo-500 hover:border-indigo-200 hover:shadow-sm opacity-100 sm:opacity-0 group-hover:opacity-100',
                         )}
-                        title={isLocked ? 'Unlock Activity' : 'Lock Activity'}
                     >
                         {isLocked ? (
-                            <Lock size={10} strokeWidth={2.5} />
+                            <Lock
+                                size={9}
+                                strokeWidth={2.5}
+                                className="sm:w-3 sm:h-3"
+                            />
                         ) : (
-                            <Unlock size={10} />
+                            <Unlock size={9} className="sm:w-3 sm:h-3" />
                         )}
                     </Button>
-
                     <Button
                         variant="ghost"
                         size="icon"
@@ -429,17 +435,20 @@ const ItemCard = ({
                             if (!isLocked) onActionClick?.();
                         }}
                         className={cn(
-                            'h-6 w-6 rounded-md border transition-all duration-200 cursor-pointer',
+                            'h-5 w-5 sm:h-6 sm:w-6 rounded border transition-all duration-200 cursor-pointer shrink-0',
                             isLocked
                                 ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
-                                : 'opacity-0 group-hover:opacity-100 bg-white border-slate-100 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 hover:shadow-sm',
+                                : 'opacity-100 sm:opacity-0 group-hover:opacity-100 bg-white border-slate-100 text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 hover:shadow-sm',
                         )}
                     >
-                        {actionIcon || <Trash2 size={10} />}
+                        {actionIcon || (
+                            <Trash2 size={9} className="sm:w-3 sm:h-3" />
+                        )}
                     </Button>
                 </div>
             </div>
         </div>
     );
 };
+
 export default ItemCard;
