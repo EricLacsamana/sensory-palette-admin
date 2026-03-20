@@ -68,6 +68,7 @@ import {
     ActivitySessionResponse,
     ActivitySessionStatus,
 } from '@/types/activitiy-session';
+import { useRouter } from 'next/navigation';
 
 // --- Animation Variants ---
 const fadeVariants: Variants = {
@@ -169,6 +170,7 @@ const CustomBarTooltip = ({ active, payload }: any) => {
 };
 
 export default function AppAdminDashboard() {
+    const router = useRouter();
     const { token, isAuthenticated } = useSelector(
         (state: RootState) => state.auth,
     );
@@ -972,6 +974,11 @@ export default function AppAdminDashboard() {
                                                     </td>
                                                     <td className="px-5 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <Button
+                                                            onClick={() => {
+                                                                router.push(
+                                                                    `/activity-sessions/${session.documentId}`,
+                                                                );
+                                                            }}
                                                             variant="ghost"
                                                             size="sm"
                                                             className="h-8 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg px-3"
