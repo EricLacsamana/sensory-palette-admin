@@ -195,8 +195,6 @@ export default function TellMe({
     baseDifficulty?: 1 | 2 | 3 | 4 | 5;
 }) {
     const searchParams = useSearchParams();
-
-    // --- INITIAL STATE ---
     const [isAdaptive, setIsAdaptive] = useState(
         () => searchParams.get('adaptive') !== 'false',
     );
