@@ -18,12 +18,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const SparkleIcon = ({ className }: { className?: string }) => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d="M11.64 5.232c.184-.525.932-.525 1.117 0l1.458 4.152a1.2 1.2 0 00.838.838l4.152 1.458c.525.184.525.932 0 1.117l-4.152 1.458a1.2 1.2 0 00-.838.838l-1.458 4.152c-.184.525-.932.525-1.117 0l-1.458-4.152a1.2 1.2 0 00.838-.838l1.458-4.152z" />
-    </svg>
-);
-
 const ALL_SHAPES = [
     { name: 'Circle', icon: Circle },
     { name: 'Square', icon: Square },
@@ -44,7 +38,7 @@ interface AdaptiveGameProps {
     baseDifficulty?: 1 | 2 | 3;
 }
 
-export default function ShapeMatchGame({
+export default function ShapePuzzleGame({
     studentAge,
     baseDifficulty,
 }: AdaptiveGameProps) {

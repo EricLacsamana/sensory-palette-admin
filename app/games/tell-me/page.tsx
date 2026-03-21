@@ -187,7 +187,7 @@ const getRandomWord = (currentLevel: number) => {
     return finalPool[Math.floor(Math.random() * finalPool.length)];
 };
 
-export default function VoiceMatchGame({
+export default function TellMe({
     studentAge,
     baseDifficulty,
 }: {
