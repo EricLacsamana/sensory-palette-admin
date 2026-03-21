@@ -95,8 +95,6 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         async (sessionToSave: ActivitySessionResponse) => {
             if (isSaving || isDraining.current) return;
 
-            // ✨ FIX: If the game never actually started (counter didn't finish),
-            // do not send empty game data to the backend. Just cleanly exit.
             if (!sessionToSave.actualStartAt) {
                 setLatchedSession(undefined);
                 telemetry.reset();
@@ -193,8 +191,14 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         if (!latchedSession) return;
         setIsLocalToggling(true);
         pause();
+
         const payload = {
             activitySessionStatus: ActivitySessionStatus.Paused,
+            // ✨ FIX: Push immediate state to DB on pause
+            score: score,
+            rounds: rounds,
+            accuracy: accuracy,
+            rawTelemetry: rawTelemetry,
             timeLogs: [
                 ...(latchedSession.timeLogs || []),
                 {
@@ -217,7 +221,15 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         } finally {
             setIsLocalToggling(false);
         }
-    }, [latchedSession, pause, queryClient]);
+    }, [
+        latchedSession,
+        pause,
+        queryClient,
+        score,
+        rounds,
+        accuracy,
+        rawTelemetry,
+    ]);
 
     const handleResume = useCallback(async () => {
         if (!latchedSession) return;
@@ -286,7 +298,6 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
                 latchedSession.activitySessionStatus !==
                     ActivitySessionStatus.Completed
             ) {
-                // ✨ FIX: Only flush data if the session officially started
                 if (latchedSession.actualStartAt) {
                     flushData(
                         latchedSession.documentId,
@@ -307,7 +318,6 @@ export default function ActivitySessionLauncher({ user }: LauncherProps) {
         if (!latchedSession) {
             setLatchedSession(serverSession);
         } else if (serverSession.documentId !== latchedSession.documentId) {
-            // ✨ FIX: Only flush data if the session officially started
             if (latchedSession.actualStartAt) {
                 flushData(
                     latchedSession.documentId,

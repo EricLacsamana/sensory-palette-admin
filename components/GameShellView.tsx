@@ -2,10 +2,16 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Loader2, Pause, Star, X, PartyPopper } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+// ✨ FIX: Added AlertTriangle, removed 'X' import completely
+import {
+    Play,
+    Loader2,
+    Pause,
+    Star,
+    PartyPopper,
+    AlertTriangle,
+} from 'lucide-react';
 import { ActivitySessionResponse } from '@/types/activitiy-session';
-import { cn } from '@/lib/utils';
 
 interface GameShellViewProps {
     session: ActivitySessionResponse & {
@@ -35,6 +41,9 @@ export default function GameShellView({
     const [countdown, setCountdown] = useState<number | null>(null);
     const [isInitiating, setIsInitiating] = useState(false);
 
+    // ✨ FIX: State to ensure the game NEVER unmounts once it has been started
+    const [isGameMounted, setIsGameMounted] = useState(false);
+
     const activity: any = session?.activity || {};
 
     const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -54,19 +63,20 @@ export default function GameShellView({
         }
     }, [session?.documentId, activity?.documentId, initialize]);
 
+    useEffect(() => {
+        if (status === 'playing' || status === 'paused' || isInitiating) {
+            setIsGameMounted(true);
+        }
+    }, [status, isInitiating]);
+
     const tickSfx = useRef<HTMLAudioElement | null>(null);
     const startSfx = useRef<HTMLAudioElement | null>(null);
 
-    // ✨ FIX: Using local assets to prevent production 404s/CORS issues
     useEffect(() => {
         tickSfx.current = new Audio('/sounds/tick.mp3');
         startSfx.current = new Audio('/sounds/start.mp3');
     }, []);
 
-    const shouldShowIframe =
-        status === 'playing' || status === 'paused' || isInitiating;
-
-    // ✨ FIX: Robust URL parsing to handle production paths, relative paths, and env variables
     const mediaConfig = useMemo(() => {
         let baseUrl = activity.activityUrl || '';
         const type = activity.activityType?.toLowerCase() || '';
@@ -144,7 +154,6 @@ export default function GameShellView({
         activity.description,
     ]);
 
-    // SILENT PUSH: Sync Source of Truth down to the iframe silently
     useEffect(() => {
         if (iframeRef.current?.contentWindow) {
             iframeRef.current.contentWindow.postMessage(
@@ -161,7 +170,6 @@ export default function GameShellView({
         }
     }, [session.enableAdaptiveDifficulty, session.enableLearnerControls]);
 
-    // MEDIA CONTROL
     useEffect(() => {
         if (status === 'paused') {
             if (
@@ -198,7 +206,6 @@ export default function GameShellView({
         }
     }, [status, mediaConfig.src, mediaConfig.renderType]);
 
-    // AUTO-START LOGIC
     useEffect(() => {
         if (
             session?.isHandsFree &&
@@ -211,7 +218,6 @@ export default function GameShellView({
         }
     }, [session?.isHandsFree, status, countdown, isInitiating]);
 
-    // COUNTDOWN LOGIC
     useEffect(() => {
         if (countdown === null || countdown === 0) return;
         tickSfx.current?.play().catch(() => {});
@@ -239,7 +245,7 @@ export default function GameShellView({
             style={{ height: vh }}
             className="fixed inset-0 bg-sky-50 z-[9999] flex flex-col font-sans overflow-hidden touch-none"
         >
-            {/* --- PLAYFUL HEADER --- */}
+            {/* --- HEADER --- */}
             <header className="h-20 md:h-24 shrink-0 bg-white border-b-4 border-slate-100 px-4 md:px-8 flex items-center justify-between z-50 rounded-b-[32px] shadow-sm relative">
                 <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-2xl bg-indigo-100 flex items-center justify-center border-2 border-indigo-200 shadow-inner rotate-[-3deg]">
@@ -257,6 +263,19 @@ export default function GameShellView({
                         </h1>
                     </div>
                 </div>
+
+                {/* ✨ FIX: Added the persistent warning badge to the center of the header */}
+                {(status === 'playing' || status === 'paused') && (
+                    <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-rose-50 border-2 border-rose-100 rounded-xl mx-4 absolute left-1/2 -translate-x-1/2">
+                        <AlertTriangle
+                            size={16}
+                            className="text-rose-500 animate-pulse"
+                        />
+                        <span className="text-[11px] font-bold text-rose-600 uppercase tracking-wider">
+                            Do not refresh (Game will end)
+                        </span>
+                    </div>
+                )}
 
                 <div className="flex items-center gap-3">
                     {session?.enableLearnerControls && (
@@ -293,22 +312,13 @@ export default function GameShellView({
                             )}
                         </>
                     )}
-
-                    {/* Exit Button (Mobile & Desktop) */}
-                    <button
-                        onClick={handleClose}
-                        className="h-12 w-12 flex items-center justify-center rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-red-500 transition-colors"
-                    >
-                        <X size={24} strokeWidth={3} />
-                    </button>
                 </div>
             </header>
 
             {/* --- MAIN MEDIA AREA --- */}
             <main className="flex-1 relative w-full min-h-0 overflow-hidden bg-sky-50">
-                {shouldShowIframe && (
+                {isGameMounted && (
                     <div className="absolute inset-0 w-full h-full z-10 flex items-center justify-center bg-transparent p-2 md:p-6">
-                        {/* Wrapper for soft borders around the game */}
                         <div className="w-full h-full rounded-[32px] overflow-hidden shadow-xl border-4 border-white bg-white relative">
                             {mediaConfig.renderType === 'html' && (
                                 <iframe
@@ -351,28 +361,45 @@ export default function GameShellView({
 
                 {/* --- OVERLAYS --- */}
                 <AnimatePresence mode="wait">
-                    {/* PAUSED OVERLAY */}
+                    {/* ✨ FIX: NEW PAUSED OVERLAY DESIGN */}
                     {status === 'paused' && (
                         <motion.div
                             key="paused"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 z-[40] flex flex-col items-center justify-center bg-white/80 backdrop-blur-md"
+                            className="absolute inset-0 z-[40] flex items-center justify-center bg-slate-900/50 backdrop-blur-[3px] p-6"
                         >
-                            <motion.div
-                                animate={{ y: [0, -10, 0] }}
-                                transition={{ repeat: Infinity, duration: 2 }}
-                                className="h-32 w-32 bg-amber-400 rounded-full flex items-center justify-center mb-6 text-white shadow-[0_8px_0_rgb(217,119,6)]"
-                            >
-                                <Pause size={64} className="fill-current" />
-                            </motion.div>
-                            <h2 className="text-4xl md:text-5xl font-black text-slate-800 tracking-tight mb-4">
-                                Game Paused!
-                            </h2>
-                            <p className="text-xl text-slate-500 font-bold text-center max-w-md">
-                                {`Time for a quick break! ${session.enableLearnerControls ? 'Click Play' : 'Let your teacher know'} when you are ready to start again.`}
-                            </p>
+                            <div className="bg-white p-8 md:p-12 rounded-[36px] shadow-2xl flex flex-col items-center text-center max-w-sm border-4 border-slate-100 relative">
+                                <motion.div
+                                    animate={{ y: [0, -10, 0] }}
+                                    transition={{
+                                        repeat: Infinity,
+                                        duration: 2,
+                                    }}
+                                    className="h-24 w-24 bg-amber-400 rounded-full flex items-center justify-center mb-6 text-white shadow-[0_8px_0_rgb(217,119,6)]"
+                                >
+                                    <Pause size={48} className="fill-current" />
+                                </motion.div>
+                                <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-4">
+                                    Game Paused
+                                </h2>
+                                <p className="text-lg text-slate-500 font-bold mb-8">
+                                    {`Take a breather! ${session.enableLearnerControls ? 'Click Resume' : 'Let your teacher know'} when you're ready to jump back in.`}
+                                </p>
+                                {session.enableLearnerControls && (
+                                    <button
+                                        onClick={onResume}
+                                        className="h-14 w-full rounded-2xl bg-emerald-400 hover:bg-emerald-300 active:translate-y-[4px] active:shadow-none transition-all shadow-[0_4px_0_rgb(5,150,105)] text-emerald-950 font-extrabold uppercase tracking-wide flex items-center justify-center gap-2 text-lg"
+                                    >
+                                        <Play
+                                            size={24}
+                                            className="fill-current"
+                                        />{' '}
+                                        Resume
+                                    </button>
+                                )}
+                            </div>
                         </motion.div>
                     )}
 
@@ -393,7 +420,6 @@ export default function GameShellView({
                                 <h2 className="text-4xl md:text-5xl font-black text-slate-800 mb-6">
                                     Awesome Job!
                                 </h2>
-
                                 {session?.isHandsFree === true ? (
                                     <div className="flex flex-col items-center gap-4 bg-sky-50 p-6 rounded-3xl border-4 border-sky-100">
                                         <Loader2

@@ -1,19 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useDispatch, useSelector } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-    LogOut,
-    Play,
-    Compass,
-    Sparkles,
-    LayoutDashboard,
-    CheckCircle2,
-    PauseCircle,
-} from 'lucide-react';
-import Link from 'next/link';
+import { LogOut, Sparkles, LayoutDashboard, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -42,8 +33,6 @@ export default function StudentPortal() {
     );
 
     const [isAutoLoggingOut, setIsAutoLoggingOut] = useState(false);
-
-    // ✨ FIX: Smart Overflow State
     const carouselContainerRef = useRef<HTMLDivElement>(null);
     const [isOverflowing, setIsOverflowing] = useState(false);
 
@@ -75,7 +64,6 @@ export default function StudentPortal() {
         refetchInterval: 5000,
     });
 
-    // Track the logout trigger with a ref so it only ever fires once
     const logoutTriggeredRef = React.useRef(false);
 
     const handleLogout = React.useCallback(() => {
@@ -86,7 +74,6 @@ export default function StudentPortal() {
         }
     }, [dispatch]);
 
-    // THE AUTO-LOGOUT LOGIC
     useEffect(() => {
         if (
             isSessionsFetched &&
@@ -110,12 +97,12 @@ export default function StudentPortal() {
         }
     }, [isSessionsFetched, sessions.length, handleLogout]);
 
+    // ✨ FIX: Simplified active session check. No more need to track 'isPaused' for the UI here!
     const activeSession = sessions.find(
         (s: ActivitySessionResponse) =>
             s.activitySessionStatus === 'in_progress' ||
             s.activitySessionStatus === 'paused',
     );
-    const isPaused = activeSession?.activitySessionStatus === 'paused';
 
     const upcoming = sessions.filter(
         (s: ActivitySessionResponse) =>
@@ -123,16 +110,12 @@ export default function StudentPortal() {
             s.activitySessionStatus !== 'paused',
     );
 
-    // ✨ FIX: Smart Width Detection for the Carousel
     useEffect(() => {
         const checkWidth = () => {
             if (carouselContainerRef.current) {
                 const containerWidth = carouselContainerRef.current.offsetWidth;
-                // Card width (300px md / 260px sm) + Gap (16px)
                 const itemWidth = window.innerWidth >= 768 ? 316 : 276;
                 const totalContentWidth = upcoming.length * itemWidth;
-
-                // If the total width of the items exceeds the container, enable the marquee
                 setIsOverflowing(totalContentWidth > containerWidth);
             }
         };
@@ -142,14 +125,12 @@ export default function StudentPortal() {
         return () => window.removeEventListener('resize', checkWidth);
     }, [upcoming.length]);
 
-    // If it overflows, duplicate it to create a seamless infinite loop. Otherwise, just map it once.
     const carouselItems = isOverflowing
         ? Array(8).fill(upcoming).flat()
         : upcoming;
 
     if (isUserLoading) return <PortalLoadingScreen />;
 
-    // AUTO-LOGOUT UI SCREEN
     if (isAutoLoggingOut) {
         return (
             <div className="h-screen w-full bg-sky-50 flex flex-col items-center justify-center relative overflow-hidden">
@@ -176,12 +157,10 @@ export default function StudentPortal() {
 
     return (
         <div className="h-screen w-full bg-sky-50 font-sans text-slate-800 relative overflow-hidden flex flex-col">
-            {/* Playful Background blobs (kept behind the content) */}
             <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-300/20 rounded-full blur-[80px] pointer-events-none" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-emerald-300/20 rounded-full blur-[80px] pointer-events-none" />
 
             <div className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-6 lg:p-10 z-10 overflow-hidden">
-                {/* --- MINIMAL HEADER --- */}
                 <header className="flex items-center justify-between mb-6 shrink-0">
                     <div className="flex items-center gap-3">
                         <Avatar className="h-12 w-12 rounded-[1rem] border-4 border-white shadow-sm">
@@ -216,7 +195,6 @@ export default function StudentPortal() {
                     </Button>
                 </header>
 
-                {/* --- HERO: THE LARGE BANNER STAGE --- */}
                 <main className="flex-1 flex flex-col justify-center min-h-0">
                     <AnimatePresence mode="wait">
                         {activeSession ? (
@@ -228,7 +206,6 @@ export default function StudentPortal() {
                                 className="w-full h-full max-h-[500px]"
                             >
                                 <Card className="relative w-full h-full border-4 lg:border-8 border-white shadow-xl bg-indigo-500 overflow-hidden rounded-[2.5rem] lg:rounded-[3rem]">
-                                    {/* 🖼️ THE FULL-SIZE BANNER IMAGE */}
                                     {activeSession.activity?.banner &&
                                         FormatService.formatStrapiMedia(
                                             activeSession.activity.banner,
@@ -238,57 +215,32 @@ export default function StudentPortal() {
                                                     activeSession.activity
                                                         .banner,
                                                 )}
-                                                className={cn(
-                                                    'absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] scale-110',
-                                                    isPaused
-                                                        ? 'opacity-40 blur-sm' // Removed grayscale, kept color but blurred
-                                                        : 'opacity-70 hover:scale-100',
-                                                )}
+                                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] scale-110 opacity-70 hover:scale-100"
                                                 alt="Activity Banner"
                                             />
                                         )}
-                                    {/* Gradient Scrim for Readability - Changed to colorful indigo instead of slate */}
                                     <div className="absolute inset-0 bg-gradient-to-t from-indigo-950/90 via-indigo-900/40 to-transparent md:bg-gradient-to-r md:from-indigo-950/90 md:via-indigo-900/50 md:to-transparent" />
 
-                                    {/* CONTENT OVERLAY */}
                                     <div className="absolute inset-0 flex flex-col justify-center p-8 lg:p-20">
                                         <div className="max-w-xl space-y-4 lg:space-y-6">
+                                            {/* ✨ FIX: Cleaned up dynamic text & UI states */}
                                             <motion.div
                                                 initial={{ opacity: 0, x: -20 }}
                                                 animate={{ opacity: 1, x: 0 }}
                                                 transition={{ delay: 0.2 }}
                                                 className="flex items-center gap-2"
                                             >
-                                                {isPaused ? (
-                                                    <>
-                                                        <PauseCircle
-                                                            size={32}
-                                                            className="text-amber-300"
-                                                        />
-                                                        <span className="text-[14px] font-black text-amber-300 uppercase tracking-[0.2em]">
-                                                            Game Paused
-                                                        </span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <span className="h-3 w-3 rounded-full bg-green-400 animate-pulse border-2 border-white" />
-                                                        <span className="text-[12px] font-black text-green-300 uppercase tracking-[0.2em]">
-                                                            Ready to Play
-                                                        </span>
-                                                    </>
-                                                )}
+                                                <span className="h-3 w-3 rounded-full bg-green-400 animate-pulse border-2 border-white" />
+                                                <span className="text-[12px] font-black text-green-300 uppercase tracking-[0.2em]">
+                                                    Activity Ready
+                                                </span>
                                             </motion.div>
 
                                             <motion.h2
                                                 initial={{ opacity: 0, x: -20 }}
                                                 animate={{ opacity: 1, x: 0 }}
                                                 transition={{ delay: 0.3 }}
-                                                className={cn(
-                                                    'text-4xl lg:text-6xl font-black tracking-tight leading-none transition-colors drop-shadow-md',
-                                                    isPaused
-                                                        ? 'text-indigo-200'
-                                                        : 'text-white',
-                                                )}
+                                                className="text-4xl lg:text-6xl font-black tracking-tight leading-none text-white transition-colors drop-shadow-md"
                                             >
                                                 {activeSession.activity?.name}
                                             </motion.h2>
@@ -299,39 +251,20 @@ export default function StudentPortal() {
                                                 transition={{ delay: 0.4 }}
                                                 className="text-indigo-100 text-base lg:text-lg font-bold max-w-md leading-relaxed opacity-90"
                                             >
-                                                {isPaused
-                                                    ? 'Take a quick breather! Your teacher has paused the game. It will start again soon.'
-                                                    : 'Your game is ready! Click the button below to start having fun.'}
+                                                Your activity is loading up!
+                                                Have fun and do your best.
                                             </motion.p>
 
-                                            <AnimatePresence mode="wait">
-                                                {!isPaused && (
-                                                    <motion.div
-                                                        key="game-launcher"
-                                                        initial={{
-                                                            opacity: 0,
-                                                            y: 20,
-                                                        }}
-                                                        animate={{
-                                                            opacity: 1,
-                                                            y: 0,
-                                                        }}
-                                                        exit={{
-                                                            opacity: 0,
-                                                            y: -20,
-                                                        }}
-                                                        transition={{
-                                                            delay: 0.5,
-                                                        }}
-                                                        className="pt-4"
-                                                    >
-                                                        {/* ✨ INJECTED LAUNCHER COMPONENT ✨ */}
-                                                        <ActivitySessionLauncher
-                                                            user={user}
-                                                        />
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 20 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: 0.5 }}
+                                                className="pt-4"
+                                            >
+                                                <ActivitySessionLauncher
+                                                    user={user}
+                                                />
+                                            </motion.div>
                                         </div>
                                     </div>
                                 </Card>
@@ -357,7 +290,6 @@ export default function StudentPortal() {
                     </AnimatePresence>
                 </main>
 
-                {/* --- CAROUSEL: UPCOMING PROMOTION --- */}
                 <footer className="mt-auto pt-8 shrink-0 overflow-hidden relative">
                     <div className="flex items-center gap-2 mb-4 px-2">
                         <Sparkles
@@ -394,7 +326,7 @@ export default function StudentPortal() {
                                           duration: Math.max(
                                               30,
                                               carouselItems.length * 2,
-                                          ), // Adjust speed dynamically
+                                          ),
                                       }
                                     : {}
                             }
