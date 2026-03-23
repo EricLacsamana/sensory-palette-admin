@@ -14,6 +14,7 @@ import {
     ShieldAlert,
     ArrowUpDown,
     Filter,
+    TrendingUp,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,6 @@ import {
     DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
-import { Separator } from '@/components/ui/separator';
 
 import { getStudents } from '@/api/students';
 import StudentsTable from '@/components/StudentsTable';
@@ -54,48 +54,53 @@ function useDebounce<T>(value: T, delay: number): T {
     return debouncedValue;
 }
 
-const MetricCard = ({
-    icon: Icon,
+// --- UNIFIED DASHBOARD STAT CARD ---
+const DashboardStatCard = ({
     title,
     value,
-    subtitle,
     trend,
-    colorTheme,
+    icon: Icon,
+    colorClass,
+    isLoading,
 }: any) => (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-start gap-4 flex-1 min-w-[200px]">
+    <div className="bg-white rounded-[24px] border border-slate-200 p-6 flex flex-col justify-between hover:shadow-lg transition-all duration-300 relative overflow-hidden group h-full">
         <div
             className={cn(
-                'p-3 rounded-xl shrink-0',
-                colorTheme.bg,
-                colorTheme.text,
+                'absolute -right-4 -top-4 opacity-[0.03] transition-transform group-hover:scale-110 group-hover:opacity-[0.07]',
+                colorClass,
             )}
         >
-            <Icon size={20} />
+            <Icon size={90} />
         </div>
-        <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+        <div className="flex items-center gap-3 mb-4 relative z-10">
+            <div
+                className={cn(
+                    'p-2.5 rounded-xl shrink-0',
+                    colorClass
+                        .replace('text-', 'bg-')
+                        .replace('600', '50')
+                        .replace('500', '50'),
+                )}
+            >
+                <Icon size={18} className={colorClass} />
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest select-none">
                 {title}
             </span>
-            <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-slate-900 leading-none">
+        </div>
+        <div className="relative z-10">
+            {isLoading ? (
+                <div className="h-9 w-24 bg-slate-100 animate-pulse rounded-xl mb-1" />
+            ) : (
+                <div className="text-3xl font-black text-slate-900 tracking-tight tabular-nums">
                     {value}
-                </span>
-                {trend && (
-                    <span
-                        className={cn(
-                            'text-[10px] font-bold px-1.5 py-0.5 rounded-md',
-                            trend.isPositive
-                                ? 'bg-emerald-50 text-emerald-600'
-                                : 'bg-rose-50 text-rose-600',
-                        )}
-                    >
-                        {trend.value}
-                    </span>
-                )}
-            </div>
-            <span className="text-xs font-medium text-slate-500 mt-1.5">
-                {subtitle}
-            </span>
+                </div>
+            )}
+            {trend && (
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5 flex items-center gap-1.5">
+                    <TrendingUp size={12} className={colorClass} /> {trend}
+                </div>
+            )}
         </div>
     </div>
 );
@@ -122,11 +127,9 @@ export default function StudentsDirectory() {
         queryFn: getStudents,
     });
 
-    // 2. ✨ ENHANCED: Client-Side Search and Processing
     const processedStudents = useMemo(() => {
         let result = [...studentsList];
 
-        // A. Search in Memory (Name, ID, or Email)
         if (debouncedSearch) {
             const query = debouncedSearch.toLowerCase();
             result = result.filter(
@@ -138,13 +141,11 @@ export default function StudentsDirectory() {
             );
         }
 
-        // B. Filter by Status
         if (statusFilter === 'active')
             result = result.filter((s) => !s.blocked);
         if (statusFilter === 'blocked')
             result = result.filter((s) => s.blocked);
 
-        // C. Sort
         result.sort((a, b) => {
             if (sortBy === 'name-asc')
                 return (a.firstName || '').localeCompare(b.firstName || '');
@@ -161,7 +162,6 @@ export default function StudentsDirectory() {
         return result;
     }, [studentsList, statusFilter, sortBy, debouncedSearch]);
 
-    // 3. Metrics are now stable because they reference studentsList (the full set)
     const totalCount = studentsList.length;
     const activeCount = studentsList.filter((s) => !s.blocked).length;
     const blockedCount = totalCount - activeCount;
@@ -186,6 +186,8 @@ export default function StudentsDirectory() {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC]">
+            <Toaster position="top-right" richColors closeButton />
+
             <div
                 className="fixed inset-0 pointer-events-none opacity-[0.4]"
                 style={{
@@ -197,34 +199,30 @@ export default function StudentsDirectory() {
                 }}
             />
 
-            <div className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-8">
-                <Toaster position="top-right" richColors closeButton />
-
-                <header className="flex flex-col gap-8">
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5">
-                                <Database
-                                    size={14}
-                                    className="fill-indigo-600/20"
-                                />{' '}
-                                Learner Database
-                            </div>
-                            <h1 className="text-3xl lg:text-4xl font-black tracking-tight text-slate-900 leading-none">
-                                Student Roster
-                            </h1>
-                            <p className="text-sm font-medium text-slate-500 max-w-xl">
-                                Manage your assigned learners, track clinical
-                                status, and enroll new students.
-                            </p>
+            <div className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-8 pb-24">
+                {/* --- UNIFIED DASHBOARD HEADER --- */}
+                <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm shrink-0">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5 mb-2">
+                            <Database size={14} className="text-indigo-600" />{' '}
+                            Learner Database
                         </div>
+                        <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none">
+                            Student Roster
+                        </h1>
+                        <p className="text-sm font-medium text-slate-500 mt-2 max-w-xl">
+                            Manage your assigned learners, track clinical
+                            status, and enroll new students.
+                        </p>
+                    </div>
 
+                    <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-3">
                         <Dialog
                             open={isDialogOpen}
                             onOpenChange={setIsDialogOpen}
                         >
                             <DialogTrigger asChild>
-                                <Button className="h-12 pl-5 pr-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 font-bold text-xs uppercase tracking-wider transition-all active:scale-95">
+                                <Button className="h-12 w-full md:w-auto px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 font-bold text-xs uppercase tracking-wider transition-all active:scale-95">
                                     <Plus className="mr-2 h-5 w-5" /> Enroll
                                     Student
                                 </Button>
@@ -241,51 +239,43 @@ export default function StudentsDirectory() {
                             </DialogContent>
                         </Dialog>
                     </div>
-
-                    <div className="flex flex-wrap gap-4">
-                        <MetricCard
-                            icon={Users}
-                            title="Total Enrolled"
-                            value={totalCount}
-                            subtitle="All assigned students"
-                            colorTheme={{
-                                bg: 'bg-blue-50',
-                                text: 'text-blue-600',
-                            }}
-                        />
-                        <MetricCard
-                            icon={UserCheck}
-                            title="Active Status"
-                            value={activeCount}
-                            subtitle="Currently engaging in therapy"
-                            trend={{ value: 'Ready', isPositive: true }}
-                            colorTheme={{
-                                bg: 'bg-emerald-50',
-                                text: 'text-emerald-600',
-                            }}
-                        />
-                        <MetricCard
-                            icon={ShieldAlert}
-                            title="Needs Review"
-                            value={blockedCount}
-                            subtitle="Blocked or suspended accounts"
-                            trend={
-                                blockedCount > 0
-                                    ? { value: 'Attention', isPositive: false }
-                                    : null
-                            }
-                            colorTheme={{
-                                bg: 'bg-amber-50',
-                                text: 'text-amber-600',
-                            }}
-                        />
-                    </div>
                 </header>
 
-                <div className="flex flex-col lg:flex-row gap-4 items-center justify-between sticky top-4 bg-white/80 backdrop-blur-xl z-30 py-3 px-4 rounded-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                    <div className="relative w-full lg:w-[400px] group">
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            {/* We use searchTerm here to show UI feedback while typing */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+                    <DashboardStatCard
+                        title="Total Enrolled"
+                        value={totalCount}
+                        trend="All assigned students"
+                        icon={Users}
+                        colorClass="text-blue-600"
+                        isLoading={isLoading}
+                    />
+                    <DashboardStatCard
+                        title="Active Status"
+                        value={activeCount}
+                        trend="Currently engaging in therapy"
+                        icon={UserCheck}
+                        colorClass="text-emerald-600"
+                        isLoading={isLoading}
+                    />
+                    <DashboardStatCard
+                        title="Needs Review"
+                        value={blockedCount}
+                        trend={
+                            blockedCount > 0
+                                ? 'Blocked or suspended accounts'
+                                : 'All clear'
+                        }
+                        icon={ShieldAlert}
+                        colorClass="text-amber-500"
+                        isLoading={isLoading}
+                    />
+                </div>
+
+                {/* --- SEARCH WIDGET BOX --- */}
+                <div className="flex flex-col sm:flex-row gap-4 items-center justify-between sticky top-4 bg-white/80 backdrop-blur-xl z-30 py-3 px-4 rounded-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] shrink-0">
+                    <div className="relative w-full sm:w-[320px] group">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                             {searchTerm !== debouncedSearch ? (
                                 <Loader2 className="h-4 w-4 text-indigo-600 animate-spin" />
                             ) : (
@@ -293,19 +283,19 @@ export default function StudentsDirectory() {
                             )}
                         </div>
                         <Input
-                            className="pl-12 bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 transition-all rounded-xl h-12 text-sm font-semibold shadow-inner"
+                            className="pl-11 bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50/50 transition-all rounded-xl h-11 text-sm font-medium placeholder:text-slate-400 shadow-inner"
                             placeholder="Search by name, ID, or email..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
 
-                    <div className="flex items-center gap-2 w-full lg:w-auto overflow-x-auto">
+                    <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="outline"
-                                    className="h-12 rounded-xl border-slate-200 bg-white text-slate-600 hover:text-indigo-600 font-bold text-[11px] uppercase tracking-widest shadow-sm"
+                                    className="h-11 rounded-xl border-slate-200 bg-white text-slate-600 hover:text-indigo-600 font-bold text-[11px] uppercase tracking-widest shadow-sm"
                                 >
                                     <ArrowUpDown size={14} className="mr-2" />{' '}
                                     Sort
@@ -353,7 +343,7 @@ export default function StudentsDirectory() {
                                 <Button
                                     variant="outline"
                                     className={cn(
-                                        'h-12 rounded-xl font-bold text-[11px] uppercase tracking-widest shadow-sm',
+                                        'h-11 rounded-xl font-bold text-[11px] uppercase tracking-widest shadow-sm',
                                         statusFilter !== 'all'
                                             ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
                                             : 'border-slate-200 bg-white text-slate-600',
@@ -395,34 +385,31 @@ export default function StudentsDirectory() {
                             </DropdownMenuContent>
                         </DropdownMenu>
 
-                        <Separator
-                            orientation="vertical"
-                            className="h-8 mx-2 bg-slate-200"
-                        />
+                        <div className="h-8 w-px bg-slate-200 mx-2 hidden sm:block" />
 
                         <Tabs
                             value={viewMode}
                             onValueChange={(v: any) => setViewMode(v)}
                         >
-                            <TabsList className="h-12 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/50">
+                            <TabsList className="h-11 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/50">
                                 <TabsTrigger
                                     value="grid"
-                                    className="h-9 rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:text-indigo-600"
+                                    className="h-8 rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:text-indigo-600 shadow-sm"
                                 >
-                                    <LayoutGrid size={16} />
+                                    <LayoutGrid size={14} />
                                 </TabsTrigger>
                                 <TabsTrigger
                                     value="table"
-                                    className="h-9 rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:text-indigo-600"
+                                    className="h-8 rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:text-indigo-600 shadow-sm"
                                 >
-                                    <List size={16} />
+                                    <List size={14} />
                                 </TabsTrigger>
                             </TabsList>
                         </Tabs>
                     </div>
                 </div>
 
-                <main className="min-h-[50vh]">
+                <main className="min-h-[50vh] flex flex-col w-full">
                     {(searchTerm || statusFilter !== 'all') &&
                         processedStudents.length > 0 && (
                             <div className="mb-6 flex items-center gap-2 text-sm font-bold text-slate-500">
@@ -433,7 +420,7 @@ export default function StudentsDirectory() {
                                         setSearchTerm('');
                                         setStatusFilter('all');
                                     }}
-                                    className="h-auto p-0 text-indigo-600 ml-2 text-xs uppercase tracking-widest"
+                                    className="h-auto p-0 text-indigo-600 ml-2 text-[10px] uppercase tracking-widest"
                                 >
                                     Clear Filters
                                 </Button>
@@ -442,7 +429,7 @@ export default function StudentsDirectory() {
 
                     {processedStudents.length > 0 ? (
                         viewMode === 'grid' ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-stretch content-start w-full">
                                 {processedStudents.map((student) => (
                                     <StudentCard
                                         key={student.id}
@@ -451,25 +438,25 @@ export default function StudentsDirectory() {
                                 ))}
                             </div>
                         ) : (
-                            <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-500">
+                            <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
                                 <StudentsTable students={processedStudents} />
                             </div>
                         )
                     ) : (
-                        <div className="flex flex-col items-center justify-center py-32 text-center border-2 border-dashed border-slate-200 rounded-[3rem] bg-white shadow-sm">
-                            <div className="h-24 w-24 bg-white rounded-full flex items-center justify-center border border-slate-100 shadow-xl mb-6">
-                                <Search size={36} className="text-indigo-300" />
+                        <div className="flex flex-col items-center justify-center min-h-[30vh] text-center w-full border-2 border-dashed border-slate-200 rounded-[32px] bg-white">
+                            <div className="h-16 w-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
+                                <Search size={24} className="text-slate-300" />
                             </div>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                            <h3 className="text-lg font-black text-slate-900">
                                 No learners found
                             </h3>
-                            <p className="text-sm font-medium text-slate-500 mt-3 max-w-[360px]">
+                            <p className="text-sm font-medium text-slate-500 mt-2 max-w-[320px]">
                                 Try adjusting your search or filters.
                             </p>
                         </div>
                     )}
                 </main>
-                <footer className="h-16 w-full shrink-0" aria-hidden="true" />
+                <div className="h-16 w-full shrink-0" aria-hidden="true" />
             </div>
         </div>
     );

@@ -60,6 +60,7 @@ const ReactQuillWrapper = dynamic(
     },
 );
 import 'react-quill-new/dist/quill.snow.css';
+import { Toaster } from '@/components/ui/sonner';
 
 // --- Constants ---
 const STATUS_OPTIONS = ['active', 'disabled', 'coming_soon'];
@@ -472,83 +473,103 @@ export default function ActivityManager() {
     }
 
     return (
-        <div className="h-screen w-full bg-[#F8FAFC] font-sans text-slate-900 flex flex-col overflow-hidden">
-            <header className="shrink-0 z-30 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-md shadow-indigo-200">
-                        <Database className="text-white" size={20} />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-black tracking-tight text-slate-900 leading-none">
+        <div className="min-h-screen bg-[#F8FAFC]">
+            <Toaster position="top-right" richColors closeButton />
+
+            <div
+                className="fixed inset-0 pointer-events-none opacity-[0.4]"
+                style={{
+                    backgroundImage:
+                        'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)',
+                    backgroundSize: '40px 40px',
+                    maskImage:
+                        'linear-gradient(to bottom, black 40%, transparent 100%)',
+                }}
+            />
+
+            <div className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-8 pb-24">
+                {/* --- UNIFIED DASHBOARD HEADER --- */}
+                <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm shrink-0">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5 mb-2">
+                            <Database size={14} className="text-indigo-600" />{' '}
+                            Content Registry
+                        </div>
+                        <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none">
                             Content Manager
                         </h1>
-                        <p className="text-[11px] font-bold text-slate-500 mt-1 uppercase tracking-widest">
-                            Activity & Activity Registry
+                        <p className="text-sm font-medium text-slate-500 mt-2 max-w-xl">
+                            Deploy, configure, and manage system activities and
+                            modules.
                         </p>
                     </div>
-                </div>
-                <button
-                    onClick={handleOpenCreate}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-md shadow-indigo-200 active:scale-95"
-                >
-                    <Plus size={16} /> New Activity
-                </button>
-            </header>
 
-            <main className="flex-1 flex flex-col min-h-0 max-w-[1600px] w-full mx-auto p-4 sm:p-6 lg:p-8">
-                <div className="shrink-0 bg-white border border-slate-200 p-3 rounded-2xl mb-4 sm:mb-6 flex flex-col sm:flex-row gap-3 shadow-sm">
-                    <div className="relative flex-1 group">
+                    <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-3">
+                        <button
+                            onClick={handleOpenCreate}
+                            className="h-12 w-full md:w-auto px-6 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-widest rounded-2xl transition-all shadow-md shadow-indigo-200 active:scale-95"
+                        >
+                            <Plus size={16} /> New Activity
+                        </button>
+                    </div>
+                </header>
+
+                {/* --- SEARCH WIDGET BOX --- */}
+                <div className="flex flex-col sm:flex-row gap-4 items-center justify-between sticky top-4 bg-white/80 backdrop-blur-xl z-30 py-3 px-4 rounded-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] shrink-0">
+                    <div className="relative w-full sm:w-[320px] group">
                         <Search
-                            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"
                             size={16}
                         />
                         <input
                             type="text"
                             placeholder="Search by Activity Name or UID..."
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-10 pr-4 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm font-medium transition-all"
+                            className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm font-medium transition-all shadow-inner"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <button
-                        onClick={() => {
-                            refetch();
-                            toast.info('Syncing registry...');
-                        }}
-                        className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
-                    >
-                        <RefreshCcw
-                            size={14}
-                            className={cn(
-                                (isLoading ||
-                                    createMutation.isPending ||
-                                    updateMutation.isPending ||
-                                    deleteMutation.isPending) &&
-                                    'animate-spin',
-                            )}
-                        />{' '}
-                        Sync
-                    </button>
+                    <div className="flex items-center w-full sm:w-auto gap-2">
+                        <button
+                            onClick={() => {
+                                refetch();
+                                toast.info('Syncing registry...');
+                            }}
+                            className="h-11 px-5 border border-slate-200 text-slate-600 rounded-xl text-[11px] font-bold uppercase tracking-widest hover:bg-slate-50 hover:text-indigo-600 transition-colors flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto"
+                        >
+                            <RefreshCcw
+                                size={14}
+                                className={cn(
+                                    (isLoading ||
+                                        createMutation.isPending ||
+                                        updateMutation.isPending ||
+                                        deleteMutation.isPending) &&
+                                        'animate-spin text-indigo-500',
+                                )}
+                            />{' '}
+                            Sync
+                        </button>
+                    </div>
                 </div>
 
-                <div className="flex-1 min-h-0 flex flex-col bg-white border border-slate-200 rounded-[24px] shadow-sm overflow-hidden">
+                <div className="flex-1 min-h-[50vh] flex flex-col bg-white border border-slate-200 rounded-[32px] shadow-sm overflow-hidden">
                     <div className="flex-1 overflow-auto custom-scrollbar">
                         <table className="w-full text-left text-sm whitespace-nowrap relative">
                             <thead className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm shadow-sm border-b border-slate-200">
                                 <tr>
-                                    <th className="px-6 py-4 font-black text-[10px] uppercase tracking-widest text-slate-500">
+                                    <th className="px-6 py-5 font-black text-[10px] uppercase tracking-widest text-slate-500">
                                         Activity Identity
                                     </th>
-                                    <th className="px-6 py-4 font-black text-[10px] uppercase tracking-widest text-slate-500">
+                                    <th className="px-6 py-5 font-black text-[10px] uppercase tracking-widest text-slate-500">
                                         Type & Status
                                     </th>
-                                    <th className="px-6 py-4 font-black text-[10px] uppercase tracking-widest text-slate-500">
+                                    <th className="px-6 py-5 font-black text-[10px] uppercase tracking-widest text-slate-500">
                                         Categories
                                     </th>
-                                    <th className="px-6 py-4 font-black text-[10px] uppercase tracking-widest text-slate-500">
+                                    <th className="px-6 py-5 font-black text-[10px] uppercase tracking-widest text-slate-500">
                                         Duration
                                     </th>
-                                    <th className="px-6 py-4 font-black text-[10px] uppercase tracking-widest text-slate-500 text-right">
+                                    <th className="px-6 py-5 font-black text-[10px] uppercase tracking-widest text-slate-500 text-right">
                                         Actions
                                     </th>
                                 </tr>
@@ -578,8 +599,8 @@ export default function ActivityManager() {
                                             key={activity.id}
                                             className="hover:bg-slate-50/50 transition-colors group"
                                         >
-                                            <td className="px-6 py-4 flex items-center gap-3">
-                                                <div className="h-10 w-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0 border border-slate-200 overflow-hidden">
+                                            <td className="px-6 py-4 flex items-center gap-4">
+                                                <div className="h-12 w-12 bg-slate-100 rounded-xl flex items-center justify-center shrink-0 border border-slate-200 overflow-hidden shadow-sm">
                                                     {activity.banner?.url ? (
                                                         <img
                                                             src={`${process.env.NEXT_PUBLIC_API_URL}${activity.banner.url}`}
@@ -693,7 +714,9 @@ export default function ActivityManager() {
                         </table>
                     </div>
                 </div>
-            </main>
+
+                <div className="h-16 w-full shrink-0" aria-hidden="true" />
+            </div>
 
             {/* --- CREATE / EDIT MODAL --- */}
             <AnimatePresence>
@@ -770,10 +793,10 @@ export default function ActivityManager() {
                                             }}
                                             placeholder="e.g., Shape Sorter Activity"
                                             className={cn(
-                                                'w-full border rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none transition-colors',
+                                                'w-full border rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none transition-colors h-11 bg-slate-50',
                                                 errors.name
                                                     ? 'border-rose-500 focus:ring-2 focus:ring-rose-500/20'
-                                                    : 'border-slate-200 focus:ring-2 focus:ring-indigo-500/20',
+                                                    : 'border-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500/20',
                                             )}
                                         />
                                         {errors.name && (
@@ -799,7 +822,7 @@ export default function ActivityManager() {
                                                             e.target.value,
                                                     })
                                                 }
-                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none h-11"
                                             >
                                                 {STATUS_OPTIONS.map((opt) => (
                                                     <option
@@ -836,7 +859,7 @@ export default function ActivityManager() {
                                                     }));
                                                 }}
                                                 className={cn(
-                                                    'w-full bg-white border rounded-xl px-3 py-2 text-sm font-medium focus:outline-none transition-colors',
+                                                    'w-full bg-slate-50 border rounded-xl px-3 py-2 text-sm font-medium focus:bg-white focus:outline-none transition-colors h-11',
                                                     errors.activityType
                                                         ? 'border-rose-500 focus:ring-2 focus:ring-rose-500/20'
                                                         : 'border-slate-200 focus:ring-2 focus:ring-indigo-500/20',
@@ -1372,7 +1395,7 @@ export default function ActivityManager() {
                                                                 : '15'
                                                         }
                                                         className={cn(
-                                                            'w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none font-mono',
+                                                            'w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none font-mono h-11 bg-slate-50',
                                                             isMediaTracked &&
                                                                 'bg-slate-50 text-slate-500',
                                                         )}
@@ -1410,7 +1433,7 @@ export default function ActivityManager() {
                                                             }}
                                                             placeholder="https://"
                                                             className={cn(
-                                                                'w-full border rounded-xl pl-9 pr-3 py-2 text-sm outline-none transition-colors',
+                                                                'w-full border rounded-xl pl-9 pr-3 py-2 text-sm outline-none focus:bg-white transition-colors h-11 bg-slate-50',
                                                                 errors.mediaSource
                                                                     ? 'border-rose-500 focus:ring-2 focus:ring-rose-500/20'
                                                                     : 'border-slate-200 focus:ring-2 focus:ring-indigo-500/20',
@@ -1441,7 +1464,7 @@ export default function ActivityManager() {
                                                         })
                                                     }
                                                     rows={3}
-                                                    className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none custom-scrollbar"
+                                                    className="w-full border border-slate-200 rounded-xl p-3 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none custom-scrollbar bg-slate-50"
                                                     placeholder="Detailed objective and instructions..."
                                                 />
                                             </div>
@@ -1467,7 +1490,7 @@ export default function ActivityManager() {
                                         createMutation.isPending ||
                                         updateMutation.isPending
                                     }
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-md transition-all"
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest shadow-md transition-all h-11"
                                 >
                                     {isUploading ||
                                     createMutation.isPending ||
@@ -1530,13 +1553,13 @@ export default function ActivityManager() {
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => setIsDeleteModalOpen(false)}
-                                    className="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-xs text-slate-600 hover:bg-slate-50"
+                                    className="flex-1 h-11 rounded-xl border border-slate-200 font-bold text-xs text-slate-600 hover:bg-slate-50"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={confirmDelete}
-                                    className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-widest"
+                                    className="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-widest"
                                 >
                                     {deleteMutation.isPending
                                         ? 'Deleting...'

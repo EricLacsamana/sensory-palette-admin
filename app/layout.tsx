@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: 'Student Directory Management',
+    title: 'TLC SPED & Therapy Center',
     description: 'Therapist Caseload Management System',
 };
 

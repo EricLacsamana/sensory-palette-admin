@@ -45,10 +45,11 @@ import {
     Focus,
     Layers,
     BrainCircuit,
+    User,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { getActivitySessionsNew } from '@/api/activity-session';
 import { getStudentAnalytics } from '@/api/analytics';
@@ -58,6 +59,7 @@ import { FormatService } from '@/utils/helpers';
 import { UserAvatar } from '@/components/UserAvatar';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { ActivitySessionResponse } from '@/types/activitiy-session';
+import { Toaster } from '@/components/ui/sonner';
 
 // --- ICON MAPPING ---
 const PATTERN_ICONS: Record<string, any> = {
@@ -172,6 +174,57 @@ const EmptyWidgetState = ({
         <span className="text-xs font-bold uppercase tracking-widest text-center px-4">
             {message}
         </span>
+    </div>
+);
+
+// --- UNIFIED DASHBOARD STAT CARD ---
+const DashboardStatCard = ({
+    title,
+    value,
+    trend,
+    icon: Icon,
+    colorClass,
+    isLoading,
+}: any) => (
+    <div className="bg-white rounded-[24px] border border-slate-200 p-6 flex flex-col justify-between hover:shadow-lg transition-all duration-300 relative overflow-hidden group h-full">
+        <div
+            className={cn(
+                'absolute -right-4 -top-4 opacity-[0.03] transition-transform group-hover:scale-110 group-hover:opacity-[0.07]',
+                colorClass,
+            )}
+        >
+            <Icon size={90} />
+        </div>
+        <div className="flex items-center gap-3 mb-4 relative z-10">
+            <div
+                className={cn(
+                    'p-2.5 rounded-xl shrink-0',
+                    colorClass
+                        .replace('text-', 'bg-')
+                        .replace('600', '50')
+                        .replace('500', '50'),
+                )}
+            >
+                <Icon size={18} className={colorClass} />
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest select-none">
+                {title}
+            </span>
+        </div>
+        <div className="relative z-10">
+            {isLoading ? (
+                <div className="h-9 w-24 bg-slate-100 animate-pulse rounded-xl mb-1" />
+            ) : (
+                <div className="text-3xl font-black text-slate-900 tracking-tight tabular-nums">
+                    {value}
+                </div>
+            )}
+            {trend && (
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5 flex items-center gap-1.5">
+                    <TrendingUp size={12} className={colorClass} /> {trend}
+                </div>
+            )}
+        </div>
     </div>
 );
 
@@ -734,196 +787,192 @@ export default function StudentDashboard() {
     const { overviewMetrics, charts } = analytics || {};
     const displayRadarData = charts?.behavioralRadar || [];
 
-    const summaryMetrics = [
-        {
-            label: 'Avg Accuracy',
-            value: `${overviewMetrics?.averageAccuracy || 0}%`,
-            icon: Target,
-            color: 'text-emerald-500',
-            bg: 'bg-emerald-50',
-        },
-        {
-            label: 'Therapy Time',
-            value: `${overviewMetrics?.totalTherapyHours || 0}h`,
-            icon: Clock,
-            color: 'text-amber-500',
-            bg: 'bg-amber-50',
-        },
-        {
-            label: 'Total Sessions',
-            value: overviewMetrics?.totalSessionsCompleted || 0,
-            icon: Zap,
-            color: 'text-rose-500',
-            bg: 'bg-rose-50',
-        },
-    ];
-
     return (
-        <div className="min-h-screen w-full bg-[#F8FAFC] flex flex-col font-sans text-slate-900 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
+        <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-x-hidden relative">
+            <Toaster position="top-right" richColors closeButton />
+
+            <div
+                className="fixed inset-0 pointer-events-none opacity-[0.4]"
+                style={{
+                    backgroundImage:
+                        'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)',
+                    backgroundSize: '40px 40px',
+                    maskImage:
+                        'linear-gradient(to bottom, black 40%, transparent 100%)',
+                }}
+            />
+
             <motion.div
                 initial="hidden"
                 animate="show"
                 variants={pageVariants}
-                className="max-w-[1600px] w-full mx-auto flex flex-col pb-10 gap-6"
+                className="max-w-[1600px] w-full mx-auto p-6 lg:p-8 flex flex-col pb-24 gap-6 relative z-10"
             >
-                {/* --- RESPONSIVE GRID HEADER --- */}
+                {/* --- UNIFIED DASHBOARD HEADER --- */}
                 <motion.header
                     variants={itemVariants}
-                    className="grid grid-cols-1 xl:grid-cols-[auto_1fr_auto] gap-6 xl:gap-8 items-center bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm"
+                    className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm shrink-0 w-full"
                 >
-                    {/* PROFILE BLOCK */}
-                    <div className="flex items-center gap-4 sm:gap-6 min-w-0">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => router.back()}
-                            className="rounded-2xl h-12 w-12 border-slate-200 hover:bg-slate-50 shrink-0"
-                        >
-                            <ArrowLeft size={20} />
-                        </Button>
-                        <div className="flex items-center gap-4 sm:gap-5 min-w-0">
-                            <UserAvatar
-                                src={FormatService.formatStrapiMedia(
-                                    student?.profilePicture,
-                                    'thumbnail',
-                                )}
-                                size="md"
-                                showStatus={true}
-                                name={student?.firstName}
-                                className="shadow-sm border border-slate-100 shrink-0"
-                            />
-                            <div className="flex flex-col min-w-0">
-                                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 leading-tight truncate">
-                                    {student?.firstName} {student?.lastName}
-                                </h1>
-                                <TechnicalLabel className="text-indigo-600 truncate">
-                                    ID: #{studentId.padStart(4, '0')}
-                                </TechnicalLabel>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* DEMOGRAPHICS BLOCK (GRID PREVENTS TRIANGLE) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 border-y xl:border-y-0 xl:border-x border-slate-100 py-5 xl:py-0 px-0 xl:px-8 min-w-0">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="p-2.5 bg-slate-50 rounded-xl shrink-0">
-                                <CakeIcon
-                                    size={15}
-                                    className="text-slate-400"
-                                />
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-0">
-                                <TechnicalLabel>Age & DOB</TechnicalLabel>
-                                <div className="flex items-center gap-2 truncate">
-                                    <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
-                                        {student?.age
-                                            ? `${student.age}y`
-                                            : '--'}
-                                    </span>
-                                    <div className="h-3 w-[1px] bg-slate-200 shrink-0" />
-                                    <span className="text-[11px] font-medium text-slate-400 truncate">
-                                        {student?.dateOfBirth
-                                            ? format(
-                                                  new Date(student.dateOfBirth),
-                                                  'MMM dd, yyyy',
-                                              )
-                                            : '--'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="p-2.5 bg-slate-50 rounded-xl shrink-0">
-                                {student?.gender === 'male' ? (
-                                    <MarsIcon
-                                        size={18}
-                                        className="text-blue-500"
-                                    />
-                                ) : (
-                                    <VenusIcon
-                                        size={18}
-                                        className="text-pink-500"
-                                    />
-                                )}
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-0">
-                                <TechnicalLabel>Gender</TechnicalLabel>
-                                <span className="text-sm font-bold text-slate-700 capitalize truncate">
-                                    {student?.gender || 'N/A'}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="p-2.5 bg-slate-50 rounded-xl shrink-0">
-                                <Activity
-                                    size={18}
-                                    className="text-purple-500"
-                                />
-                            </div>
-                            <div className="flex flex-col gap-1 min-w-0">
-                                <TechnicalLabel>Diagnosis</TechnicalLabel>
-                                <span
-                                    className="text-sm font-bold text-slate-700 capitalize truncate"
-                                    title={
-                                        student?.diagnosis ||
-                                        'No diagnosis specified'
-                                    }
+                    <div className="flex items-center gap-4 sm:gap-5 min-w-0 w-full md:w-auto">
+                        <UserAvatar
+                            src={FormatService.formatStrapiMedia(
+                                student?.profilePicture,
+                                'thumbnail',
+                            )}
+                            size="lg"
+                            showStatus={true}
+                            name={student?.firstName}
+                            className="shadow-sm border border-slate-100 shrink-0"
+                        />
+                        <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5 mb-2">
+                                <button
+                                    onClick={() => router.back()}
+                                    className="flex items-center gap-1 hover:text-indigo-800 transition-colors shrink-0"
                                 >
-                                    {student?.diagnosis || 'N/A'}
+                                    <ArrowLeft size={14} strokeWidth={3} /> Go
+                                    Back
+                                </button>
+                                <span className="opacity-40 shrink-0">•</span>
+                                <User
+                                    size={14}
+                                    className="text-indigo-600 shrink-0"
+                                />{' '}
+                                <span className="truncate">
+                                    Learner Profile
                                 </span>
                             </div>
+                            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 leading-none truncate">
+                                {student?.firstName} {student?.lastName}
+                            </h1>
+                            <p className="text-sm font-medium text-slate-500 mt-2 flex items-center gap-2">
+                                <span className="font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 text-[11px] font-bold">
+                                    ID-{(studentId || '0').padStart(4, '0')}
+                                </span>
+                                <span className="text-slate-300">•</span>
+                                <span className="truncate">
+                                    Review learner analytics, telemetry, and
+                                    generated insights.
+                                </span>
+                            </p>
                         </div>
                     </div>
 
-                    {/* ACTIONS BLOCK */}
-                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto justify-start xl:justify-end">
-                        <div className="w-full sm:w-auto">
-                            <DateRangePicker
-                                value={dateRange}
-                                onChange={setDateRange}
-                            />
-                        </div>
+                    <div className="w-full md:w-auto flex items-center justify-end shrink-0">
                         <Button
-                            variant="outline"
                             onClick={handleDownloadPDF}
                             disabled={isGeneratingPDF}
-                            className="w-full sm:w-auto rounded-2xl border-slate-200 h-11 px-4 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-widest shrink-0 shadow-sm transition-all"
+                            className="h-12 w-full md:w-auto px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-indigo-200 transition-all active:scale-95"
                         >
                             {isGeneratingPDF ? (
-                                <Loader2 size={16} className="animate-spin" />
+                                <Loader2
+                                    size={16}
+                                    className="animate-spin mr-2"
+                                />
                             ) : (
-                                <Download size={16} />
+                                <Download size={16} className="mr-2" />
                             )}
+                            {isGeneratingPDF
+                                ? 'Generating...'
+                                : 'Export Report'}
                         </Button>
                     </div>
                 </motion.header>
 
+                {/* --- DEMOGRAPHICS BLOCK (Styled like categories) --- */}
                 <motion.div
                     variants={itemVariants}
-                    className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6"
+                    className="flex flex-wrap items-center gap-2"
                 >
-                    {summaryMetrics.map((stat, i) => (
-                        <div
-                            key={i}
-                            className="bg-white rounded-[28px] border border-slate-200 p-6 shadow-sm flex items-start justify-between group hover:border-indigo-100 transition-colors"
-                        >
-                            <div className="flex flex-col">
-                                <TechnicalLabel>{stat.label}</TechnicalLabel>
-                                <p className="text-3xl font-black text-slate-900 mt-2">
-                                    {stat.value}
-                                </p>
-                            </div>
-                            <div
-                                className={cn(
-                                    'p-3 rounded-2xl transition-transform group-hover:scale-110',
-                                    stat.bg,
-                                    stat.color,
-                                )}
-                            >
-                                <stat.icon size={22} />
-                            </div>
-                        </div>
-                    ))}
+                    <div className="flex items-center rounded-lg px-3 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-white text-slate-500 border border-slate-200 shadow-sm cursor-default">
+                        <User
+                            size={14}
+                            className="mr-1.5 shrink-0 text-indigo-500"
+                        />
+                        {student?.age ? `${student.age} Years Old` : 'Age N/A'}
+                    </div>
+                    <div className="flex items-center rounded-lg px-3 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-white text-slate-500 border border-slate-200 shadow-sm cursor-default">
+                        <CakeIcon
+                            size={14}
+                            className={cn(
+                                'mr-1.5 shrink-0 ',
+                                student?.gender === 'male'
+                                    ? 'text-blue-500'
+                                    : 'text-rose-400',
+                            )}
+                        />
+                        {student?.dateOfBirth
+                            ? format(
+                                  new Date(student.dateOfBirth),
+                                  'MMM dd, yyyy',
+                              )
+                            : 'DOB N/A'}
+                    </div>
+                    <div className="flex items-center rounded-lg px-3 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-white text-slate-500 border border-slate-200 shadow-sm cursor-default">
+                        {student?.gender === 'male' ? (
+                            <MarsIcon
+                                size={14}
+                                className="mr-1.5 shrink-0 text-blue-500"
+                            />
+                        ) : (
+                            <VenusIcon
+                                size={14}
+                                className="mr-1.5 shrink-0 text-rose-400"
+                            />
+                        )}
+                        {student?.gender || 'Gender N/A'}
+                    </div>
+                    <div className="flex items-center rounded-lg px-3 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-white text-slate-500 border border-slate-200 shadow-sm cursor-default">
+                        <Activity
+                            size={14}
+                            className="mr-1.5 shrink-0 text-emerald-500"
+                        />
+                        {student?.diagnosis || 'No Diagnosis'}
+                    </div>
+                </motion.div>
+
+                {/* --- DATE WIDGET BOX --- */}
+                <motion.div
+                    variants={itemVariants}
+                    className="flex flex-col sm:flex-row gap-4 items-center justify-start sticky top-4 bg-white/80 backdrop-blur-xl z-30 py-3 px-4 rounded-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] shrink-0 w-full"
+                >
+                    <div className="flex items-center w-full sm:w-auto">
+                        <DateRangePicker
+                            value={dateRange}
+                            onChange={setDateRange}
+                        />
+                    </div>
+                </motion.div>
+
+                {/* --- SUMMARY METRICS --- */}
+                <motion.div
+                    variants={itemVariants}
+                    className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6"
+                >
+                    <DashboardStatCard
+                        title="Avg Accuracy"
+                        value={`${overviewMetrics?.averageAccuracy || 0}%`}
+                        trend="Overall Precision"
+                        icon={Target}
+                        colorClass="text-emerald-500"
+                        isLoading={isLoadingAnalytics}
+                    />
+                    <DashboardStatCard
+                        title="Therapy Time"
+                        value={`${overviewMetrics?.totalTherapyHours || 0}h`}
+                        trend="Total Logged"
+                        icon={Clock}
+                        colorClass="text-amber-500"
+                        isLoading={isLoadingAnalytics}
+                    />
+                    <DashboardStatCard
+                        title="Total Sessions"
+                        value={overviewMetrics?.totalSessionsCompleted || 0}
+                        trend="Completed Modules"
+                        icon={Zap}
+                        colorClass="text-rose-500"
+                        isLoading={isLoadingAnalytics}
+                    />
                 </motion.div>
 
                 {/* --- ROW 1: PERFORMANCE WIDGETS --- */}
@@ -1224,6 +1273,7 @@ export default function StudentDashboard() {
                                             tick={<CleanRadarTick />}
                                         />
                                         <PolarRadiusAxis
+                                            angle={30}
                                             domain={[0, 100]}
                                             tick={false}
                                             axisLine={false}

@@ -8,18 +8,12 @@ import {
     Activity,
     Radio,
     Power,
-    Eye,
-    Sparkles,
-    UserCircle2,
     Users,
-    Gamepad2,
     CheckCircle2,
     AlertTriangle,
-    Ban,
     Clock,
     ShieldCheck,
     RefreshCcw,
-    Download,
     ChevronRight,
     ChevronLeft,
     CalendarDays,
@@ -29,12 +23,15 @@ import {
     Search,
     Filter,
     Settings,
-    Target,
     ShieldAlert,
     LineChart as LineChartIcon,
     BarChart as BarChartIcon,
+    Database,
+    Shield,
+    TrendingUp,
+    Gamepad2,
+    Sparkles,
 } from 'lucide-react';
-import axios from 'axios';
 import {
     AreaChart,
     Area,
@@ -60,22 +57,11 @@ import { getActivities } from '@/api/activity';
 // UI Components
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { FormatService } from '@/utils/helpers';
 import { cn } from '@/lib/utils';
-import {
-    ActivitySessionEntry,
-    ActivitySessionResponse,
-    ActivitySessionStatus,
-} from '@/types/activitiy-session';
+import { ActivitySessionStatus } from '@/types/activitiy-session';
 import { useRouter } from 'next/navigation';
 
 // --- Animation Variants ---
-const fadeVariants: Variants = {
-    hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.3 } },
-};
-
 const modalVariants: Variants = {
     hidden: { opacity: 0, scale: 0.95 },
     visible: {
@@ -113,6 +99,69 @@ const StatusBadge = ({ status }: { status: string }) => {
         </span>
     );
 };
+
+// --- UNIFIED DASHBOARD STAT CARD ---
+const DashboardStatCard = ({
+    title,
+    value,
+    trend,
+    icon: Icon,
+    colorClass,
+    isLoading,
+    customAction,
+}: any) => (
+    <div
+        className={cn(
+            'bg-white rounded-[24px] border border-slate-200 p-6 flex flex-col justify-between hover:shadow-lg transition-all duration-300 relative overflow-hidden group h-full',
+            customAction && 'cursor-pointer hover:border-indigo-300',
+        )}
+        onClick={customAction}
+    >
+        <div
+            className={cn(
+                'absolute -right-4 -top-4 opacity-[0.03] transition-transform group-hover:scale-110 group-hover:opacity-[0.07]',
+                colorClass,
+            )}
+        >
+            <Icon size={90} />
+        </div>
+        <div className="flex items-center gap-3 mb-4 relative z-10">
+            <div
+                className={cn(
+                    'p-2.5 rounded-xl shrink-0',
+                    colorClass
+                        .replace('text-', 'bg-')
+                        .replace('600', '50')
+                        .replace('500', '50'),
+                )}
+            >
+                <Icon size={18} className={colorClass} />
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest select-none">
+                {title}
+            </span>
+        </div>
+        <div className="relative z-10">
+            {isLoading ? (
+                <div className="h-9 w-24 bg-slate-100 animate-pulse rounded-xl mb-1" />
+            ) : (
+                <div className="flex items-baseline gap-2">
+                    <div className="text-3xl font-black text-slate-900 tracking-tight tabular-nums">
+                        {value}
+                    </div>
+                </div>
+            )}
+            {trend && (
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5 flex items-center gap-1.5">
+                    {trend !== 'Idle' && (
+                        <TrendingUp size={12} className={colorClass} />
+                    )}{' '}
+                    {trend}
+                </div>
+            )}
+        </div>
+    </div>
+);
 
 // --- Custom Chart Tooltips ---
 const CustomAreaTooltip = ({ active, payload, label }: any) => {
@@ -259,6 +308,12 @@ export default function AppAdminDashboard() {
             (s: any) => s.activitySessionStatus !== 'in_progress',
         );
 
+        const totalUsers = platformUsers.length;
+        const admins = platformUsers.filter(
+            (u: any) =>
+                u.role?.name?.toLowerCase().includes('admin') ||
+                u.role === 'admin',
+        );
         const therapists = platformUsers.filter(
             (u: any) => u.role?.name === 'Therapist',
         );
@@ -339,12 +394,14 @@ export default function AppAdminDashboard() {
 
         const topActivities = Object.entries(activityCounts)
             .map(([name, count]) => ({ name, count }))
-            .sort((a: any, b: any) => b.count - a.count)
+            .sort((a: any, b: any) => (b.count as number) - (a.count as number))
             .slice(0, 5);
 
         return {
             liveSessions,
             historicalSessions,
+            totalUsersCount: totalUsers,
+            adminsCount: admins.length,
             therapistsCount: therapists.length,
             studentsCount: students.length,
             activeActivities,
@@ -371,7 +428,6 @@ export default function AppAdminDashboard() {
                 metrics.liveSessions.map((session: any) => {
                     const targetId = session.documentId || session.id;
 
-                    // Pass the properties directly (no 'data' wrapper!)
                     return updateActivitySession(targetId, {
                         activitySessionStatus:
                             ActivitySessionStatus.Interrupted,
@@ -400,155 +456,116 @@ export default function AppAdminDashboard() {
         );
 
     return (
-        <div className="min-h-screen w-full bg-[#F8FAFC] font-sans text-slate-900 pb-12 relative">
-            {/* --- TOP NAVIGATION --- */}
-            <header className="sticky top-0 z-40 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-md shadow-indigo-200">
-                        <ShieldCheck className="text-white" size={20} />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-black tracking-tight text-slate-900 leading-none">
+        <div className="min-h-screen bg-[#F8FAFC]">
+            <div
+                className="fixed inset-0 pointer-events-none opacity-[0.4]"
+                style={{
+                    backgroundImage:
+                        'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)',
+                    backgroundSize: '40px 40px',
+                    maskImage:
+                        'linear-gradient(to bottom, black 40%, transparent 100%)',
+                }}
+            />
+
+            <div className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-8 pb-24">
+                {/* --- UNIFIED DASHBOARD HEADER --- */}
+                <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm shrink-0">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5 mb-2">
+                            <ShieldCheck
+                                size={14}
+                                className="text-indigo-600"
+                            />{' '}
                             Platform Dashboard
+                        </div>
+                        <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 leading-none">
+                            Admin Overview
                         </h1>
-                        <p className="text-[11px] font-bold text-slate-500 mt-1 uppercase tracking-widest">
-                            Therapy & Session Administration
+                        <p className="text-sm font-medium text-slate-500 mt-2 max-w-xl">
+                            Global therapy and session administration center.
                         </p>
                     </div>
-                </div>
 
-                <div className="flex items-center gap-4">
-                    <Button
-                        variant="outline"
-                        className="h-10 gap-2 border-slate-200 text-sm font-bold shadow-sm text-slate-600 w-36 transition-all duration-300"
-                        onClick={() => refetchSessions()}
-                        disabled={isSessionsFetching}
-                    >
-                        <RefreshCcw
-                            size={14}
-                            className={cn(
-                                isSessionsFetching &&
-                                    'animate-spin text-indigo-500',
-                            )}
-                        />
-                        {isSessionsFetching ? 'Syncing...' : 'Sync Data'}
-                    </Button>
-                </div>
-            </header>
-            <main className="max-w-[1600px] mx-auto p-4 lg:p-6 xl:p-8 space-y-6 lg:space-y-8 pb-24">
-                {/* --- 1. PLATFORM OVERVIEW KPIs --- */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 xl:gap-6">
-                    <Card className="bg-white border-slate-200 p-5 rounded-[20px] shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-                        <div className="h-12 w-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-                            <Stethoscope size={24} />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-0.5">
-                                Therapists
-                            </p>
-                            <h2 className="text-2xl font-black text-slate-900">
-                                {metrics.therapistsCount}
-                            </h2>
-                        </div>
-                    </Card>
-                    <Card className="bg-white border-slate-200 p-5 rounded-[20px] shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-                        <div className="h-12 w-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
-                            <GraduationCap size={24} />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-0.5">
-                                Students
-                            </p>
-                            <h2 className="text-2xl font-black text-slate-900">
-                                {metrics.studentsCount}
-                            </h2>
-                        </div>
-                    </Card>
-                    <Card className="bg-white border-slate-200 p-5 rounded-[20px] shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-                        <div className="h-12 w-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
-                            <CheckCircle2 size={24} />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-0.5">
-                                Active Content
-                            </p>
-                            <div className="flex items-baseline gap-2">
-                                <h2 className="text-2xl font-black text-slate-900 leading-none">
-                                    {metrics.activeActivities}
-                                </h2>
-                                <span className="text-xs font-bold text-slate-400">
-                                    Deployed
-                                </span>
-                            </div>
-                        </div>
-                    </Card>
-                    <Card
-                        className={cn(
-                            'p-5 rounded-[20px] shadow-sm flex items-center gap-4 transition-all duration-500 border hover:shadow-md',
-                            metrics.liveSessions.length > 0
-                                ? 'bg-emerald-50/20 border-emerald-100 shadow-emerald-100/20'
-                                : 'bg-slate-50 border-slate-200',
-                        )}
-                    >
-                        <div
-                            className={cn(
-                                'h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-colors duration-500',
-                                metrics.liveSessions.length > 0
-                                    ? 'bg-emerald-100 text-emerald-600'
-                                    : 'bg-slate-200 text-slate-400',
-                            )}
+                    <div className="w-full md:w-auto flex items-center gap-3">
+                        <Button
+                            variant="outline"
+                            className="h-12 w-full md:w-auto rounded-2xl border-slate-200 text-xs font-bold shadow-sm text-slate-600 px-6 transition-all hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100"
+                            onClick={() => refetchSessions()}
+                            disabled={isSessionsFetching}
                         >
-                            <Radio
-                                size={24}
+                            <RefreshCcw
+                                size={14}
                                 className={cn(
-                                    metrics.liveSessions.length > 0
-                                        ? 'animate-pulse'
-                                        : 'opacity-50',
+                                    'mr-2',
+                                    isSessionsFetching &&
+                                        'animate-spin text-indigo-500',
                                 )}
                             />
-                        </div>
-                        <div>
-                            <p
-                                className={cn(
-                                    'text-[10px] font-bold uppercase tracking-widest mb-0.5 transition-colors duration-500',
-                                    metrics.liveSessions.length > 0
-                                        ? 'text-emerald-600'
-                                        : 'text-slate-500',
-                                )}
-                            >
-                                Live Activity
-                            </p>
-                            <div className="flex items-baseline gap-2">
-                                <h2
-                                    className={cn(
-                                        'text-2xl font-black leading-none transition-colors duration-500',
-                                        metrics.liveSessions.length > 0
-                                            ? 'text-emerald-700'
-                                            : 'text-slate-400',
-                                    )}
-                                >
-                                    {metrics.liveSessions.length}
-                                </h2>
-                                <span
-                                    className={cn(
-                                        'text-[10px] font-black uppercase transition-colors duration-500',
-                                        metrics.liveSessions.length > 0
-                                            ? 'text-emerald-500'
-                                            : 'text-slate-400',
-                                    )}
-                                >
-                                    {metrics.liveSessions.length > 0
-                                        ? 'Online'
-                                        : 'Idle'}
-                                </span>
-                            </div>
-                        </div>
-                    </Card>
+                            {isSessionsFetching ? 'Syncing...' : 'Sync Data'}
+                        </Button>
+                    </div>
+                </header>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 xl:gap-6">
+                    <DashboardStatCard
+                        title="Total Users"
+                        value={metrics.totalUsersCount}
+                        trend="Total Members"
+                        icon={Database}
+                        colorClass="text-slate-600"
+                        isLoading={isUserLoading}
+                    />
+                    <DashboardStatCard
+                        title="Sys Admins"
+                        value={metrics.adminsCount}
+                        trend="System Core"
+                        icon={Shield}
+                        colorClass="text-rose-600"
+                        isLoading={isUserLoading}
+                    />
+                    <DashboardStatCard
+                        title="Therapists"
+                        value={metrics.therapistsCount}
+                        trend="Active Staff"
+                        icon={Stethoscope}
+                        colorClass="text-indigo-600"
+                        isLoading={isUserLoading}
+                    />
+                    <DashboardStatCard
+                        title="Students"
+                        value={metrics.studentsCount}
+                        trend="Enrolled"
+                        icon={GraduationCap}
+                        colorClass="text-blue-600"
+                        isLoading={isUserLoading}
+                    />
+                    <DashboardStatCard
+                        title="Deployed"
+                        value={metrics.activeActivities}
+                        trend="Active Modules"
+                        icon={CheckCircle2}
+                        colorClass="text-emerald-600"
+                        isLoading={isUserLoading}
+                    />
+                    <DashboardStatCard
+                        title="Live Activity"
+                        value={metrics.liveSessions.length}
+                        trend={
+                            metrics.liveSessions.length > 0 ? 'Online' : 'Idle'
+                        }
+                        icon={Radio}
+                        colorClass={
+                            metrics.liveSessions.length > 0
+                                ? 'text-emerald-600'
+                                : 'text-slate-400'
+                        }
+                        isLoading={isSessionsLoading}
+                    />
                 </div>
 
-                {/* --- 2. ANALYTICS (AREA & BAR CHARTS) --- */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 xl:gap-8">
-                    {/* Area Chart: Session Volume (Spans 2 columns) */}
+                    {/* Area Chart: Session Volume */}
                     <Card className="lg:col-span-2 bg-white border-slate-200 p-6 rounded-[24px] shadow-sm h-[400px] flex flex-col">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 shrink-0 gap-4">
                             <div>
@@ -564,7 +581,6 @@ export default function AppAdminDashboard() {
                                 </p>
                             </div>
 
-                            {/* SHORTER CALENDAR TOOLBAR */}
                             <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl p-1 shadow-sm">
                                 <Button
                                     variant="ghost"
@@ -731,7 +747,7 @@ export default function AppAdminDashboard() {
                         </div>
                     </Card>
 
-                    {/* TOP 5 BAR CHART (Spans 1 column) */}
+                    {/* TOP 5 BAR CHART */}
                     <Card className="lg:col-span-1 bg-white border-slate-200 p-6 rounded-[24px] shadow-sm h-[400px] flex flex-col">
                         <div className="flex items-center justify-between mb-6 shrink-0">
                             <div>
@@ -820,7 +836,6 @@ export default function AppAdminDashboard() {
                     </Card>
                 </div>
 
-                {/* --- 3. LIVE SESSIONS & LOGS --- */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 xl:gap-8 h-[600px]">
                     {/* LEFT: Recent Historical Sessions (Spans 2 cols) */}
                     <Card className="lg:col-span-2 flex flex-col bg-white border-slate-200 rounded-[24px] shadow-sm overflow-hidden h-full">
@@ -995,231 +1010,8 @@ export default function AppAdminDashboard() {
                         </div>
                     </Card>
 
-                    {/* RIGHT: LIVE SESSIONS & PLATFORM TOOLS (Spans 1 Col) */}
+                    {/* RIGHT: System Actions Arsenal */}
                     <div className="flex flex-col gap-6 lg:col-span-1 h-full">
-                        {/* Shrinked Live Sessions Card */}
-                        <Card className="bg-white rounded-[24px] shadow-sm border border-slate-200 h-[400px] flex flex-col overflow-hidden relative">
-                            {/* Header with Dynamic Badge */}
-                            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-                                <div className="flex items-center gap-2">
-                                    <div
-                                        className={cn(
-                                            'h-8 w-8 rounded-lg flex items-center justify-center transition-colors shadow-sm',
-                                            metrics.liveSessions.length > 0
-                                                ? 'bg-indigo-600 shadow-indigo-100'
-                                                : 'bg-slate-200',
-                                        )}
-                                    >
-                                        <Radio
-                                            size={16}
-                                            className={cn(
-                                                'text-white',
-                                                metrics.liveSessions.length >
-                                                    0 && 'animate-pulse',
-                                            )}
-                                        />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xs font-black text-slate-900 tracking-tight">
-                                            Live Monitor
-                                        </h2>
-                                        <p className="text-[9px] text-slate-400 font-bold uppercase">
-                                            Real-time Feed
-                                        </p>
-                                    </div>
-                                </div>
-                                <span
-                                    className={cn(
-                                        'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all',
-                                        metrics.liveSessions.length > 0
-                                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                                            : 'bg-slate-100 text-slate-400 border border-slate-200',
-                                    )}
-                                >
-                                    {metrics.liveSessions.length} Active
-                                </span>
-                            </div>
-
-                            {/* Scrollable Session List */}
-                            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 bg-slate-50/30 space-y-3">
-                                {isSessionsLoading ? (
-                                    <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-300">
-                                        <RefreshCcw
-                                            className="animate-spin"
-                                            size={20}
-                                        />
-                                        <span className="text-[10px] font-black uppercase">
-                                            Syncing...
-                                        </span>
-                                    </div>
-                                ) : metrics.liveSessions.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-full text-center space-y-2 opacity-60">
-                                        <div className="p-4 bg-white rounded-full border border-dashed border-slate-300">
-                                            <Gamepad2
-                                                size={32}
-                                                className="text-slate-300"
-                                            />
-                                        </div>
-                                        <p className="font-bold text-xs text-slate-500 uppercase tracking-tighter">
-                                            No sessions in progress
-                                        </p>
-                                    </div>
-                                ) : (
-                                    metrics.liveSessions.map(
-                                        (session: ActivitySessionEntry) => {
-                                            const startTime =
-                                                session.actualStartAt
-                                                    ? new Date(
-                                                          session.actualStartAt,
-                                                      ).getTime()
-                                                    : Date.now();
-                                            const elapsedMins = Math.floor(
-                                                (Date.now() - startTime) /
-                                                    60000,
-                                            );
-
-                                            return (
-                                                <motion.div
-                                                    key={session.id}
-                                                    initial={{
-                                                        opacity: 0,
-                                                        x: -10,
-                                                    }}
-                                                    animate={{
-                                                        opacity: 1,
-                                                        x: 0,
-                                                    }}
-                                                    className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:border-indigo-300 transition-all group"
-                                                >
-                                                    {/* Top Row: User & Activity */}
-                                                    <div className="flex justify-between items-start mb-3">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <Avatar className="h-9 w-9 rounded-lg border-2 border-slate-50 shadow-sm">
-                                                                <AvatarImage
-                                                                    src={FormatService.formatStrapiMedia(
-                                                                        session
-                                                                            .student
-                                                                            ?.profilePicture,
-                                                                        'thumbnail',
-                                                                    )}
-                                                                />
-                                                                <AvatarFallback className="bg-indigo-50 text-indigo-700 text-xs font-black">
-                                                                    {session.student?.firstName?.charAt(
-                                                                        0,
-                                                                    )}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                            <div>
-                                                                <h4 className="font-black text-slate-900 text-[12px] leading-tight">
-                                                                    {
-                                                                        session
-                                                                            .student
-                                                                            ?.firstName
-                                                                    }{' '}
-                                                                    {
-                                                                        session
-                                                                            .student
-                                                                            ?.lastName
-                                                                    }
-                                                                </h4>
-                                                                <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
-                                                                    <Stethoscope
-                                                                        size={
-                                                                            10
-                                                                        }
-                                                                        className="text-indigo-400"
-                                                                    />
-                                                                    Therapist:{' '}
-                                                                    {session
-                                                                        .therapist
-                                                                        ?.lastName ||
-                                                                        'Unassigned'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Live Timer Badge */}
-                                                        <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-100">
-                                                            <Clock
-                                                                size={10}
-                                                                className="animate-spin-slow"
-                                                            />
-                                                            <span className="text-[10px] font-mono font-black">
-                                                                {elapsedMins}m
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Middle Row: Content Meta */}
-                                                    <div className="bg-slate-50 rounded-lg p-2 flex items-center justify-between mb-3 border border-slate-100">
-                                                        <div className="flex items-center gap-2 overflow-hidden">
-                                                            <LayoutGrid
-                                                                size={12}
-                                                                className="text-slate-400 shrink-0"
-                                                            />
-                                                            <span className="text-[10px] font-black text-slate-600 truncate uppercase tracking-tighter">
-                                                                {session
-                                                                    .activity
-                                                                    ?.name ||
-                                                                    'Manual Evaluation'}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white rounded border border-slate-200">
-                                                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                                            <span className="text-[8px] font-black text-slate-400 uppercase">
-                                                                Live
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Bottom Row: Control Center */}
-                                                    <div className="flex gap-2">
-                                                        {/* <Button
-                                                            variant="outline"
-                                                            className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest gap-2 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all"
-                                                        >
-                                                            <Eye size={14} />{' '}
-                                                            Observe
-                                                        </Button> */}
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            className="h-8 w-8 shrink-0 border-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-all"
-                                                            title="Force End Session"
-                                                        >
-                                                            <Power size={14} />
-                                                        </Button>
-                                                    </div>
-                                                </motion.div>
-                                            );
-                                        },
-                                    )
-                                )}
-                            </div>
-
-                            {/* Footer: Detailed Legend */}
-                            <div className="px-4 py-2 border-t border-slate-100 bg-white shrink-0 flex items-center justify-between">
-                                <div className="flex gap-3">
-                                    <div className="flex items-center gap-1">
-                                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase">
-                                            Stable
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase">
-                                            Idle 5m+
-                                        </span>
-                                    </div>
-                                </div>
-                                <span className="text-[9px] font-black text-indigo-500/50 uppercase tracking-widest">
-                                    v2.4.0 Live
-                                </span>
-                            </div>
-                        </Card>
-
-                        {/* System Actions Arsenal */}
                         <Card className="bg-white border-slate-200 rounded-[24px] shadow-sm flex-1 flex flex-col p-5">
                             <h3 className="font-black text-sm text-slate-900 flex items-center gap-2 mb-4">
                                 <Settings
@@ -1229,34 +1021,10 @@ export default function AppAdminDashboard() {
                                 Platform Tools
                             </h3>
 
-                            {/* <div className="space-y-2 flex-1 overflow-y-auto">
-                                <Button
-                                    variant="outline"
-                                    className="w-full justify-start h-9 text-[11px] font-bold text-slate-700 bg-white border-slate-200 shadow-sm gap-3 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                                >
-                                    <Users
-                                        size={14}
-                                        className="text-slate-400"
-                                    />{' '}
-                                    Manage User Approvals
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="w-full justify-start h-9 text-[11px] font-bold text-slate-700 bg-white border-slate-200 shadow-sm gap-3 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                                >
-                                    <Download
-                                        size={14}
-                                        className="text-slate-400"
-                                    />{' '}
-                                    Export Audit Logs
-                                </Button>
-                            </div> */}
-
-                            <div className="pt-4 border-t border-slate-100 mt-4 shrink-0">
+                            <div className="pt-4 border-t border-slate-100 mt-auto shrink-0">
                                 <span className="text-[9px] font-black uppercase tracking-widest text-rose-500 flex items-center gap-1.5 mb-2">
                                     <ShieldAlert size={10} /> Emergency
                                 </span>
-                                {/* UPDATED: Button text contrast, size, and added click handler */}
                                 <Button
                                     variant="destructive"
                                     className="w-full justify-start h-9 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 gap-3 shadow-md mb-2 transition-colors"
@@ -1272,7 +1040,7 @@ export default function AppAdminDashboard() {
                     </div>
                 </div>
                 <div className="h-12 w-full" aria-hidden="true" />
-            </main>
+            </div>
 
             {/* --- CONFIRMATION MODAL --- */}
             <AnimatePresence>

@@ -7,28 +7,26 @@ import {
     Search,
     LayoutGrid,
     List,
-    Users,
     FilterX,
     Loader2,
     Database,
-    Shield,
-    HeartPulse,
-    GraduationCap,
-    MoreHorizontal,
+    ArrowUpDown,
+    Filter,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
+} from '@/components/ui/dropdown-menu';
 import { Toaster } from '@/components/ui/sonner';
-import { Separator } from '@/components/ui/separator';
 
 // Custom Components
 import { UserCard } from '@/components/UserCard';
@@ -49,23 +47,6 @@ function useDebounce<T>(value: T, delay: number): T {
     return debouncedValue;
 }
 
-// --- SUB-COMPONENT: Stat Badge ---
-const StatBadge = ({ icon: Icon, label, value, colorClass }: any) => (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-100 bg-white shadow-sm">
-        <div className={cn('p-1 rounded-md', colorClass)}>
-            <Icon size={12} />
-        </div>
-        <div className="flex flex-col">
-            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">
-                {label}
-            </span>
-            <span className="text-xs font-bold text-slate-900 leading-none tabular-nums">
-                {value}
-            </span>
-        </div>
-    </div>
-);
-
 export default function UsersDirectory() {
     // --- STATE ---
     const [searchTerm, setSearchTerm] = useState('');
@@ -83,13 +64,11 @@ export default function UsersDirectory() {
         isLoading,
         isFetching,
     } = useQuery({
-        queryKey: ['users', { populate: '*' }], // Static key so we fetch everything once
+        queryKey: ['users', { populate: '*' }],
         queryFn: getUsers,
         placeholderData: keepPreviousData,
     });
 
-    // --- LOGIC: FILTERING (The Fix) ---
-    // We filter the users locally. This is fast and keeps the KPI Stats accurate.
     const filteredUsers = useMemo(() => {
         return users.filter((user: any) => {
             const matchesSearch =
@@ -129,10 +108,10 @@ export default function UsersDirectory() {
 
     if (isInitialLoading)
         return (
-            <div className="min-h-screen flex items-center justify-center bg-white">
+            <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="h-12 w-12 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                    <p className="font-mono text-slate-400 text-xs uppercase tracking-widest">
+                    <div className="h-12 w-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+                    <p className="font-bold text-slate-400 text-xs uppercase tracking-widest">
                         Loading System Registry...
                     </p>
                 </div>
@@ -141,7 +120,8 @@ export default function UsersDirectory() {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC]">
-            {/* Background Grid Pattern */}
+            <Toaster position="top-right" richColors closeButton />
+
             <div
                 className="fixed inset-0 pointer-events-none opacity-[0.4]"
                 style={{
@@ -153,181 +133,159 @@ export default function UsersDirectory() {
                 }}
             />
 
-            <div className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-10 font-sans">
-                <Toaster position="top-right" richColors closeButton />
-
-                {/* --- SECTION 1: HEADER --- */}
-                <header className="flex flex-col gap-6">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 pb-8">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5">
-                                <Database size={12} /> System Registry
-                            </div>
-                            <h1 className="text-3xl font-bold tracking-tight text-slate-900 leading-none">
-                                User Directory
-                            </h1>
+            <div className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-8 pb-24">
+                {/* --- UNIFIED DASHBOARD HEADER --- */}
+                <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm shrink-0">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5 mb-2">
+                            <Database size={14} className="text-indigo-600" />{' '}
+                            System Registry
                         </div>
-
-                        <div className="flex items-center gap-3">
-                            {/* KPI Stats (Uses the 'users' array so counts stay accurate) */}
-                            <div className="hidden md:flex gap-3 mr-4">
-                                <StatBadge
-                                    icon={Users}
-                                    label="Total"
-                                    value={users.length}
-                                    colorClass="bg-indigo-50 text-indigo-600"
-                                />
-                                <StatBadge
-                                    icon={Shield}
-                                    label="Admins"
-                                    value={
-                                        users.filter(
-                                            (u: any) =>
-                                                u.role?.name
-                                                    ?.toLowerCase()
-                                                    .includes('admin') ||
-                                                u.role === 'admin',
-                                        ).length
-                                    }
-                                    colorClass="bg-rose-50 text-rose-600"
-                                />
-                                <StatBadge
-                                    icon={HeartPulse}
-                                    label="Staff"
-                                    value={
-                                        users.filter(
-                                            (u: any) =>
-                                                u.role?.name
-                                                    ?.toLowerCase()
-                                                    .includes('therapist') ||
-                                                u.role === 'therapist',
-                                        ).length
-                                    }
-                                    colorClass="bg-emerald-50 text-emerald-600"
-                                />
-                                <StatBadge
-                                    icon={GraduationCap}
-                                    label="Students"
-                                    value={
-                                        users.filter(
-                                            (u: any) =>
-                                                u.role?.name
-                                                    ?.toLowerCase()
-                                                    .includes('student') ||
-                                                u.role === 'student',
-                                        ).length
-                                    }
-                                    colorClass="bg-blue-50 text-blue-600"
-                                />
-                            </div>
-
-                            <Separator
-                                orientation="vertical"
-                                className="h-8 hidden md:block bg-slate-200"
-                            />
-
-                            <Button
-                                onClick={handleOpenAddModal}
-                                className="h-11 pl-4 pr-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 font-bold text-xs uppercase tracking-wide transition-all active:scale-95"
-                            >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Add User
-                            </Button>
-                        </div>
+                        <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 leading-none">
+                            User Directory
+                        </h1>
+                        <p className="text-sm font-medium text-slate-500 mt-2 max-w-xl">
+                            Manage platform access, assign roles, and configure
+                            system administrators.
+                        </p>
                     </div>
 
-                    {/* --- SECTION 2: TOOLBAR --- */}
-                    <div className="flex flex-col md:flex-row gap-4 items-center justify-between sticky top-4 bg-white/70 backdrop-blur-xl z-30 py-3 px-4 rounded-2xl border border-slate-200/50 shadow-sm">
-                        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-center">
-                            <div className="relative w-full sm:w-[320px] group">
-                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                    {/* Show loader only if the query itself is refetching */}
-                                    {isFetching && !isLoading ? (
-                                        <Loader2 className="h-4 w-4 text-indigo-600 animate-spin" />
-                                    ) : (
-                                        <Search className="h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
-                                    )}
-                                </div>
-                                <Input
-                                    className="pl-11 bg-slate-100/50 border-transparent focus:bg-white focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50/50 transition-all rounded-xl h-11 text-sm font-medium placeholder:text-slate-400"
-                                    placeholder="Search users by name or email..."
-                                    value={searchTerm}
-                                    onChange={(e) =>
-                                        setSearchTerm(e.target.value)
-                                    }
-                                />
-                            </div>
-
-                            <Select
-                                value={roleFilter}
-                                onValueChange={setRoleFilter}
-                            >
-                                <SelectTrigger className="w-full sm:w-[160px] h-11 bg-slate-100/50 border-transparent focus:bg-white transition-all rounded-xl text-xs font-bold uppercase tracking-wider text-slate-700">
-                                    <SelectValue placeholder="All Roles" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">
-                                        All Roles
-                                    </SelectItem>
-                                    <SelectItem value="admin">Admin</SelectItem>
-                                    <SelectItem value="therapist">
-                                        Therapist
-                                    </SelectItem>
-                                    <SelectItem value="secretary">
-                                        Secretary
-                                    </SelectItem>
-                                    <SelectItem value="student">
-                                        Student
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="flex items-center gap-2 self-end md:self-auto">
-                            {(searchTerm || roleFilter !== 'all') && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                        setSearchTerm('');
-                                        setRoleFilter('all');
-                                    }}
-                                    className="text-[10px] font-bold uppercase tracking-widest text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-9 px-3"
-                                >
-                                    <FilterX size={14} className="mr-1.5" />{' '}
-                                    Clear Filters
-                                </Button>
-                            )}
-
-                            <Tabs
-                                value={viewMode}
-                                onValueChange={(v: any) => setViewMode(v)}
-                            >
-                                <TabsList className="h-11 bg-slate-100/80 p-1 rounded-xl border border-slate-200/50">
-                                    <TabsTrigger
-                                        value="grid"
-                                        className="h-9 rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm"
-                                    >
-                                        <LayoutGrid size={16} />
-                                    </TabsTrigger>
-                                    <TabsTrigger
-                                        value="table"
-                                        className="h-9 rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm"
-                                    >
-                                        <List size={16} />
-                                    </TabsTrigger>
-                                </TabsList>
-                            </Tabs>
-                        </div>
+                    <div className="w-full md:w-auto flex items-center gap-3">
+                        <Button
+                            onClick={handleOpenAddModal}
+                            className="h-12 w-full md:w-auto px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 font-bold text-xs uppercase tracking-wider transition-all active:scale-95"
+                        >
+                            <Plus className="mr-2 h-5 w-5" />
+                            Add User
+                        </Button>
                     </div>
                 </header>
 
-                {/* --- SECTION 3: CONTENT AREA --- */}
-                <main className="min-h-[50vh]">
-                    {/* Notice we use filteredUsers here! */}
+                {/* --- SEARCH WIDGET BOX --- */}
+                <div className="flex flex-col sm:flex-row gap-4 items-center justify-between sticky top-4 bg-white/80 backdrop-blur-xl z-30 py-3 px-4 rounded-2xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] shrink-0">
+                    <div className="relative w-full sm:w-[320px] group">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            {isFetching && !isLoading ? (
+                                <Loader2 className="h-4 w-4 text-indigo-600 animate-spin" />
+                            ) : (
+                                <Search className="h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                            )}
+                        </div>
+                        <Input
+                            className="pl-11 bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50/50 transition-all rounded-xl h-11 text-sm font-medium placeholder:text-slate-400 shadow-inner"
+                            placeholder="Search users by name or email..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+                        {(searchTerm || roleFilter !== 'all') && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    setSearchTerm('');
+                                    setRoleFilter('all');
+                                }}
+                                className="text-[10px] font-bold uppercase tracking-widest text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-11 px-4 rounded-xl"
+                            >
+                                <FilterX size={14} className="mr-1.5" /> Clear
+                            </Button>
+                        )}
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className={cn(
+                                        'h-11 rounded-xl font-bold text-[11px] uppercase tracking-widest shadow-sm',
+                                        roleFilter !== 'all'
+                                            ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                            : 'border-slate-200 bg-white text-slate-600',
+                                    )}
+                                >
+                                    <Filter size={14} className="mr-2" /> Role:{' '}
+                                    {roleFilter}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="end"
+                                className="w-48 rounded-xl shadow-xl"
+                            >
+                                <DropdownMenuRadioGroup
+                                    value={roleFilter}
+                                    onValueChange={setRoleFilter}
+                                >
+                                    <DropdownMenuRadioItem
+                                        value="all"
+                                        className="text-xs font-bold"
+                                    >
+                                        All Roles
+                                    </DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem
+                                        value="admin"
+                                        className="text-xs font-bold"
+                                    >
+                                        Admin
+                                    </DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem
+                                        value="therapist"
+                                        className="text-xs font-bold"
+                                    >
+                                        Therapist
+                                    </DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem
+                                        value="secretary"
+                                        className="text-xs font-bold"
+                                    >
+                                        Secretary
+                                    </DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem
+                                        value="student"
+                                        className="text-xs font-bold"
+                                    >
+                                        Student
+                                    </DropdownMenuRadioItem>
+                                </DropdownMenuRadioGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <div className="h-8 w-px bg-slate-200 mx-2 hidden sm:block" />
+
+                        <Tabs
+                            value={viewMode}
+                            onValueChange={(v: any) => setViewMode(v)}
+                        >
+                            <TabsList className="h-11 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/50">
+                                <TabsTrigger
+                                    value="grid"
+                                    className="h-8 rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:text-indigo-600 shadow-sm"
+                                >
+                                    <LayoutGrid size={14} />
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="table"
+                                    className="h-8 rounded-lg px-4 data-[state=active]:bg-white data-[state=active]:text-indigo-600 shadow-sm"
+                                >
+                                    <List size={14} />
+                                </TabsTrigger>
+                            </TabsList>
+                        </Tabs>
+                    </div>
+                </div>
+
+                <main className="min-h-[50vh] flex flex-col w-full">
+                    {(searchTerm || roleFilter !== 'all') &&
+                        filteredUsers.length > 0 && (
+                            <div className="mb-6 flex items-center gap-2 text-sm font-bold text-slate-500">
+                                Showing {filteredUsers.length} matches
+                            </div>
+                        )}
+
                     {filteredUsers.length > 0 ? (
                         viewMode === 'grid' ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-stretch content-start w-full">
                                 {filteredUsers.map((user: any) => (
                                     <UserCard
                                         key={user.id}
@@ -337,7 +295,7 @@ export default function UsersDirectory() {
                                 ))}
                             </div>
                         ) : (
-                            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-500">
+                            <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden w-full">
                                 <UsersTable
                                     users={filteredUsers}
                                     onEdit={handleOpenEditModal}
@@ -345,18 +303,17 @@ export default function UsersDirectory() {
                             </div>
                         )
                     ) : (
-                        /* --- EMPTY STATE --- */
-                        <div className="flex flex-col items-center justify-center py-40 text-center animate-in zoom-in-95 duration-500 border-2 border-dashed border-slate-200 rounded-[40px] bg-slate-50/30">
-                            <div className="h-20 w-20 bg-white rounded-3xl flex items-center justify-center mb-6 border border-slate-100 shadow-sm">
-                                <Search size={32} className="text-slate-300" />
+                        <div className="flex flex-col items-center justify-center min-h-[30vh] text-center w-full border-2 border-dashed border-slate-200 rounded-[32px] bg-white">
+                            <div className="h-16 w-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
+                                <Search size={24} className="text-slate-300" />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900">
+                            <h3 className="text-lg font-black text-slate-900">
                                 No records found
                             </h3>
-                            <p className="text-sm font-medium text-slate-400 mt-2 max-w-[320px]">
+                            <p className="text-sm font-medium text-slate-500 mt-2 max-w-[320px]">
                                 {roleFilter !== 'all'
                                     ? `We couldn't find any ${roleFilter}s matching your criteria.`
-                                    : `No users matched your search for "${searchTerm}".`}
+                                    : `No users matched your search.`}
                             </p>
                             <Button
                                 variant="outline"
@@ -364,7 +321,7 @@ export default function UsersDirectory() {
                                     setSearchTerm('');
                                     setRoleFilter('all');
                                 }}
-                                className="mt-8 h-11 px-8 rounded-xl border-slate-200 text-slate-600 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-white hover:text-indigo-600 hover:border-indigo-200 shadow-sm"
+                                className="mt-6 h-11 px-8 rounded-xl border-slate-200 text-slate-600 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-white hover:text-indigo-600 hover:border-indigo-200 shadow-sm"
                             >
                                 Reset All Filters
                             </Button>

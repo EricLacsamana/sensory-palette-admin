@@ -65,20 +65,16 @@ export default function SettingsPage() {
 
     const [activeTab, setActiveTab] = useState<TabType>('profile');
 
-    // UI states
     const [mounted, setMounted] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Local Image Preview State
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-    // Preferences State
     const [autoStart, setAutoStart] = useState(true);
     const [handsFree, setHandsFree] = useState(false);
 
-    // Prevent Cascading Renders by deferring the state update slightly
     useEffect(() => {
         const timer = setTimeout(() => {
             setAutoStart(getStorageBool('therapist_auto_start', true));
@@ -94,7 +90,6 @@ export default function SettingsPage() {
         enabled: isAuthenticated && !!token,
     });
 
-    // --- FORM 1: PROFILE ---
     const {
         register,
         handleSubmit,
@@ -107,7 +102,6 @@ export default function SettingsPage() {
         },
     });
 
-    // --- FORM 2: SECURITY ---
     const {
         register: registerSecurity,
         handleSubmit: handleSecuritySubmit,
@@ -118,7 +112,6 @@ export default function SettingsPage() {
 
     const newPassword = watchSecurity('password');
 
-    // Profile Mutation
     const updateProfileMutation = useMutation({
         mutationFn: (data: any) => updateUserProfile(user.id, data),
         onSuccess: () => {
@@ -133,7 +126,6 @@ export default function SettingsPage() {
         },
     });
 
-    // Password Change Mutation
     const changePasswordMutation = useMutation({
         mutationFn: (data: SecurityFormValues) => changePassword(data),
         onSuccess: () => {
@@ -141,13 +133,10 @@ export default function SettingsPage() {
             resetSecurityForm();
         },
         onError: (error: any) => {
-            // This pops up the beautiful red Toast notification on the screen
             toast.error(error.message || 'Failed to update password');
-
-            // (Removed the console.error line so your terminal stays clean!)
         },
     });
-    // Submit Profile Logic
+
     const onSubmitProfile = async (data: ProfileFormValues) => {
         setIsSaving(true);
         const toastId = toast.loading('Saving profile data...');
@@ -202,7 +191,6 @@ export default function SettingsPage() {
         }
     };
 
-    // Submit Security Logic
     const onSubmitSecurity = (data: SecurityFormValues) => {
         changePasswordMutation.mutate(data);
     };
@@ -247,23 +235,39 @@ export default function SettingsPage() {
         undefined;
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] pb-24">
-            <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-slate-100 to-transparent pointer-events-none" />
+        <div className="min-h-screen bg-[#F8FAFC]">
+            <div
+                className="fixed inset-0 pointer-events-none opacity-[0.4]"
+                style={{
+                    backgroundImage:
+                        'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)',
+                    backgroundSize: '40px 40px',
+                    maskImage:
+                        'linear-gradient(to bottom, black 40%, transparent 100%)',
+                }}
+            />
 
-            <div className="max-w-6xl mx-auto p-6 lg:p-10 relative z-10">
-                <header className="mb-10">
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                        System Settings
-                    </h1>
-                    <p className="text-sm font-medium text-slate-500 mt-2">
-                        Manage your account parameters and platform preferences.
-                    </p>
+            <div className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-8 pb-24">
+                {/* --- UNIFIED DASHBOARD HEADER --- */}
+                <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm shrink-0">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5 mb-2">
+                            <Sliders size={14} className="text-indigo-600" />{' '}
+                            Configuration
+                        </div>
+                        <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none">
+                            System Settings
+                        </h1>
+                        <p className="text-sm font-medium text-slate-500 mt-2 max-w-xl">
+                            Manage your account parameters and platform
+                            preferences.
+                        </p>
+                    </div>
                 </header>
 
                 <div className="flex flex-col lg:flex-row gap-8 items-start">
-                    {/* --- SIDEBAR NAVIGATION --- */}
-                    <Card className="w-full lg:w-72 shrink-0 rounded-3xl border border-slate-200 shadow-sm bg-white overflow-hidden p-2">
-                        <nav className="flex flex-col gap-1">
+                    <Card className="w-full lg:w-72 shrink-0 rounded-[32px] border border-slate-200 shadow-sm bg-white overflow-hidden p-3">
+                        <nav className="flex flex-col gap-1.5">
                             <TabButton
                                 active={activeTab === 'profile'}
                                 onClick={() => setActiveTab('profile')}
@@ -282,35 +286,26 @@ export default function SettingsPage() {
                                 icon={Lock}
                                 label="Password & Security"
                             />
-                            {/* <TabButton
-                                active={activeTab === 'notifications'}
-                                onClick={() => setActiveTab('notifications')}
-                                icon={Bell}
-                                label="Notifications"
-                            /> */}
                         </nav>
                     </Card>
 
-                    {/* --- MAIN CONTENT AREA --- */}
                     <div className="flex-1 w-full min-w-0">
-                        {/* TAB: PROFILE */}
                         {activeTab === 'profile' && (
                             <form
                                 onSubmit={handleSubmit(onSubmitProfile)}
                                 className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300"
                             >
-                                <Card className="rounded-[2rem] border border-slate-200 shadow-sm bg-white overflow-hidden">
-                                    <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-6">
-                                        <CardTitle className="text-xl font-bold">
+                                <Card className="rounded-[32px] border border-slate-200 shadow-sm bg-white overflow-hidden">
+                                    <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-6 px-8 pt-8">
+                                        <CardTitle className="text-xl font-bold text-slate-900 tracking-tight">
                                             Public Profile
                                         </CardTitle>
-                                        <CardDescription className="text-xs font-semibold">
+                                        <CardDescription className="text-xs font-semibold text-slate-500">
                                             This is how you appear to learners
                                             and administrators.
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="p-8 space-y-8">
-                                        {/* AVATAR PREVIEW */}
                                         <div className="flex items-center gap-6">
                                             <input
                                                 type="file"
@@ -321,33 +316,33 @@ export default function SettingsPage() {
                                             />
 
                                             <div
-                                                className="relative group cursor-pointer"
+                                                className="relative group cursor-pointer shrink-0"
                                                 onClick={() =>
                                                     fileInputRef.current?.click()
                                                 }
                                             >
-                                                <Avatar className="h-24 w-24 rounded-2xl shadow-md border-2 border-white group-hover:opacity-75 transition-opacity">
+                                                <Avatar className="h-28 w-28 rounded-[24px] shadow-sm border border-slate-200 group-hover:opacity-75 transition-opacity bg-slate-50">
                                                     <AvatarImage
                                                         src={avatarImageSrc}
                                                         className="object-cover"
                                                     />
-                                                    <AvatarFallback className="bg-indigo-50 text-indigo-600 text-2xl font-black">
+                                                    <AvatarFallback className="bg-indigo-50 text-indigo-600 text-3xl font-black">
                                                         {user?.firstName?.[0]}
                                                     </AvatarFallback>
                                                 </Avatar>
 
-                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl bg-slate-900/20 backdrop-blur-[2px]">
-                                                    <div className="bg-slate-900/80 p-2 rounded-full text-white">
-                                                        <Upload size={16} />
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-[24px] bg-slate-900/20 backdrop-blur-[2px]">
+                                                    <div className="bg-slate-900/80 p-2.5 rounded-full text-white shadow-xl">
+                                                        <Upload size={18} />
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-2">
                                                 <h3 className="font-bold text-slate-900">
                                                     Profile Picture
                                                 </h3>
-                                                <p className="text-xs text-slate-500 font-medium max-w-[250px]">
+                                                <p className="text-xs text-slate-500 font-medium max-w-[250px] leading-relaxed">
                                                     Upload a square image,
                                                     ideally 500x500px. JPG, PNG
                                                     or WebP.
@@ -360,14 +355,14 @@ export default function SettingsPage() {
                                                         onClick={() =>
                                                             fileInputRef.current?.click()
                                                         }
-                                                        className="h-8 rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:text-indigo-600"
+                                                        className="h-9 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:text-indigo-600 border-slate-200 shadow-sm"
                                                     >
                                                         {selectedImage
                                                             ? 'Change Image'
                                                             : 'Choose Image'}
                                                     </Button>
                                                     {selectedImage && (
-                                                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest bg-amber-50 px-2 py-1 rounded-md">
+                                                        <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 border border-amber-100 px-2 py-1 rounded-md">
                                                             Pending Save
                                                         </span>
                                                     )}
@@ -377,7 +372,6 @@ export default function SettingsPage() {
 
                                         <Separator className="bg-slate-100" />
 
-                                        {/* Form Fields connected to React Hook Form */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -387,7 +381,7 @@ export default function SettingsPage() {
                                                     {...register('firstName', {
                                                         required: true,
                                                     })}
-                                                    className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold"
+                                                    className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold shadow-inner"
                                                 />
                                                 {errors.firstName && (
                                                     <span className="text-[10px] font-bold text-rose-500">
@@ -403,7 +397,7 @@ export default function SettingsPage() {
                                                     {...register('lastName', {
                                                         required: true,
                                                     })}
-                                                    className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold"
+                                                    className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold shadow-inner"
                                                 />
                                                 {errors.lastName && (
                                                     <span className="text-[10px] font-bold text-rose-500">
@@ -422,7 +416,7 @@ export default function SettingsPage() {
                                                         {...register('email', {
                                                             required: true,
                                                         })}
-                                                        className="h-12 pl-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold"
+                                                        className="h-12 pl-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold shadow-inner"
                                                     />
                                                 </div>
                                                 {errors.email && (
@@ -439,7 +433,7 @@ export default function SettingsPage() {
                                     <Button
                                         type="submit"
                                         disabled={isSaving}
-                                        className="h-12 px-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                                        className="h-12 px-8 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-indigo-200 transition-all active:scale-95"
                                     >
                                         {isSaving ? (
                                             <Loader2
@@ -455,25 +449,24 @@ export default function SettingsPage() {
                             </form>
                         )}
 
-                        {/* TAB: PREFERENCES */}
                         {activeTab === 'preferences' && mounted && (
                             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <Card className="rounded-[2rem] border border-slate-200 shadow-sm bg-white overflow-hidden">
-                                    <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-6">
-                                        <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <Card className="rounded-[32px] border border-slate-200 shadow-sm bg-white overflow-hidden">
+                                    <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-6 px-8 pt-8">
+                                        <CardTitle className="text-xl font-bold flex items-center gap-2 text-slate-900 tracking-tight">
                                             <Sliders
                                                 size={20}
                                                 className="text-indigo-600"
                                             />{' '}
                                             Session Workflows
                                         </CardTitle>
-                                        <CardDescription className="text-xs font-semibold">
+                                        <CardDescription className="text-xs font-semibold text-slate-500">
                                             Customize how your dashboard behaves
                                             during live clinical sessions.
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="p-8 space-y-6">
-                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 p-5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
                                             <div>
                                                 <h4 className="text-sm font-bold text-slate-900">
                                                     Auto-Advance Queue
@@ -498,7 +491,7 @@ export default function SettingsPage() {
 
                                         <div
                                             className={cn(
-                                                'flex flex-col md:flex-row md:items-center justify-between gap-6 p-4 rounded-2xl border transition-colors',
+                                                'flex flex-col md:flex-row md:items-center justify-between gap-6 p-5 rounded-2xl border transition-colors',
                                                 handsFree
                                                     ? 'border-emerald-200 bg-emerald-50/30'
                                                     : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50',
@@ -508,10 +501,10 @@ export default function SettingsPage() {
                                                 <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                                                     Hands-Free Mode{' '}
                                                     <Zap
-                                                        size={14}
+                                                        size={16}
                                                         className={
                                                             handsFree
-                                                                ? 'text-emerald-500 fill-emerald-500'
+                                                                ? 'text-emerald-500 fill-emerald-500 animate-pulse'
                                                                 : 'text-slate-300'
                                                         }
                                                     />
@@ -538,7 +531,6 @@ export default function SettingsPage() {
                             </div>
                         )}
 
-                        {/* TAB: SECURITY */}
                         {activeTab === 'security' && (
                             <form
                                 onSubmit={handleSecuritySubmit(
@@ -546,16 +538,16 @@ export default function SettingsPage() {
                                 )}
                                 className="animate-in fade-in slide-in-from-bottom-2 duration-300"
                             >
-                                <Card className="rounded-[2rem] border border-slate-200 shadow-sm bg-white overflow-hidden">
-                                    <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-6">
-                                        <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <Card className="rounded-[32px] border border-slate-200 shadow-sm bg-white overflow-hidden">
+                                    <CardHeader className="border-b border-slate-100 bg-slate-50/50 pb-6 px-8 pt-8">
+                                        <CardTitle className="text-xl font-bold flex items-center gap-2 text-slate-900 tracking-tight">
                                             <ShieldCheck
                                                 size={20}
                                                 className="text-emerald-500"
                                             />{' '}
                                             Account Security
                                         </CardTitle>
-                                        <CardDescription className="text-xs font-semibold">
+                                        <CardDescription className="text-xs font-semibold text-slate-500">
                                             Update your password and secure your
                                             account.
                                         </CardDescription>
@@ -575,7 +567,7 @@ export default function SettingsPage() {
                                                             'Current password is required',
                                                     },
                                                 )}
-                                                className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold"
+                                                className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold shadow-inner"
                                             />
                                             {securityErrors.currentPassword && (
                                                 <p className="text-[10px] font-bold text-rose-500">
@@ -609,7 +601,7 @@ export default function SettingsPage() {
                                                         },
                                                     },
                                                 )}
-                                                className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold"
+                                                className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold shadow-inner"
                                             />
                                             {securityErrors.password && (
                                                 <p className="text-[10px] font-bold text-rose-500">
@@ -639,7 +631,7 @@ export default function SettingsPage() {
                                                             'Passwords do not match',
                                                     },
                                                 )}
-                                                className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold"
+                                                className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-indigo-50 font-semibold shadow-inner"
                                             />
                                             {securityErrors.passwordConfirmation && (
                                                 <p className="text-[10px] font-bold text-rose-500">
@@ -657,7 +649,7 @@ export default function SettingsPage() {
                                             disabled={
                                                 changePasswordMutation.isPending
                                             }
-                                            className="h-12 mt-4 px-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-widest shadow-md transition-all active:scale-95"
+                                            className="h-12 mt-6 px-8 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-widest shadow-md transition-all active:scale-95"
                                         >
                                             {changePasswordMutation.isPending ? (
                                                 <Loader2
@@ -675,25 +667,6 @@ export default function SettingsPage() {
                                     </CardContent>
                                 </Card>
                             </form>
-                        )}
-
-                        {/* TAB: NOTIFICATIONS */}
-                        {activeTab === 'notifications' && (
-                            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <Card className="rounded-[2rem] border border-slate-200 shadow-sm bg-white overflow-hidden p-12 text-center flex flex-col items-center justify-center min-h-[400px]">
-                                    <div className="h-20 w-20 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-400 mb-6">
-                                        <Bell size={32} />
-                                    </div>
-                                    <h3 className="text-xl font-bold text-slate-900">
-                                        Push Notifications
-                                    </h3>
-                                    <p className="text-sm font-medium text-slate-500 mt-2 max-w-[300px]">
-                                        Email and push notification preferences
-                                        are currently managed by your
-                                        organization's administrator.
-                                    </p>
-                                </Card>
-                            </div>
                         )}
                     </div>
                 </div>
@@ -718,9 +691,9 @@ function TabButton({
             onClick={onClick}
             type="button"
             className={cn(
-                'w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all outline-none',
+                'w-full flex items-center gap-3 px-5 py-4 rounded-[20px] text-sm font-bold transition-all outline-none',
                 active
-                    ? 'bg-slate-50 text-indigo-600 shadow-sm border border-slate-100'
+                    ? 'bg-slate-50 text-indigo-600 shadow-sm border border-slate-200/60'
                     : 'text-slate-500 hover:bg-slate-50/50 hover:text-slate-800 border border-transparent',
             )}
         >

@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
+import { toast } from 'sonner';
+
 import {
     Radar,
     RadarChart,
@@ -17,7 +20,6 @@ import {
     BrainCircuit,
     Activity,
     Target,
-    ChevronLeft,
     Loader2,
     Zap,
     MessageSquareText,
@@ -25,27 +27,29 @@ import {
     PlayCircle,
     RotateCcw,
     AlertCircle,
-    BarChart3,
-    CalendarClock,
-    Edit2,
-    Save,
-    X,
-    Cpu,
-    Network,
     CheckCircle2,
     Clock,
-    Radar as RadarIcon,
     Trophy,
     Timer,
-    Gamepad2,
-    Lightbulb,
+    AlertTriangle,
+    RefreshCw,
+    Focus,
+    Layers,
     ArrowRight,
     ArrowLeft,
     Play,
     Link as LinkIcon,
+    Edit2,
+    Save,
+    X,
+    Network,
+    ShieldCheck,
+    CalendarClock,
+    Gamepad2,
+    Lightbulb,
+    RadarIcon,
+    BarChart3,
 } from 'lucide-react';
-import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,6 +57,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
+import { Toaster } from '@/components/ui/sonner';
+
 import {
     triggerActivitySessionRecommendation,
     updateActivitySession,
@@ -67,6 +73,44 @@ import {
     ActivitySessionStatus,
     BehavioralIndicator,
 } from '@/types/activitiy-session';
+
+const PATTERN_ICONS: Record<string, any> = {
+    'Impulsive Responding': Zap,
+    'High Distractibility': AlertTriangle,
+    'Rapid Task-Switching': RefreshCw,
+    Hyperfocus: Focus,
+    'Repetitive Interaction Patterns': Layers,
+    'Rigid Task Execution': Target,
+    'Prolonged Processing Time': Timer,
+    'Inconsistent Accuracy': Activity,
+    'Sustained Attention': BrainCircuit,
+};
+
+const CpuIcon = ({ size, className }: any) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+    >
+        <rect width="16" height="16" x="4" y="4" rx="2" />
+        <rect width="6" height="6" x="9" y="9" rx="1" />
+        <path d="M15 2v2" />
+        <path d="M15 20v2" />
+        <path d="M2 15h2" />
+        <path d="M2 9h2" />
+        <path d="M20 15h2" />
+        <path d="M20 9h2" />
+        <path d="M9 2v2" />
+        <path d="M9 20v2" />
+    </svg>
+);
 
 const containerVariants: Variants = {
     hidden: { opacity: 0 },
@@ -113,7 +157,7 @@ const AnalysisStat = ({
         <div className="flex items-center gap-3 mb-4 relative z-10">
             <div
                 className={cn(
-                    'p-2 rounded-xl',
+                    'p-2 rounded-xl shrink-0',
                     colorClass
                         .replace('text-', 'bg-')
                         .replace('600', '50')
@@ -141,11 +185,11 @@ const DramaticAIGeneration = () => {
     const [phase, setPhase] = useState(0);
     const phases = [
         { text: 'Ingesting Raw Telemetry...', icon: Network },
-        { text: 'Analyzing Performance Vectors...', icon: Cpu },
+        { text: 'Analyzing Performance Vectors...', icon: CpuIcon },
         { text: 'Synthesizing Clinical Insight...', icon: BrainCircuit },
     ];
 
-    React.useEffect(() => {
+    useEffect(() => {
         const interval = setInterval(() => {
             setPhase((p) => (p < phases.length - 1 ? p + 1 : p));
         }, 1500);
@@ -209,7 +253,7 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (
-            <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-xl max-w-[250px]">
+            <div className="bg-slate-900 border border-slate-700 p-4 rounded-2xl shadow-xl max-w-[250px] pointer-events-none z-50">
                 <p className="text-indigo-400 font-bold text-[10px] uppercase tracking-widest mb-1">
                     {data.pattern}
                 </p>
@@ -238,6 +282,70 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
         );
     }
     return null;
+};
+
+const CleanRadarTick = (props: any) => {
+    const { payload, x, y, cx, cy } = props;
+    const patternName = payload.value;
+    const Icon = PATTERN_ICONS[patternName] || BrainCircuit;
+    const isTop = y < cy - 20;
+    const isBottom = y > cy + 20;
+    const isRight = x > cx + 20;
+    const isLeft = x < cx - 20;
+    let textAnchor: 'start' | 'middle' | 'end' | 'inherit' = 'middle';
+    if (isLeft && !isTop && !isBottom) textAnchor = 'end';
+    if (isRight && !isTop && !isBottom) textAnchor = 'start';
+    const radius = Math.sqrt(Math.pow(x - cx, 2) + Math.pow(y - cy, 2));
+    const unitX = (x - cx) / radius;
+    const unitY = (y - cy) / radius;
+    const offsetIcon = 16;
+    const offsetText = 36;
+    const iconX = x + unitX * offsetIcon;
+    const iconY = y + unitY * offsetIcon;
+    const textX = x + unitX * offsetText;
+    const textY = y + unitY * offsetText;
+    let dyShift = 3;
+    if (isTop) dyShift = -2;
+    if (isBottom) dyShift = 10;
+    return (
+        <g className="recharts-radar-tick">
+            <foreignObject
+                x={iconX - 10}
+                y={iconY - 10}
+                width="20"
+                height="20"
+                style={{ pointerEvents: 'none' }}
+            >
+                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                    <Icon size={14} strokeWidth={2} />
+                </div>
+            </foreignObject>
+            <text
+                x={textX}
+                y={textY}
+                textAnchor={textAnchor}
+                fill="#64748B"
+                fontSize="8px"
+                fontWeight="700"
+                className="uppercase tracking-tight"
+                dy={dyShift}
+                style={{ pointerEvents: 'none' }}
+            >
+                {patternName.length > 14 ? (
+                    <>
+                        <tspan x={textX} dy="0">
+                            {patternName.split(' ').slice(0, 2).join(' ')}
+                        </tspan>
+                        <tspan x={textX} dy="10">
+                            {patternName.split(' ').slice(2).join(' ')}
+                        </tspan>
+                    </>
+                ) : (
+                    patternName
+                )}
+            </text>
+        </g>
+    );
 };
 
 interface SessionMetricsProps {
@@ -322,6 +430,10 @@ function SessionMetricsSummary({
     );
 }
 
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
 export default function ActivitySessionDashboard({
     session,
 }: {
@@ -347,7 +459,6 @@ export default function ActivitySessionDashboard({
 
     const targetActivityId = session.aiRecommendationId;
 
-    // Fetch the suggested activity using the extracted ID
     const { data: suggestedActivity, isLoading: isLoadingSuggested } = useQuery(
         {
             queryKey: ['suggested-activity', targetActivityId],
@@ -356,7 +467,6 @@ export default function ActivitySessionDashboard({
         },
     );
 
-    // ✅ ADDED: Fetch Active Sessions to check for locks
     const { data: activeSessions = [] } = useQuery({
         queryKey: [
             'active-sessions',
@@ -388,6 +498,28 @@ export default function ActivitySessionDashboard({
 
     const isLocked = activeSessions?.length > 0;
     const currentlyActiveSession = isLocked ? activeSessions[0] : null;
+
+    const radarData = useMemo(() => {
+        if (
+            !session.behavioralIndicators ||
+            !Array.isArray(session.behavioralIndicators)
+        )
+            return [];
+        const confidenceScoreMap: Record<string, number> = {
+            High: 90,
+            Medium: 60,
+            Low: 30,
+        };
+        return session.behavioralIndicators.map(
+            (indicator: BehavioralIndicator) => ({
+                pattern: indicator.pattern,
+                score: confidenceScoreMap[indicator.confidence] || 0,
+                fullMark: 100,
+                confidence: indicator.confidence,
+                evidence: indicator.evidence,
+            }),
+        );
+    }, [session.behavioralIndicators]);
 
     const aiMutation = useMutation({
         mutationFn: triggerActivitySessionRecommendation,
@@ -432,7 +564,6 @@ export default function ActivitySessionDashboard({
         },
     });
 
-    // Quick Launch Mutation for the suggested next step
     const quickLaunchMutation = useMutation({
         mutationFn: async () => {
             if (!suggestedActivity || !session.student) {
@@ -440,14 +571,15 @@ export default function ActivitySessionDashboard({
             }
 
             const newSession = await createActivitySession({
-                activity: suggestedActivity.documentId,
-                student: session.student.id,
-                activitySessionStatus: ActivitySessionStatus.InProgress,
+                activity: suggestedActivity.documentId || suggestedActivity.id,
+                student: session.student.documentId || session.student.id,
+                activitySessionStatus: 'in_progress',
+                startAt: new Date().toISOString(),
                 previousActivitySession: session.documentId,
             });
 
             await updateActivitySession(session.documentId, {
-                nextActivitySession: newSession.documentId,
+                nextActivitySession: newSession.documentId || newSession.id,
             });
 
             return newSession;
@@ -458,7 +590,6 @@ export default function ActivitySessionDashboard({
             queryClient.invalidateQueries({
                 queryKey: ['activity-session', session.documentId],
             });
-            // Automatically route to the newly created session dashboard
             if (data?.documentId) {
                 router.push(`/activity-sessions/${data.documentId}`);
             } else {
@@ -484,7 +615,6 @@ export default function ActivitySessionDashboard({
         });
     };
 
-    // ✅ ADDED: Intercept click to check for active sessions before opening modal
     const handleOpenLaunchModal = () => {
         if (isLocked) {
             toast.error('You have an ongoing session.', {
@@ -511,28 +641,6 @@ export default function ActivitySessionDashboard({
         });
     };
 
-    const radarData = useMemo(() => {
-        if (
-            !session.behavioralIndicators ||
-            !Array.isArray(session.behavioralIndicators)
-        )
-            return [];
-        const confidenceScoreMap: Record<string, number> = {
-            High: 90,
-            Medium: 60,
-            Low: 30,
-        };
-        return session.behavioralIndicators.map(
-            (indicator: BehavioralIndicator) => ({
-                pattern: indicator.pattern,
-                score: confidenceScoreMap[indicator.confidence] || 0,
-                fullMark: 100,
-                confidence: indicator.confidence,
-                evidence: indicator.evidence,
-            }),
-        );
-    }, [session.behavioralIndicators]);
-
     const renderPrimaryAction = () => {
         const status = session.activitySessionStatus;
         if (status === 'completed') {
@@ -540,7 +648,7 @@ export default function ActivitySessionDashboard({
                 <Button
                     onClick={() => aiMutation.mutate(session.documentId)}
                     disabled={isAIGenerating}
-                    className="h-11 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] uppercase tracking-widest transition-all shadow-md disabled:opacity-70"
+                    className="h-12 w-full md:w-auto px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-widest transition-all shadow-md disabled:opacity-70"
                 >
                     <Sparkles
                         className={cn(
@@ -563,10 +671,10 @@ export default function ActivitySessionDashboard({
         ) {
             return (
                 <Button
-                    disabled={launchMutation.isPending || isLocked} // Prevents regular launch if locked globally
+                    disabled={launchMutation.isPending || isLocked}
                     onClick={() => {
                         if (isLocked) {
-                            handleOpenLaunchModal(); // Let the toast function handle the warning UI
+                            handleOpenLaunchModal();
                         } else {
                             handleLaunchOrResume(
                                 ActivitySessionStatus.InProgress,
@@ -574,7 +682,7 @@ export default function ActivitySessionDashboard({
                         }
                     }}
                     className={cn(
-                        'h-11 px-6 rounded-2xl text-white shadow-md font-bold text-[10px] uppercase tracking-widest transition-all',
+                        'h-12 w-full md:w-auto px-6 rounded-2xl text-white shadow-md font-bold text-xs uppercase tracking-widest transition-all',
                         isLocked
                             ? 'bg-slate-400 cursor-not-allowed'
                             : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100 active:scale-95',
@@ -600,7 +708,7 @@ export default function ActivitySessionDashboard({
                     onClick={() =>
                         handleLaunchOrResume(ActivitySessionStatus.InProgress)
                     }
-                    className="h-11 px-6 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-100 font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95"
+                    className="h-12 w-full md:w-auto px-6 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-100 font-bold text-xs uppercase tracking-widest transition-all active:scale-95"
                 >
                     {launchMutation.isPending ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -614,7 +722,7 @@ export default function ActivitySessionDashboard({
         return (
             <Badge
                 variant="secondary"
-                className="h-11 px-5 rounded-2xl text-slate-500 font-bold uppercase tracking-widest text-[10px] border border-slate-200"
+                className="h-12 w-full md:w-auto px-6 rounded-2xl text-slate-500 font-bold uppercase tracking-widest text-[10px] border border-slate-200 flex items-center justify-center"
             >
                 <AlertCircle className="mr-2 h-4 w-4" /> Session {status}
             </Badge>
@@ -622,13 +730,15 @@ export default function ActivitySessionDashboard({
     };
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900">
+        <div className="min-h-screen bg-[#F8FAFC]">
+            <Toaster position="top-right" richColors closeButton />
+
             <div
-                className="fixed inset-0 pointer-events-none opacity-[0.2]"
+                className="fixed inset-0 pointer-events-none opacity-[0.4]"
                 style={{
                     backgroundImage:
                         'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)',
-                    backgroundSize: '60px 60px',
+                    backgroundSize: '40px 40px',
                     maskImage:
                         'linear-gradient(to bottom, black 40%, transparent 100%)',
                 }}
@@ -638,38 +748,41 @@ export default function ActivitySessionDashboard({
                 variants={containerVariants}
                 initial="hidden"
                 animate="show"
-                className="max-w-[1600px] mx-auto p-6 lg:p-12 relative z-10 flex flex-col gap-10"
+                className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-8 pb-24"
             >
                 <motion.header
                     variants={itemVariants}
-                    className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm"
+                    className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm shrink-0 w-full"
                 >
-                    <div className="space-y-4">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => router.back()}
-                            className="p-0 h-auto text-slate-400 hover:text-indigo-600 font-bold text-[10px] uppercase tracking-widest transition-colors"
-                        >
-                            <ChevronLeft size={14} className="mr-1" /> Registry
-                            Directory
-                        </Button>
-                        <div className="flex items-center gap-4">
+                    <div className="space-y-1 w-full md:w-auto">
+                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5 mb-2">
+                            <button
+                                onClick={() => router.back()}
+                                className="flex items-center gap-1 hover:text-indigo-800 transition-colors"
+                            >
+                                <ArrowLeft size={14} strokeWidth={3} /> Go Back
+                            </button>
+                            <span className="opacity-40">•</span>
+                            <ShieldCheck
+                                size={14}
+                                className="text-indigo-600"
+                            />{' '}
+                            Session Details
+                        </div>
+                        <div className="flex flex-col md:flex-row md:items-center gap-3">
                             <h1
                                 className={cn(
-                                    'text-3xl md:text-4xl font-black tracking-tight leading-none',
-                                    !session.activity?.name
-                                        ? 'text-slate-400 italic'
-                                        : 'text-slate-900',
+                                    'text-3xl md:text-4xl font-black tracking-tight text-slate-900 leading-none truncate',
+                                    !session.activity?.name &&
+                                        'text-slate-400 italic',
                                 )}
                             >
-                                {session.activity?.name ||
-                                    'No Activity is Linked'}
+                                {session.activity?.name || 'No Activity Linked'}
                             </h1>
                             <Badge
                                 variant="outline"
                                 className={cn(
-                                    'border-2 font-bold uppercase tracking-widest text-[10px] px-3 py-1 rounded-xl',
+                                    'border-2 font-bold uppercase tracking-widest text-[10px] px-3 py-1 w-max rounded-xl',
                                     session.activitySessionStatus ===
                                         'completed'
                                         ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
@@ -685,21 +798,20 @@ export default function ActivitySessionDashboard({
                                 )}
                             </Badge>
                         </div>
-                        <div className="text-sm font-bold text-slate-500 flex items-center gap-4">
-                            <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                                <Target size={14} className="text-slate-400" />
-                                {session.student
-                                    ? `${session.student.firstName} ${session.student.lastName}`
-                                    : 'Unknown Student'}
-                            </span>
-                        </div>
+                        <p className="text-sm font-medium text-slate-500 mt-2 flex items-center gap-2">
+                            <Target size={14} className="text-slate-400" />
+                            Student:{' '}
+                            {session.student
+                                ? `${session.student.firstName} ${session.student.lastName}`
+                                : 'Unknown'}
+                        </p>
                     </div>
-                    <div className="flex items-center gap-4">
+
+                    <div className="w-full md:w-auto flex items-center gap-3 shrink-0">
                         {renderPrimaryAction()}
                     </div>
                 </motion.header>
 
-                {/* --- STATS ROW --- */}
                 <motion.div
                     variants={itemVariants}
                     className={cn(
@@ -721,7 +833,7 @@ export default function ActivitySessionDashboard({
                                 : 'Awaiting Analysis'
                         }
                         icon={BrainCircuit}
-                        colorClass="group-hover:text-purple-500"
+                        colorClass="text-purple-600"
                     />
                     <AnalysisStat
                         label="Session State"
@@ -731,7 +843,7 @@ export default function ActivitySessionDashboard({
                         }
                         subtitle="Current Status"
                         icon={Activity}
-                        colorClass="group-hover:text-indigo-500"
+                        colorClass="text-indigo-600"
                     />
                     <AnalysisStat
                         label="Execution Start"
@@ -751,7 +863,7 @@ export default function ActivitySessionDashboard({
                                 : 'Not Initialized'
                         }
                         icon={CalendarClock}
-                        colorClass="group-hover:text-amber-500"
+                        colorClass="text-amber-500"
                     />
                     {isGameActivity && (
                         <AnalysisStat
@@ -763,7 +875,7 @@ export default function ActivitySessionDashboard({
                             }
                             subtitle="Data Points Processed"
                             icon={Network}
-                            colorClass="group-hover:text-emerald-500"
+                            colorClass="text-emerald-500"
                         />
                     )}
                 </motion.div>
@@ -915,7 +1027,13 @@ export default function ActivitySessionDashboard({
                                                                             Active
                                                                         </span>
                                                                     </div>
-                                                                    <h4 className="text-base font-bold text-slate-800 truncate leading-tight group-hover:text-emerald-700 transition-colors">
+                                                                    <h4
+                                                                        className={cn(
+                                                                            'text-base font-bold text-slate-800 truncate leading-tight transition-colors',
+                                                                            !isLocked &&
+                                                                                'group-hover:text-amber-600',
+                                                                        )}
+                                                                    >
                                                                         {session
                                                                             .nextActivitySession
                                                                             .activity
@@ -989,7 +1107,6 @@ export default function ActivitySessionDashboard({
                                                                         suggestedActivity.banner,
                                                                         'thumbnail',
                                                                     ) ? (
-                                                                        // eslint-disable-next-line @next/next/no-img-element
                                                                         <img
                                                                             src={FormatService.formatStrapiMedia(
                                                                                 suggestedActivity.banner,
@@ -1122,13 +1239,14 @@ export default function ActivitySessionDashboard({
                             </AnimatePresence>
                         )}
 
+                        {/* RESTORED: BEHAVIORAL RADAR CHART */}
                         {radarData.length > 0 && (
                             <motion.div
                                 initial={{ opacity: 0, y: 15 }}
                                 animate={{ opacity: 1, y: 0 }}
                             >
-                                <Card className="rounded-[32px] border border-slate-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)] bg-white overflow-hidden">
-                                    <CardHeader className="p-8 border-b border-slate-50 flex flex-row items-center justify-between">
+                                <Card className="rounded-[32px] border border-slate-100 shadow-sm bg-white overflow-hidden">
+                                    <CardHeader className="p-6 border-b border-slate-50 flex flex-row items-center justify-between">
                                         <div className="space-y-1">
                                             <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-900">
                                                 Cognitive & Behavioral Profile
@@ -1160,11 +1278,9 @@ export default function ActivitySessionDashboard({
                                                     <PolarGrid stroke="#e2e8f0" />
                                                     <PolarAngleAxis
                                                         dataKey="pattern"
-                                                        tick={{
-                                                            fill: '#64748b',
-                                                            fontSize: 11,
-                                                            fontWeight: 600,
-                                                        }}
+                                                        tick={
+                                                            <CleanRadarTick />
+                                                        }
                                                     />
                                                     <PolarRadiusAxis
                                                         angle={30}
@@ -1181,6 +1297,7 @@ export default function ActivitySessionDashboard({
                                                         fillOpacity={0.3}
                                                     />
                                                     <RechartsTooltip
+                                                        cursor={false}
                                                         content={
                                                             <CustomRadarTooltip />
                                                         }
@@ -1193,9 +1310,10 @@ export default function ActivitySessionDashboard({
                             </motion.div>
                         )}
 
+                        {/* RESTORED: TELEMETRY LIST */}
                         {isGameActivity && (
                             <Card className="rounded-[32px] border border-slate-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)] bg-white overflow-hidden flex flex-col">
-                                <CardHeader className="p-8 border-b border-slate-50 flex flex-row items-center justify-between shrink-0">
+                                <CardHeader className="p-6 border-b border-slate-50 flex flex-row items-center justify-between shrink-0">
                                     <div className="space-y-1">
                                         <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-900">
                                             Activity Telemetry
@@ -1212,7 +1330,6 @@ export default function ActivitySessionDashboard({
                                         />
                                     </div>
                                 </CardHeader>
-
                                 <CardContent className="p-0 h-[450px] overflow-y-auto custom-scrollbar">
                                     {session.telemetryAnalysis &&
                                     Array.isArray(session.telemetryAnalysis) &&
@@ -1323,7 +1440,6 @@ export default function ActivitySessionDashboard({
                                         </Button>
                                     )}
                             </CardHeader>
-
                             <CardContent className="p-8">
                                 {isEditingNotes ? (
                                     <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
@@ -1339,7 +1455,7 @@ export default function ActivitySessionDashboard({
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100"
+                                                className="h-10 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:bg-slate-100"
                                                 onClick={() => {
                                                     setIsEditingNotes(false);
                                                     setNotesContent(
@@ -1353,7 +1469,7 @@ export default function ActivitySessionDashboard({
                                             </Button>
                                             <Button
                                                 size="sm"
-                                                className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-slate-200"
+                                                className="h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-slate-200 px-6"
                                                 disabled={
                                                     updateNotesMutation.isPending
                                                 }
@@ -1434,7 +1550,7 @@ export default function ActivitySessionDashboard({
                         <div className="bg-white rounded-[32px] border border-slate-100 shadow-[0_2px_20px_rgba(0,0,0,0.02)] p-8 space-y-6">
                             <div className="flex items-center gap-2.5">
                                 <div className="p-1.5 bg-slate-50 rounded-lg text-slate-400">
-                                    <FileText size={14} />
+                                    <Layers size={14} />
                                 </div>
                                 <TechnicalLabel className="text-slate-600">
                                     Registry Details
@@ -1464,8 +1580,6 @@ export default function ActivitySessionDashboard({
                                             : 'Unassigned'}
                                     </span>
                                 </div>
-
-                                {/* Previous Linked Session UI (Clickable) */}
                                 {session.previousActivitySession && (
                                     <div className="pt-4 mt-4 border-t border-slate-100 flex flex-col gap-3">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -1501,8 +1615,6 @@ export default function ActivitySessionDashboard({
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Next Linked Session UI (Clickable) */}
                                 {session.nextActivitySession && (
                                     <div className="pt-4 mt-4 border-t border-slate-100 flex flex-col gap-3">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -1541,7 +1653,6 @@ export default function ActivitySessionDashboard({
                         </div>
                     </motion.aside>
                 </div>
-                <footer className="h-16 w-full shrink-0" aria-hidden="true" />
             </motion.div>
 
             {/* Quick Launch Confirmation Modal */}
@@ -1595,9 +1706,9 @@ export default function ActivitySessionDashboard({
                                     onClick={() => quickLaunchMutation.mutate()}
                                     disabled={quickLaunchMutation.isPending}
                                 >
-                                    {quickLaunchMutation.isPending ? (
+                                    {quickLaunchMutation.isPending && (
                                         <Loader2 className="animate-spin w-4 h-4 mr-2" />
-                                    ) : null}
+                                    )}{' '}
                                     Confirm Launch
                                 </Button>
                             </div>

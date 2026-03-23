@@ -172,9 +172,6 @@ const CHART_COLORS = [
     '#14b8a6',
 ];
 
-// ============================================================================
-// --- UNIFIED ZERO-JERK RADAR TICK (USED IN BOTH PANELS) ---
-// ============================================================================
 const CleanRadarTick = (props: any) => {
     const { payload, x, y, cx, cy } = props;
     const patternName = payload.value;
@@ -208,9 +205,7 @@ const CleanRadarTick = (props: any) => {
 
     return (
         <g className="recharts-radar-tick outline-none">
-            {/* Invisible hitbox block to stop resizing */}
             <circle cx={iconX} cy={iconY} r={16} fill="transparent" />
-
             <foreignObject
                 x={iconX - 9}
                 y={iconY - 9}
@@ -223,7 +218,6 @@ const CleanRadarTick = (props: any) => {
                     <Icon size={14} strokeWidth={2.5} />
                 </div>
             </foreignObject>
-
             <text
                 x={textX}
                 y={textY}
@@ -251,10 +245,6 @@ const CleanRadarTick = (props: any) => {
         </g>
     );
 };
-
-// ============================================================================
-// --- SUB-COMPONENT: ADVANCED STUDENT COMPARISON CHART ---
-// ============================================================================
 
 const CustomComparisonTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -690,7 +680,6 @@ const StudentComparisonPanel = ({
                                         width="100%"
                                         height="100%"
                                     >
-                                        {/* ✨ GLITCH-FREE RADAR IMPLEMENTATION ✨ */}
                                         <RadarChart
                                             cx="50%"
                                             cy="50%"
@@ -771,7 +760,6 @@ const StudentComparisonPanel = ({
     );
 };
 
-// --- SUB-COMPONENT: Stat Card ---
 const DashboardStatCard = ({
     title,
     value,
@@ -831,7 +819,6 @@ const DashboardStatCard = ({
     </div>
 );
 
-// --- SUB-COMPONENT: Pending Feed Item ---
 const ActivityFeedItem = ({
     session,
     isLast,
@@ -939,7 +926,6 @@ const ActivityFeedItem = ({
     );
 };
 
-// --- SUB-COMPONENT: Recent Log Item ---
 const RecentLogItem = ({ session }: { session: ActivitySessionResponse }) => {
     const status = session.activitySessionStatus?.toLowerCase();
     const isCompleted = status === 'completed';
@@ -1014,7 +1000,6 @@ const RecentLogItem = ({ session }: { session: ActivitySessionResponse }) => {
     );
 };
 
-// --- MAIN DASHBOARD COMPONENT ---
 export default function Dashboard() {
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -1244,25 +1229,28 @@ export default function Dashboard() {
     return (
         <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-x-hidden relative">
             <div
-                className="absolute inset-0 pointer-events-none opacity-[0.2]"
+                className="absolute inset-0 pointer-events-none opacity-[0.4]"
                 style={{
                     backgroundImage:
                         'linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px)',
-                    backgroundSize: '60px 60px',
+                    backgroundSize: '40px 40px',
+                    maskImage:
+                        'linear-gradient(to bottom, black 40%, transparent 100%)',
                 }}
             />
 
-            <div className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-10">
-                <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm">
+            <div className="max-w-[1600px] mx-auto p-6 lg:p-8 relative z-10 flex flex-col gap-8">
+                {/* --- UNIFIED DASHBOARD HEADER --- */}
+                <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-200 shadow-sm shrink-0">
                     <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5">
+                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-[10px] uppercase tracking-widest ml-0.5 mb-2">
                             <Zap size={14} className="fill-indigo-600" />{' '}
                             Command Center
                         </div>
-                        <h1 className="text-3xl font-black tracking-tight text-slate-900 leading-none">
+                        <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 leading-none">
                             Good day, {user?.firstName || 'Therapist'}
                         </h1>
-                        <p className="text-sm font-medium text-slate-500 mt-2">
+                        <p className="text-sm font-medium text-slate-500 mt-2 max-w-xl">
                             You have{' '}
                             <span className="text-slate-900 font-bold">
                                 {pendingQueue.length} pending sessions
@@ -1270,12 +1258,13 @@ export default function Dashboard() {
                             scheduled for today.
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+
+                    <div className="w-full md:w-auto flex items-center gap-3">
                         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                             <SheetTrigger asChild>
                                 <Button
                                     variant="outline"
-                                    className="relative h-12 rounded-2xl border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 font-bold text-[10px] uppercase tracking-widest px-6 transition-all shadow-sm"
+                                    className="h-12 w-full md:w-auto rounded-2xl border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 font-bold text-[10px] uppercase tracking-widest px-6 transition-all shadow-sm relative"
                                 >
                                     <CalendarDays className="mr-2 h-4 w-4" /> My
                                     Activities
@@ -1528,7 +1517,7 @@ export default function Dashboard() {
 }
 
 // ============================================================================
-// --- LIVE SESSION WIDGET SUB-COMPONENT ---
+// --- FULL, UNTRUNCATED LIVE SESSION WIDGET ---
 // ============================================================================
 function LiveSessionWidget({
     session,
@@ -2191,9 +2180,7 @@ function LiveSessionWidget({
                 }
             });
 
-            if (lastPauseMs !== null) {
-                totalPausedMs += nowMs - lastPauseMs;
-            }
+            if (lastPauseMs !== null) totalPausedMs += nowMs - lastPauseMs;
             return Math.max(0, Math.floor((grossMs - totalPausedMs) / 1000));
         };
 
@@ -2949,7 +2936,7 @@ function LiveSessionWidget({
                                         </div>
                                     </div>
 
-                                    {/* ✨ PERFECTED DROPZONE vs NEW PRO PIN UI ✨ */}
+                                    {/* ✨ DROPZONE / PIN UI ✨ */}
                                     <div
                                         className={cn(
                                             'w-full flex flex-col items-center justify-center py-2 transition-all duration-300 relative',
@@ -2981,7 +2968,6 @@ function LiveSessionWidget({
                                         }}
                                     >
                                         <div className="w-full flex flex-col items-center justify-center min-h-[140px]">
-                                            {/* Priority 1: If dragging, ONLY show the dropzone */}
                                             {dragOverLive &&
                                             !session.actualStartAt &&
                                             !isLocked ? (
@@ -3010,7 +2996,6 @@ function LiveSessionWidget({
                                                     exit={{ opacity: 0 }}
                                                     className="flex flex-col items-center w-full pointer-events-auto"
                                                 >
-                                                    {/* ✨ NEW SECURE PIN CARD DESIGN ✨ */}
                                                     <div className="bg-white border border-slate-200/60 rounded-[24px] p-5 shadow-sm w-full max-w-[280px] relative transition-all group">
                                                         <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <Button
@@ -3302,7 +3287,7 @@ function LiveSessionWidget({
                                                         variant="outline"
                                                         className="flex-1 h-10 rounded-xl border-slate-200/60 bg-white/50 text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 font-bold text-[10px] uppercase tracking-wider shadow-sm transition-all px-2"
                                                     >
-                                                        <Square className="mr-1.5 h-3.5 w-3.5 fill-current shrink-0" />
+                                                        <Square className="mr-1.5 h-3.5 w-3.5 fill-current shrink-0" />{' '}
                                                         Cancel
                                                     </Button>
                                                     {queuedSessions.length >
@@ -3319,7 +3304,7 @@ function LiveSessionWidget({
                                                             }
                                                             className="flex-1 h-10 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm transition-all border border-slate-700 px-2"
                                                         >
-                                                            <SkipForward className="mr-1.5 h-3.5 w-3.5 fill-current shrink-0" />
+                                                            <SkipForward className="mr-1.5 h-3.5 w-3.5 fill-current shrink-0" />{' '}
                                                             Skip
                                                         </Button>
                                                     )}

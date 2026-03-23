@@ -56,6 +56,7 @@ export function DateRangePicker({
     className,
 }: DateRangePickerProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [alignment, setAlignment] = useState<'left' | 'right'>('left');
     const popoverRef = useRef<HTMLDivElement>(null);
 
     const initialFrom = value.from ? parseISO(value.from) : new Date();
@@ -81,6 +82,7 @@ export function DateRangePicker({
         }
     }, [value, isOpen]);
 
+    // Handle clicking outside to close
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (
@@ -94,6 +96,23 @@ export function DateRangePicker({
         return () =>
             document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // ✨ SMART EDGE DETECTION ✨
+    // Checks if the dropdown will overflow the screen and flips alignment if necessary
+    useEffect(() => {
+        if (isOpen && popoverRef.current) {
+            const rect = popoverRef.current.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const dropdownWidth = viewportWidth < 640 ? 320 : 540;
+
+            // If expanding to the right pushes it past the edge (minus 20px padding)
+            if (rect.left + dropdownWidth > viewportWidth - 20) {
+                setAlignment('right');
+            } else {
+                setAlignment('left');
+            }
+        }
+    }, [isOpen]);
 
     const calendarDays = useMemo(() => {
         const monthStart = startOfMonth(currentMonth);
@@ -176,15 +195,15 @@ export function DateRangePicker({
 
     return (
         <div
-            className={cn('relative inline-block text-left z-50', className)}
+            className={cn('relative inline-block text-left z-[100]', className)}
             ref={popoverRef}
         >
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-3 bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-2xl w-full md:w-auto shadow-sm hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                className="flex items-center gap-3 bg-white border border-slate-200 px-4 h-12 rounded-2xl w-full md:w-auto shadow-sm hover:border-indigo-300 hover:bg-indigo-50/50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
                 <CalendarDays size={16} className="text-indigo-500" />
-                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest whitespace-nowrap">
                     {formatDateDisplay(value.from)}{' '}
                     <span className="text-slate-300 mx-1">—</span>{' '}
                     {formatDateDisplay(value.to)}
@@ -192,15 +211,21 @@ export function DateRangePicker({
                 <ChevronDown
                     size={14}
                     className={cn(
-                        'text-slate-400 transition-transform duration-200',
+                        'text-slate-400 transition-transform duration-200 shrink-0',
                         isOpen && 'rotate-180',
                     )}
                 />
             </button>
 
             {isOpen && (
-                <div className="absolute top-full right-0 mt-2 w-[320px] sm:w-[540px] bg-white border border-slate-200 rounded-[24px] shadow-xl overflow-hidden flex flex-col sm:flex-row">
-                    <div className="w-full sm:w-[160px] bg-slate-50/50 border-b sm:border-b-0 sm:border-r border-slate-100 p-3 flex flex-col gap-1 shrink-0">
+                <div
+                    className={cn(
+                        'absolute z-[100] top-[calc(100%+8px)] sm:w-[540px] bg-white border border-slate-200 rounded-[24px] shadow-2xl overflow-hidden flex flex-col sm:flex-row animate-in fade-in slide-in-from-top-2 duration-200',
+                        alignment === 'right' ? 'right-0' : 'left-0',
+                        'w-[calc(100vw-2rem)] max-w-[320px] sm:max-w-none', // Mobile-safe width
+                    )}
+                >
+                    <div className="w-full sm:w-[160px] bg-slate-50/80 border-b sm:border-b-0 sm:border-r border-slate-100 p-3 flex flex-col gap-1 shrink-0">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1 mb-1">
                             Quick Select
                         </span>
@@ -208,13 +233,14 @@ export function DateRangePicker({
                             <button
                                 key={preset.label}
                                 onClick={() => applyPreset(preset.value)}
+                                className="w-full text-left px-3 py-2 text-[11px] font-bold text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-sm rounded-xl transition-all"
                             >
                                 {preset.label}
                             </button>
                         ))}
                     </div>
 
-                    <div className="flex-1 p-5 flex flex-col select-none">
+                    <div className="flex-1 p-5 flex flex-col select-none bg-white">
                         <div className="flex items-center justify-between mb-4">
                             <button
                                 onClick={() =>
