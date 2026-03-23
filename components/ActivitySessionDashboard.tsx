@@ -571,9 +571,9 @@ export default function ActivitySessionDashboard({
             }
 
             const newSession = await createActivitySession({
-                activity: suggestedActivity.documentId || suggestedActivity.id,
-                student: session.student.documentId || session.student.id,
-                activitySessionStatus: 'in_progress',
+                activity: suggestedActivity.documentId,
+                student: session.student.id,
+                activitySessionStatus: ActivitySessionStatus.InProgress,
                 startAt: new Date().toISOString(),
                 previousActivitySession: session.documentId,
             });

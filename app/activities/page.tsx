@@ -188,7 +188,7 @@ const ActivityLibrary = () => {
     }, [studentsList, parsedStudentIdParam]);
 
     const handleConfirmLaunch = useCallback(
-        (selectedStudentId: string | number, activityOverride?: any) => {
+        (selectedStudentId: number, activityOverride?: any) => {
             if (launchMutation.isPending) return;
             const targetActivity = activityOverride || activityToLaunch;
             if (!targetActivity) return;
@@ -206,7 +206,7 @@ const ActivityLibrary = () => {
                 {
                     activity: activityId,
                     student: selectedStudentId,
-                    activitySessionStatus: 'in_progress',
+                    activitySessionStatus: ActivitySessionStatus.InProgress,
                     startAt: new Date().toISOString(),
                 },
                 {
