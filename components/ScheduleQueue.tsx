@@ -22,7 +22,6 @@ import {
     ActivitySessionResponse,
     ActivitySessionStatus,
 } from '@/types/activitiy-session';
-import { Activity, Activity as ActivityType } from '@/types/actitivity';
 import { FormatService } from '@/utils/helpers';
 
 interface ScheduleQueueProps {

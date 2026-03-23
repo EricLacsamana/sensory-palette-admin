@@ -44,7 +44,7 @@ import { FormatService } from '@/utils/helpers';
 import { Input } from '@base-ui/react';
 import { UserResponse } from '@/types';
 import { UserAvatar } from '@/components/UserAvatar';
-import { Activity } from '@/types/actitivity';
+import { ActivityResponse } from '@/types/actitivity';
 import { cn } from '@/lib/utils';
 
 export const getOperatingHoursForDate = (targetDate: Date | string) => {
@@ -105,7 +105,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const [slideDirection, setSlideDirection] = useState(0);
 
     const [mobileSelectedActivity, setMobileSelectedActivity] =
-        useState<Activity | null>(null);
+        useState<ActivityResponse | null>(null);
 
     // FIX: Local state prevents Next.js routing destruction on student switch
     const [activeStudentId, setActiveStudentId] = useState<number | null>(

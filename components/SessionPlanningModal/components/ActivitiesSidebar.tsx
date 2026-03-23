@@ -150,7 +150,7 @@ export const ActivitiesSiderbar = ({
                                         durationMinutes: 5,
                                         banner: null,
                                         activityStatus: 'active',
-                                    } as unknown as Activity,
+                                    } as unknown as ActivityResponse,
                                     'static-break',
                                     true,
                                 )}

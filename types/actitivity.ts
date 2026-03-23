@@ -21,13 +21,13 @@ export interface ActivityResponse {
 }
 
 // // Helper to represent just the attributes for Partial usage
-// export type ActivityAttributes = Omit<Activity, 'documentId'>;
+// export type ActivityAttributes = Omit<ActivityResponse, 'documentId'>;
 
 /**
  * Interface for the Planning Timeline
- * Extended to handle Activity vs Break logic explicitly
+ * Extended to handle ActivityResponse vs Break logic explicitly
  */
-export interface ActivityEntry extends Partial<Activity> {
+export interface ActivityEntry extends Partial<ActivityResponse> {
     // Identity
     instanceId: string;
     id?: number;
