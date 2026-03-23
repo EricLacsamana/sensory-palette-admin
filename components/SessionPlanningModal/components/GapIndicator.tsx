@@ -3,15 +3,15 @@
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Clock, PlusCircle, Ban } from 'lucide-react';
-import { Activity } from '@/types/actitivity';
+import { ActivityResponse } from '@/types/actitivity';
 import { FormatService } from '@/utils/helpers';
 
 interface GapIndicatorProps {
     durationMinutes: number;
     startAt: string;
     endAt: string;
-    draggedItem: Activity | null;
-    onGapDrop: (activity: Activity) => void;
+    draggedItem: ActivityResponse | null;
+    onGapDrop: (activity: ActivityResponse) => void;
 }
 
 export const GapIndicator = ({

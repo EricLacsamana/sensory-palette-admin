@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api';
 import { ENDPOINTS } from '../constants/api';
-import { Activity } from '@/types/actitivity';
+import { ActivityResponse } from '@/types/actitivity';
 
 // --- FETCH ---
 const fetchActivities = async () => {
@@ -45,7 +45,7 @@ export const useUpdateActivity = () => {
             id: string;
             // You can keep Activity here, but we cast during destructuring
             // to avoid TS errors if your Activity type doesn't strictly define these Strapi fields
-            payload: Activity;
+            payload: ActivityResponse;
         }) => {
             console.log('Original payload before cleaning:', payload);
 

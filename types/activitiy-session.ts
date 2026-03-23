@@ -1,5 +1,5 @@
 import { User, UserResponse } from '.';
-import { Activity } from './actitivity';
+import { ActivityResponse } from './actitivity';
 
 export enum ActivitySessionStatus {
     Pending = 'pending',
@@ -42,7 +42,7 @@ export interface ActivitySessionResponse {
     id: number | string;
     documentId: string;
     student: UserResponse;
-    activity: Activity;
+    activity: ActivityResponse;
     therapist: User;
     startAt: string;
     endAt: string; // ISO String
@@ -84,7 +84,7 @@ export type ActivitySessionEntry = Omit<
     student?: UserResponse;
     durationMinutes?: number;
     documentId?: string;
-    activity: Activity;
+    activity: ActivityResponse;
     type: 'activity' | 'gap';
     enableLearnerControls?: boolean;
     rawTelemetry: unknown[];

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react'; // Added useState
+import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useDispatch } from 'react-redux';
@@ -10,7 +10,6 @@ import {
     PieChart,
     Users,
     Gamepad2,
-    Wifi,
     LogOut,
     ChevronRight,
     ChevronLeft,
@@ -20,6 +19,7 @@ import {
     Settings2,
     Users2,
     Settings,
+    Loader2,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -36,6 +36,32 @@ import {
 import { InitializeSessionButton } from './SessionPlanningModal/components/InitializeSessionPlanningButton';
 import { FormatService } from '@/utils/helpers';
 
+// --- Tooltip Wrapper (Outside render to avoid component-in-render errors) ---
+const TooltipWrapper = ({
+    children,
+    tooltipText,
+    shouldWrap,
+    isMobile,
+}: {
+    children: React.ReactNode;
+    tooltipText: string;
+    shouldWrap: boolean;
+    isMobile: boolean;
+}) => {
+    if (!shouldWrap || isMobile) return <>{children}</>;
+    return (
+        <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>{children}</TooltipTrigger>
+            <TooltipContent
+                side="right"
+                className="font-semibold bg-slate-900 text-white border-none"
+            >
+                {tooltipText}
+            </TooltipContent>
+        </Tooltip>
+    );
+};
+
 interface SidebarProps {
     isCollapsed: boolean;
     setIsCollapsed: (value: boolean) => void;
@@ -45,7 +71,17 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
     const router = useRouter();
     const dispatch = useDispatch();
     const pathname = usePathname();
-    const [isMobile, setIsMobile] = useState(false); // Track if it's a touch device
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Feedback states
+    const [pendingPath, setPendingPath] = useState<string | null>(null);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+    // --- FIX: Reset state during render instead of in useEffect ---
+    // If the URL matches the path we were waiting for, clear it immediately
+    if (pendingPath === pathname) {
+        setPendingPath(null);
+    }
 
     const { data: user } = useQuery({
         queryKey: ['me'],
@@ -56,25 +92,15 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
         const handleResize = () => {
             const mobile = window.innerWidth < 768;
             setIsMobile(mobile);
-            if (mobile) {
-                setIsCollapsed(true);
-            }
+            if (mobile) setIsCollapsed(true);
         };
-
         handleResize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, [setIsCollapsed]);
 
-    const handleLogout = () => {
-        dispatch(logout());
-    };
-
     const userRole = user?.role?.type;
-
-    if (userRole === 'student') {
-        return null;
-    }
+    if (userRole === 'student') return null;
 
     const navItems = [
         {
@@ -82,79 +108,61 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
             label: 'Overview',
             icon: PieChart,
             allowedRoles: ['admin', 'therapist', 'secretary'],
-            badge: null,
         },
         {
             path: '/students',
             label: 'Learners',
             icon: Users,
             allowedRoles: ['therapist', 'secretary'],
-            badge: null,
         },
         {
             path: '/activities',
             label: 'Activity Center',
             icon: Gamepad2,
             allowedRoles: ['therapist'],
-            badge: null,
         },
         {
             path: '/activity-manager',
             label: 'Activity Manager',
             icon: Gamepad2,
             allowedRoles: ['admin'],
-            badge: null,
         },
         {
             path: '/activity-sessions',
             label: 'Sessions',
             icon: Activity,
             allowedRoles: ['admin', 'therapist', 'secretary'],
-            badge: null,
         },
         {
             path: '/users',
             label: 'Users Directory',
             icon: Users2,
             allowedRoles: ['admin', 'secretary'],
-            badge: null,
         },
         {
             path: '/settings',
             label: 'Settings',
             icon: Settings,
             allowedRoles: ['admin', 'therapist', 'secretary'],
-            badge: null,
         },
     ];
 
-    const visibleNavItems = navItems.filter(
-        (item) => !userRole || item.allowedRoles.includes(userRole),
+    const visibleNavItems = useMemo(
+        () =>
+            navItems.filter(
+                (item) => !userRole || item.allowedRoles.includes(userRole),
+            ),
+        [userRole],
     );
 
-    // --- HELPER TO PREVENT TOOLTIPS ON MOBILE ---
-    // Tooltips ruin the first tap on touchscreens. If it's mobile, we skip the tooltip.
-    const TooltipWrapper = ({
-        children,
-        tooltipText,
-        shouldWrap,
-    }: {
-        children: React.ReactNode;
-        tooltipText: string;
-        shouldWrap: boolean;
-    }) => {
-        if (!shouldWrap || isMobile) return <>{children}</>;
-        return (
-            <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>{children}</TooltipTrigger>
-                <TooltipContent
-                    side="right"
-                    className="font-semibold bg-slate-900 text-white border-none"
-                >
-                    {tooltipText}
-                </TooltipContent>
-            </Tooltip>
-        );
+    const handleLogout = async () => {
+        setIsLoggingOut(true);
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            dispatch(logout());
+        } catch (error) {
+            setIsLoggingOut(false);
+        }
     };
 
     return (
@@ -182,13 +190,12 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                         <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0 shadow-sm shadow-indigo-200">
                             <LayoutGrid size={18} className="text-white" />
                         </div>
-                        <AnimatePresence>
+                        <AnimatePresence mode="wait">
                             {!isCollapsed && (
                                 <motion.span
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -10 }}
-                                    transition={{ duration: 0.2 }}
                                     className="font-bold text-lg tracking-tight text-slate-900 whitespace-nowrap"
                                 >
                                     Sensory
@@ -202,109 +209,80 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                 </div>
 
                 {/* Profile */}
-                <div className="px-3 py-6">
+                <div className="px-3 py-6 shrink-0">
                     <div
                         className={cn(
-                            'rounded-xl bg-slate-50 border border-slate-100 transition-all duration-300 relative group overflow-hidden',
-                            isCollapsed ? 'p-1.5' : 'p-3',
+                            'rounded-xl bg-slate-50 border border-slate-100 transition-all duration-300 flex items-center',
+                            isCollapsed ? 'p-1.5 justify-center' : 'p-3',
                         )}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="relative shrink-0">
-                                <Avatar className="h-9 w-9 rounded-lg border border-white shadow-sm">
-                                    <AvatarImage
-                                        src={FormatService.formatStrapiMedia(
-                                            user?.profilePicture,
-                                            'thumbnail',
-                                        )}
-                                        className="object-cover"
-                                    />
-                                    <AvatarFallback className="bg-slate-200 text-slate-500 rounded-lg text-xs font-bold">
-                                        {user?.fullName?.charAt(0) || '?'}
-                                    </AvatarFallback>
-                                </Avatar>
-                            </div>
-                            {!isCollapsed && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="flex flex-col min-w-0 pr-4"
-                                >
-                                    <p className="truncate text-sm font-semibold text-slate-900 leading-none mb-1">
-                                        {user?.fullName || 'Loading...'}
-                                    </p>
-                                    <p className="truncate text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                                        {user?.role?.name || '...'}
-                                    </p>
-                                </motion.div>
-                            )}
-                        </div>
+                        <Avatar className="h-9 w-9 rounded-lg border border-white shadow-sm shrink-0">
+                            <AvatarImage
+                                src={FormatService.formatStrapiMedia(
+                                    user?.profilePicture,
+                                    'thumbnail',
+                                )}
+                                className="object-cover"
+                            />
+                            <AvatarFallback className="bg-slate-200 text-slate-500 rounded-lg text-xs font-bold">
+                                {user?.fullName?.charAt(0) || '?'}
+                            </AvatarFallback>
+                        </Avatar>
                         {!isCollapsed && (
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Link href="/settings">
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-7 w-7 text-slate-400 hover:text-indigo-600 bg-white/80 backdrop-blur-sm"
-                                    >
-                                        <Settings2 size={14} />
-                                    </Button>
-                                </Link>
+                            <div className="ml-3 flex flex-col min-w-0 pr-4">
+                                <p className="truncate text-sm font-semibold text-slate-900 leading-none mb-1">
+                                    {user?.fullName || 'User'}
+                                </p>
+                                <p className="truncate text-[10px] font-medium text-slate-500 uppercase tracking-wide">
+                                    {user?.role?.name || 'Role'}
+                                </p>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Primary Action */}
-                {['therapist', 'secretary'].includes(userRole) && (
+                {/* Action Button */}
+                {['therapist', 'secretary'].includes(userRole || '') && (
                     <div
                         className={cn(
-                            'px-3 mb-6 transition-all',
-                            isCollapsed ? 'flex justify-center' : '',
+                            'px-3 mb-6 shrink-0',
+                            isCollapsed && 'flex justify-center',
                         )}
                     >
                         {isCollapsed ? (
                             <TooltipWrapper
-                                shouldWrap={true}
+                                shouldWrap
                                 tooltipText="Initialize Session"
+                                isMobile={isMobile}
                             >
                                 <Button
                                     size="icon"
                                     className="h-10 w-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200"
                                     onClick={() => {
-                                        const btn =
-                                            document.getElementById(
-                                                'init-session-btn',
-                                            );
-                                        if (btn) btn.click();
-                                        else {
-                                            const params = new URLSearchParams(
-                                                window.location.search,
-                                            );
-                                            params.set(
-                                                'isActivitySessionPlanningOpen',
-                                                'true',
-                                            );
-                                            router.push(
-                                                `${pathname}?${params.toString()}`,
-                                            );
-                                        }
+                                        const params = new URLSearchParams(
+                                            window.location.search,
+                                        );
+                                        params.set(
+                                            'isActivitySessionPlanningOpen',
+                                            'true',
+                                        );
+                                        router.push(
+                                            `${pathname}?${params.toString()}`,
+                                        );
                                     }}
                                 >
                                     <Plus size={20} className="text-white" />
                                 </Button>
                             </TooltipWrapper>
                         ) : (
-                            <div className="animate-in fade-in zoom-in-95 duration-300">
-                                <InitializeSessionButton className="w-full" />
-                            </div>
+                            <InitializeSessionButton className="w-full" />
                         )}
                     </div>
                 )}
 
                 {/* Navigation */}
-                <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-                    {!isCollapsed && visibleNavItems.length > 0 && (
+                <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 custom-scrollbar">
+                    {!isCollapsed && (
                         <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                             Platform
                         </div>
@@ -315,6 +293,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                             pathname === item.path ||
                             (item.path !== '/' &&
                                 pathname.startsWith(item.path));
+                        const isPending = pendingPath === item.path;
                         const Icon = item.icon;
 
                         return (
@@ -322,54 +301,77 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                                 key={item.path}
                                 shouldWrap={isCollapsed}
                                 tooltipText={item.label}
+                                isMobile={isMobile}
                             >
                                 <Link
                                     href={item.path}
+                                    onClick={() => setPendingPath(item.path)}
                                     className={cn(
-                                        'relative group flex items-center rounded-lg transition-all duration-200',
+                                        'relative group flex items-center rounded-lg transition-all duration-200 h-10',
                                         isCollapsed
-                                            ? 'justify-center h-10 w-10 mx-auto'
-                                            : 'px-3 py-2.5 gap-3',
+                                            ? 'w-10 mx-auto justify-center'
+                                            : 'px-3 gap-3',
                                         active
-                                            ? 'bg-slate-50 text-indigo-600'
+                                            ? 'bg-indigo-50/50 text-indigo-600'
                                             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
+                                        isPending &&
+                                            !active &&
+                                            'bg-slate-100 animate-pulse cursor-wait',
                                     )}
                                 >
-                                    {active && (
+                                    {(active || isPending) && (
                                         <motion.div
                                             layoutId="activeNavIndicator"
-                                            className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-600 rounded-r-full"
+                                            className={cn(
+                                                'absolute left-0 w-1 h-6 bg-indigo-600 rounded-r-full z-10',
+                                                isPending &&
+                                                    !active &&
+                                                    'bg-indigo-300 opacity-60',
+                                            )}
+                                            initial={false}
+                                            transition={{
+                                                type: 'spring',
+                                                stiffness: 500,
+                                                damping: 38,
+                                            }}
+                                            style={{ top: '8px' }}
                                         />
                                     )}
-                                    <Icon
-                                        size={20}
-                                        strokeWidth={active ? 2.5 : 2}
-                                        className={cn(
-                                            'shrink-0 transition-colors',
-                                            active
-                                                ? 'text-indigo-600'
-                                                : 'text-slate-400 group-hover:text-slate-600',
+
+                                    <div className="relative shrink-0 flex items-center justify-center z-20">
+                                        {isPending && !active ? (
+                                            <Loader2
+                                                size={18}
+                                                className="animate-spin text-indigo-500"
+                                            />
+                                        ) : (
+                                            <Icon
+                                                size={20}
+                                                strokeWidth={active ? 2.5 : 2}
+                                                className={cn(
+                                                    'transition-colors',
+                                                    active
+                                                        ? 'text-indigo-600'
+                                                        : 'text-slate-400 group-hover:text-slate-600',
+                                                )}
+                                            />
                                         )}
-                                    />
+                                    </div>
+
                                     {!isCollapsed && (
                                         <span
                                             className={cn(
-                                                'text-sm transition-all',
+                                                'text-sm transition-all relative z-20 whitespace-nowrap overflow-hidden',
                                                 active
                                                     ? 'font-semibold'
                                                     : 'font-medium',
+                                                isPending &&
+                                                    !active &&
+                                                    'text-indigo-400',
                                             )}
                                         >
                                             {item.label}
                                         </span>
-                                    )}
-                                    {!isCollapsed && item.badge && (
-                                        <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700 uppercase tracking-wide">
-                                            {item.badge}
-                                        </span>
-                                    )}
-                                    {isCollapsed && item.badge && (
-                                        <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
                                     )}
                                 </Link>
                             </TooltipWrapper>
@@ -377,28 +379,50 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                     })}
                 </div>
 
-                {/* Footer */}
-                <div className="p-3 border-t border-slate-100 bg-slate-50/30">
+                {/* Sign Out Footer */}
+                <div className="p-3 border-t border-slate-100 bg-slate-50/30 shrink-0">
                     <TooltipWrapper
                         shouldWrap={isCollapsed}
                         tooltipText="Sign Out"
+                        isMobile={isMobile}
                     >
                         <button
-                            onClick={() => handleLogout()}
+                            onClick={handleLogout}
+                            disabled={isLoggingOut}
                             className={cn(
-                                'group flex w-full items-center rounded-lg transition-all hover:bg-red-50 hover:text-red-600',
-                                isCollapsed
-                                    ? 'justify-center h-10'
-                                    : 'px-3 py-2.5 gap-3',
+                                'group flex w-full items-center rounded-lg transition-all h-10',
+                                isCollapsed ? 'justify-center' : 'px-3 gap-3',
+                                isLoggingOut
+                                    ? 'bg-red-50 text-red-400 cursor-wait'
+                                    : 'text-slate-500 hover:bg-red-50 hover:text-red-600 cursor-pointer',
                             )}
                         >
-                            <LogOut
-                                size={20}
-                                className="shrink-0 text-slate-400 group-hover:text-red-500 transition-colors"
-                            />
+                            <div className="shrink-0 flex items-center justify-center">
+                                {isLoggingOut ? (
+                                    <Loader2
+                                        size={20}
+                                        className="animate-spin"
+                                    />
+                                ) : (
+                                    <LogOut
+                                        size={20}
+                                        className="text-slate-400 group-hover:text-red-500 transition-colors"
+                                    />
+                                )}
+                            </div>
+
                             {!isCollapsed && (
-                                <span className="text-sm font-medium text-slate-500 group-hover:text-red-600">
-                                    Sign Out
+                                <span
+                                    className={cn(
+                                        'text-sm font-medium transition-opacity truncate',
+                                        isLoggingOut
+                                            ? 'opacity-70'
+                                            : 'opacity-100',
+                                    )}
+                                >
+                                    {isLoggingOut
+                                        ? 'Signing out...'
+                                        : 'Sign Out'}
                                 </span>
                             )}
                         </button>

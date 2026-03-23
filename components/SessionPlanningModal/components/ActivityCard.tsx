@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Lock, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ActivityCardProps {
@@ -11,6 +11,7 @@ interface ActivityCardProps {
     imageSrc?: string;
     disabled?: boolean;
     showAddIcon?: boolean;
+    activityStatus?: 'active' | 'disabled' | 'coming_soon' | string; // NEW PROP
     onAddClick?: (e: React.MouseEvent) => void;
 }
 
@@ -20,8 +21,12 @@ const ActivityCard = ({
     imageSrc,
     disabled,
     showAddIcon,
+    activityStatus,
     onAddClick,
 }: ActivityCardProps) => {
+    const isComingSoon = activityStatus === 'coming_soon';
+    const isExplicitlyDisabled = activityStatus === 'disabled';
+
     return (
         <div
             onClick={(e) => {
@@ -58,29 +63,55 @@ const ActivityCard = ({
                         )}
                     </div>
 
-                    {/* Plus Overlay Indicator for Collapsed View (Moved outside overflow-hidden) */}
+                    {/* Plus Overlay Indicator for Collapsed View */}
                     {showAddIcon && !disabled && (
                         <div className="absolute -bottom-1.5 -right-1.5 z-20 bg-indigo-600 text-white rounded-full p-0.5 shadow-sm lg:hidden border-2 border-white pointer-events-none">
                             <Plus size={12} strokeWidth={4} />
+                        </div>
+                    )}
+
+                    {/* Disabled / Coming Soon Overlay for Collapsed View */}
+                    {disabled && (
+                        <div className="absolute -bottom-1.5 -right-1.5 z-20 bg-slate-400 text-white rounded-full p-0.5 shadow-sm lg:hidden border-2 border-white pointer-events-none">
+                            {isComingSoon ? (
+                                <Clock
+                                    size={10}
+                                    strokeWidth={3}
+                                    className="m-[1px]"
+                                />
+                            ) : (
+                                <Lock
+                                    size={10}
+                                    strokeWidth={3}
+                                    className="m-[1px]"
+                                />
+                            )}
                         </div>
                     )}
                 </div>
 
                 {/* Text container (Hidden until Large screens) */}
                 <div className="hidden lg:flex flex-col min-w-0 flex-1 items-start text-left">
-                    <h4 className="text-[13px] font-bold truncate leading-tight text-slate-800 w-full">
-                        {title}
+                    <h4 className="flex items-center gap-1.5 text-[13px] font-bold leading-tight text-slate-800 w-full min-w-0">
+                        <span className="truncate">{title}</span>
+                        {isComingSoon && (
+                            <span className="text-[8px] bg-amber-100 text-amber-700 uppercase tracking-wider font-black px-1.5 py-[1px] rounded shrink-0">
+                                Soon
+                            </span>
+                        )}
                     </h4>
                     <div className="flex items-center gap-2 mt-0.5 min-w-0 w-full">
                         <div className="text-[10px] text-slate-500 bg-slate-100/80 px-1.5 py-0.5 rounded font-medium truncate max-w-full">
-                            {subtitle}
+                            {isExplicitlyDisabled
+                                ? 'Currently Unavailable'
+                                : subtitle}
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Dedicated Add Button for Large Screens */}
-            {showAddIcon && !disabled && (
+            {/* Dedicated Right-Side Icon for Large Screens */}
+            {!disabled && showAddIcon ? (
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
@@ -92,7 +123,11 @@ const ActivityCard = ({
                 >
                     <Plus size={18} strokeWidth={2.5} />
                 </button>
-            )}
+            ) : disabled ? (
+                <div className="shrink-0 ml-2 h-8 w-8 rounded-full bg-transparent text-slate-300 hidden lg:flex items-center justify-center">
+                    {isComingSoon ? <Clock size={16} /> : <Lock size={16} />}
+                </div>
+            ) : null}
         </div>
     );
 };

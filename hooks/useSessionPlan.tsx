@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getActivitySessionsNew } from '@/api/activity-session';
 import { ActivitySessionEntry } from '@/types/activitiy-session';
-import { Activity } from '@/types/actitivity';
+import { ActivityResponse } from '@/types/actitivity';
 import { calculateSchedule } from '@/components/SessionPlanningModal/utils/scheduler';
 import { UserResponse } from '@/types';
 
@@ -295,7 +295,7 @@ export const useSessionPlan = ({
     };
 
     const addActivity = useCallback(
-        (activity: Activity) => {
+        (activity: ActivityResponse) => {
             const duration = activity.durationMinutes || 30;
             let currentCursor = new Date(startAt).getTime();
 
@@ -327,7 +327,7 @@ export const useSessionPlan = ({
     );
 
     const insertAtGap = useCallback(
-        (gapInstanceId: string, activity: Activity) => {
+        (gapInstanceId: string, activity: ActivityResponse) => {
             const targetId = gapInstanceId.replace('gap-before-', '');
             const idx = currentBaseEntries.findIndex(
                 (i) => i.instanceId === targetId,

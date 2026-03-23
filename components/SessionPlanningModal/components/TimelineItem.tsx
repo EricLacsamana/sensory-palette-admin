@@ -18,9 +18,12 @@ import {
 import { cn } from '@/lib/utils';
 import { FormatService } from '@/utils/helpers';
 import { ActivitySessionEntry } from '@/types/activitiy-session';
-import { Activity } from '@/types/actitivity';
+import { ActivityResponse } from '@/types/actitivity';
 import ItemCard, { ActivitySessionStatus } from './ItemCard';
-import { getUserColor } from '@/utils/colors';
+import {
+    getInfiniteUserColorVars,
+    DYNAMIC_COLOR_CLASSES,
+} from '@/utils/colors';
 
 interface TimelineItemProps {
     variant: 'activity' | 'gap';
@@ -33,7 +36,7 @@ interface TimelineItemProps {
     onToggleLock?: () => void;
     onDragStart?: () => void;
     onDragEnd?: () => void;
-    onGapDrop?: (activity: Activity) => void;
+    onGapDrop?: (activity: ActivityResponse) => void;
     onTimeChange?: (time: string) => void;
 }
 
@@ -57,7 +60,6 @@ export const TimelineEndpoint = ({
 
     return (
         <div className="flex flex-row items-center w-full select-none relative h-12 sm:h-16 group z-0">
-            {/* Fully responsive width scale */}
             <div className="w-[48px] sm:w-[64px] lg:w-[80px] flex justify-end pr-1.5 sm:pr-3 lg:pr-4 shrink-0">
                 <div
                     className={cn(
@@ -75,7 +77,6 @@ export const TimelineEndpoint = ({
                     </span>
                 </div>
             </div>
-            {/* Fully responsive center align scale */}
             <div className="w-[24px] sm:w-[32px] lg:w-[40px] relative flex justify-center items-center shrink-0 h-full">
                 <div
                     className={cn(
@@ -131,7 +132,12 @@ export const TimelineItem = ({
     const hasConflict = data?.hasConflict ?? false;
     const isSaved = !!data.documentId || !!data.id;
     const status = data.status || 'pending';
-    const studentColor = getUserColor(data.student?.id || 0);
+
+    // Resolve ID and generate variables
+    const resolvedStudentId = data.student?.id || currentStudentId || 0;
+    const colorVars = getInfiniteUserColorVars(resolvedStudentId);
+    const studentColor = DYNAMIC_COLOR_CLASSES;
+
     const isForeign = Boolean(
         isActivity &&
         data.student &&
@@ -209,10 +215,7 @@ export const TimelineItem = ({
                                     const activity = JSON.parse(raw);
                                     onGapDrop?.(activity);
                                 } catch (err) {
-                                    console.error(
-                                        'Failed to parse activity data',
-                                        err,
-                                    );
+                                    console.error('Drop error', err);
                                 }
                             }
                         }}
@@ -261,16 +264,16 @@ export const TimelineItem = ({
         : status === 'cancelled'
           ? 'border-l-2 border-slate-300 border-dashed w-px'
           : cn('w-[2px]', studentColor.line);
+
+    // FIX: Using the newly defined dotBorder properly!
     let dotClass = hasConflict
         ? 'bg-rose-500 border-[3px] sm:border-4 border-rose-100 scale-110 shadow-sm'
         : status === 'completed'
           ? cn('border-none', studentColor.dot)
           : status === 'cancelled'
             ? 'border-slate-300 bg-slate-50'
-            : cn(
-                  'border-2 bg-white',
-                  studentColor.dot.replace('bg-', 'border-'),
-              );
+            : cn('border-2 bg-white', studentColor.dotBorder);
+
     let connClass = hasConflict
         ? 'bg-rose-500 h-[2px]'
         : status === 'cancelled'
@@ -281,6 +284,7 @@ export const TimelineItem = ({
         <Reorder.Item
             value={data}
             id={data.instanceId}
+            style={colorVars} // Applies CSS variables to this wrapper
             dragListener={!isForeign && status !== 'cancelled' && !isLocked}
             dragControls={dragControls}
             onDragStart={!isForeign ? onDragStart : undefined}
@@ -389,10 +393,12 @@ export const TimelineItem = ({
                         subtitle={`${data.durationMinutes} min activity`}
                         startTime={startTimeStr}
                         endTime={endTimeStr}
-                        imageSrc={FormatService.formatStrapiMedia(
-                            data?.activity?.banner,
-                            'thumbnail',
-                        )}
+                        imageSrc={
+                            FormatService.formatStrapiMedia(
+                                data?.activity?.banner,
+                                'thumbnail',
+                            ) || undefined
+                        }
                         isLocked={isLocked}
                         isSaved={isSaved}
                         isForeign={isForeign}
@@ -409,6 +415,7 @@ export const TimelineItem = ({
                         dragControls={dragControls}
                         showDetails={true}
                         colorProfile={studentColor}
+                        colorVars={colorVars}
                     />
                 </div>
             </div>

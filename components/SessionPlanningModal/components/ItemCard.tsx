@@ -25,7 +25,7 @@ import { DragControls } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { FormatService } from '@/utils/helpers';
 import { UserResponse } from '@/types';
-import { getUserColor } from '@/utils/colors';
+import { DYNAMIC_COLOR_CLASSES } from '@/utils/colors';
 
 export type ActivitySessionStatus =
     | 'pending'
@@ -59,7 +59,8 @@ interface ItemCardProps {
     startTime?: string;
     endTime?: string;
     showDetails?: boolean;
-    colorProfile?: ReturnType<typeof getUserColor>;
+    colorProfile?: typeof DYNAMIC_COLOR_CLASSES;
+    colorVars?: React.CSSProperties;
 }
 
 const STATUS_CONFIG: Record<
@@ -98,8 +99,9 @@ const ItemCard = ({
     endTime,
     showDetails = false,
     colorProfile,
+    colorVars,
 }: ItemCardProps) => {
-    const colors = colorProfile || getUserColor(student?.id || 0);
+    const colors = colorProfile || DYNAMIC_COLOR_CLASSES;
     const s = STATUS_CONFIG[status];
     const StatusIcon = s.icon;
     const isPending = status === 'pending';
@@ -148,6 +150,7 @@ const ItemCard = ({
     if (isForeign) {
         return (
             <div
+                style={colorVars}
                 className={cn(
                     'relative flex items-center gap-1.5 sm:gap-3 p-1.5 sm:p-2.5 rounded-xl border w-full select-none group transition-all min-h-[52px] sm:min-h-[64px]',
                     'bg-slate-50/50 border-slate-200',
@@ -217,6 +220,7 @@ const ItemCard = ({
 
     return (
         <div
+            style={colorVars}
             className={cn(
                 'group relative flex items-center gap-1.5 sm:gap-3 p-1.5 sm:p-2.5 rounded-xl border transition-all duration-200 w-full select-none min-h-[52px] sm:min-h-[64px] overflow-hidden',
                 error
@@ -240,7 +244,7 @@ const ItemCard = ({
                 <div
                     className={cn(
                         'absolute left-0 top-0 bottom-0 w-1 rounded-l-xl opacity-50',
-                        colors.bg.replace('bg-', 'bg-'),
+                        colors.bg, // FIX: Cleaned up the .replace() so it actually reads the CSS variable!
                     )}
                 />
             )}
@@ -259,7 +263,6 @@ const ItemCard = ({
                 </div>
             )}
 
-            {/* Compact Mobile Image */}
             <div
                 className={cn(
                     'h-8 w-8 sm:h-10 sm:w-10 rounded-md sm:rounded-lg overflow-hidden border shrink-0 flex items-center justify-center bg-slate-100 relative z-10',
@@ -279,7 +282,6 @@ const ItemCard = ({
                 )}
             </div>
 
-            {/* Central Content Column - Strict min-w-0 to force truncation over overlapping */}
             <div className="flex-1 min-w-0 flex flex-col justify-center py-0.5 gap-0.5 sm:gap-1">
                 <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                     <h4
@@ -300,7 +302,6 @@ const ItemCard = ({
                                 strokeWidth={2.5}
                                 className="sm:w-3 sm:h-3"
                             />
-                            {/* Hide text on mobile to save space */}
                             <span className="hidden sm:inline">{s.label}</span>
                         </div>
                     )}
@@ -316,7 +317,6 @@ const ItemCard = ({
                     )}
                 </div>
 
-                {/* FLEX WRAP: Badges wrap dynamically if they hit the max width */}
                 <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
                     {(startTime || endTime) && (
                         <div className="relative group/time-badge shrink-0 max-w-[85px] sm:max-w-none">
@@ -332,7 +332,6 @@ const ItemCard = ({
                                     size={9}
                                     className="shrink-0 sm:w-3 sm:h-3"
                                 />
-                                {/* Time fits safely, truncates strictly if forced */}
                                 <span className="tabular-nums tracking-tight truncate">
                                     {startTime}-{endTime}
                                 </span>
@@ -396,7 +395,6 @@ const ItemCard = ({
                 )}
             </div>
 
-            {/* Right Action Column */}
             <div className="flex flex-col items-end justify-center gap-1 sm:gap-1.5 shrink-0 pl-1.5 sm:pl-3 border-l border-slate-100/50 min-w-0">
                 {student?.firstName && renderStudentBadge(false)}
 

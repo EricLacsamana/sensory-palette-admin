@@ -6,15 +6,15 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useActivities } from '@/hooks/useActivities';
-import { Activity } from '@/types/actitivity';
+import { ActivityResponse } from '@/types/actitivity';
 import { FormatService } from '@/utils/helpers';
 import ActivityCard from './ActivityCard';
 
 interface ActivitiesSidebarProps {
     remainingMinutes: number;
-    onDragStart: (e: React.DragEvent, item: Activity) => void;
+    onDragStart: (e: React.DragEvent, item: ActivityResponse) => void;
     onDragEnd: () => void;
-    onActivityTap: (activity: Activity) => void;
+    onActivityTap: (activity: ActivityResponse) => void;
     className?: string;
 }
 
@@ -28,23 +28,39 @@ export const ActivitiesSiderbar = ({
     const [searchTerm, setSearchTerm] = useState('');
     const { data: activities = [] } = useActivities();
 
-    const renderActivityItem = (act: Activity, isBreak = false) => {
+    const renderActivityItem = (
+        act: ActivityResponse,
+        index: number | string,
+        isBreak = false,
+    ) => {
         const duration = isBreak ? 5 : act.durationMinutes || 30;
-        const isDisabled = duration > remainingMinutes;
+
+        // STRICT STATUS CHECK: Is the activity explicitly disabled or coming soon?
+        const isStatusDisabled =
+            act.activityStatus === 'disabled' ||
+            act.activityStatus === 'coming_soon';
+
+        // Final disabled flag: It's disabled if it's too long OR has a restricted status
+        const isDisabled = duration > remainingMinutes || isStatusDisabled;
 
         return (
             <div
-                key={act.documentId || act.id || Math.random()}
+                // Stable fallback key to prevent React from unmounting elements (fixes the Math.random bug)
+                key={act.documentId || act.id || `activity-fallback-${index}`}
                 draggable={!isDisabled}
                 onDragStart={(e) => {
-                    if (isDisabled) return e.preventDefault();
+                    // Block dragging if disabled
+                    if (isDisabled) {
+                        e.preventDefault();
+                        return;
+                    }
                     onDragStart(e, act);
                 }}
                 onDragEnd={onDragEnd}
                 className={cn(
                     'w-full block transition-transform duration-200 touch-pan-y',
                     isDisabled
-                        ? 'cursor-not-allowed opacity-50 grayscale'
+                        ? 'cursor-not-allowed opacity-60 grayscale'
                         : 'hover:-translate-y-0.5',
                 )}
             >
@@ -62,13 +78,19 @@ export const ActivitiesSiderbar = ({
                     }
                     disabled={isDisabled}
                     showAddIcon={!isDisabled}
-                    onAddClick={() => onActivityTap(act)}
+                    activityStatus={act.activityStatus} // Passes status to show the Lock/Soon icons
+                    onAddClick={() => {
+                        // Double lock to prevent clicks if disabled
+                        if (!isDisabled) {
+                            onActivityTap(act);
+                        }
+                    }}
                 />
             </div>
         );
     };
 
-    const filteredActivities = activities.filter((a: Activity) =>
+    const filteredActivities = activities.filter((a: ActivityResponse) =>
         a.name?.toLowerCase().includes(searchTerm.toLowerCase()),
     );
 
@@ -127,7 +149,9 @@ export const ActivitiesSiderbar = ({
                                         name: 'Short Break',
                                         durationMinutes: 5,
                                         banner: null,
+                                        activityStatus: 'active',
                                     } as unknown as Activity,
+                                    'static-break',
                                     true,
                                 )}
                             </div>
@@ -143,8 +167,11 @@ export const ActivitiesSiderbar = ({
                             </div>
                             <div className="flex flex-col items-stretch gap-2.5 pb-20 w-full">
                                 {filteredActivities.length > 0 ? (
-                                    filteredActivities.map((act: Activity) =>
-                                        renderActivityItem(act),
+                                    filteredActivities.map(
+                                        (
+                                            act: ActivityResponse,
+                                            index: number,
+                                        ) => renderActivityItem(act, index),
                                     )
                                 ) : (
                                     <div className="text-center py-6 lg:py-8 text-slate-400 w-full bg-white rounded-xl border border-slate-100 border-dashed">

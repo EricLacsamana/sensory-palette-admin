@@ -8,6 +8,7 @@ import {
     ShieldAlert,
     Calendar,
     Mail,
+    Brain,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
@@ -108,13 +109,25 @@ export function StudentCard({ student }: { student: UserResponse }) {
                                     </span>
                                 </div>
                             )}
+
+                            {/* --- DIAGNOSIS TAG --- */}
+                            {student.diagnosis && (
+                                <div className="flex items-center gap-1.5 bg-indigo-50 px-2.5 h-6 rounded-md border border-indigo-100 transition-all duration-300 group-hover:bg-indigo-600 group-hover:border-indigo-600 group-hover:shadow-sm">
+                                    <Brain
+                                        size={12}
+                                        className="text-indigo-500 transition-colors group-hover:text-white"
+                                    />
+                                    <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest leading-none mt-0.5 transition-colors group-hover:text-white truncate max-w-[100px]">
+                                        {student.diagnosis}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {/* --- FOOTER: CONTEXTUAL DATA --- */}
                 <div className="mt-8 pt-5 border-t border-slate-100 flex flex-col gap-2">
-                    {/* Only render email if it exists and isn't a fake generated one */}
                     {student.email && !student.email.includes('fake') && (
                         <div className="flex items-center gap-2 text-slate-400">
                             <Mail size={12} />
@@ -135,7 +148,7 @@ export function StudentCard({ student }: { student: UserResponse }) {
                     </div>
                 </div>
 
-                {/* --- DECORATIVE BACKGROUND ACCENT --- */}
+                {/* Decorative Background Accent */}
                 <div
                     className={cn(
                         'absolute -bottom-8 -right-8 h-32 w-32 rounded-full blur-3xl transition-colors duration-700 opacity-0 group-hover:opacity-100',

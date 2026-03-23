@@ -17,7 +17,7 @@ import { RootState } from '@/redux/store';
 import { me } from '@/api/users';
 import SessionPlanningModal from './SessionPlanningModal';
 
-// --- SUB-COMPONENT: Modal Manager ---
+// Modal Manager logic restored
 function ModalManager() {
     const searchParams = useSearchParams();
     const isOpen = searchParams.get('isActivitySessionPlanningOpen') === 'true';
@@ -25,7 +25,6 @@ function ModalManager() {
     return <SessionPlanningModal />;
 }
 
-// Hydration Helpers
 const subscribe = () => () => {};
 const getSnapshot = () => true;
 const getServerSnapshot = () => false;
@@ -39,10 +38,7 @@ export default function LayoutWrapper({
     const pathname = usePathname();
     const router = useRouter();
     const queryClient = useQueryClient();
-    const searchParams = useSearchParams();
-    const modalKey = searchParams.toString();
 
-    // Prevent Hydration Mismatch
     const isMounted = useSyncExternalStore(
         subscribe,
         getSnapshot,
@@ -55,7 +51,6 @@ export default function LayoutWrapper({
         isLoading: isAuthLoading,
     } = useSelector((state: RootState) => state.auth);
 
-    // 1. IDENTITY FETCH: Gated by token
     const { data: user, isLoading: isUserLoading } = useQuery({
         queryKey: ['me'],
         queryFn: me,
@@ -65,14 +60,12 @@ export default function LayoutWrapper({
 
     const isStudent = user?.role?.type === 'student';
 
-    // 2. CACHE SYNC
     useEffect(() => {
         if (isAuthenticated && token) {
             queryClient.invalidateQueries({ queryKey: ['me'] });
         }
     }, [isAuthenticated, token, queryClient]);
 
-    // ✨ ROUTE DEFINITIONS ✨
     const isTherapistAuth =
         pathname.startsWith('/auth') ||
         pathname === '/login' ||
@@ -82,18 +75,14 @@ export default function LayoutWrapper({
         pathname.startsWith('/student-portal') ||
         pathname.startsWith('/activities/play');
 
-    // Should we hide the sidebar? (Yes, for ALL auth pages, ALL student pages, or if the user is a student)
     const isFullScreenRoute =
         isTherapistAuth || isStudentLogin || isStudentZone || isStudent;
 
-    // 3. SMART AUTH REDIRECT LOGIC
     useEffect(() => {
         if (isMounted && !isAuthLoading && !isAuthenticated) {
             if (isStudentZone) {
-                // Unauthenticated user trying to access the portal -> Kick to Passcode Screen
                 router.push('/auth/student-login');
             } else if (!isTherapistAuth && !isStudentLogin) {
-                // Unauthenticated user trying to access Therapist dashboard -> Kick to Admin Login
                 router.push('/auth/login');
             }
         }
@@ -107,7 +96,7 @@ export default function LayoutWrapper({
         router,
     ]);
 
-    // Global Loading Barrier
+    // Loading State
     if (
         !isMounted ||
         ((isAuthLoading || isUserLoading) &&
@@ -121,13 +110,12 @@ export default function LayoutWrapper({
         );
     }
 
-    // --- LAYOUT 1: FULL SCREEN (Auth, Passcode, Student Portal, or Games) ---
+    // --- FULL SCREEN LAYOUT ---
     if (isFullScreenRoute) {
         return (
             <main
                 className={cn(
                     'h-[100dvh] w-full overflow-y-auto relative',
-                    // Give login screens a dark background, portal/games a light background
                     isStudentLogin || isTherapistAuth
                         ? 'bg-slate-950'
                         : 'bg-[#FDFEFE]',
@@ -138,10 +126,9 @@ export default function LayoutWrapper({
         );
     }
 
-    // --- LAYOUT 2: THERAPIST DASHBOARD ---
+    // --- DASHBOARD LAYOUT (STABLE) ---
     return (
         <div className="flex h-[100dvh] w-full overflow-hidden bg-[#F8FAFC]">
-            {/* Sidebar only renders for authenticated therapists on dashboard routes */}
             <Sidebar
                 isCollapsed={isCollapsed}
                 setIsCollapsed={setIsCollapsed}
@@ -150,17 +137,19 @@ export default function LayoutWrapper({
             <main
                 className={cn(
                     'flex flex-col flex-1 h-full min-w-0 overflow-y-auto transition-all duration-300 relative',
-                    // Using 'pl' (padding) instead of 'ml' (margin) prevents horizontal overflow bugs
                     isCollapsed ? 'pl-[72px]' : 'pl-[260px]',
                 )}
             >
+                {/* CRITICAL: Never put a 'key' prop here. 
+                   Keeping this container stable allows the Sidebar to stay mounted 
+                   and the animation indicator to slide correctly.
+                */}
                 <div className="flex flex-col flex-1 w-full h-full max-w-[1600px] mx-auto">
                     {children}
                 </div>
             </main>
 
-            {/* Suspense-wrapped Modal Manager */}
-            <Suspense fallback={null} key={modalKey}>
+            <Suspense fallback={null}>
                 <ModalManager />
             </Suspense>
         </div>

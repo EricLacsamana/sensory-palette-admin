@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, User, IdCard, Clock, Plus } from 'lucide-react';
+import { Search, IdCard, Clock, Plus } from 'lucide-react';
 import { Reorder, AnimatePresence, motion } from 'framer-motion';
 import {
     Dialog,
@@ -43,8 +43,9 @@ import {
 import { FormatService } from '@/utils/helpers';
 import { Input } from '@base-ui/react';
 import { UserResponse } from '@/types';
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { UserAvatar } from '@/components/UserAvatar';
 import { Activity } from '@/types/actitivity';
+import { cn } from '@/lib/utils';
 
 export const getOperatingHoursForDate = (targetDate: Date | string) => {
     const base = new Date(targetDate);
@@ -96,6 +97,9 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showExitConfirm, setShowExitConfirm] = useState(false);
+    const [pendingStudentId, setPendingStudentId] = useState<number | null>(
+        null,
+    );
     const [isDragging, setIsDragging] = useState(false);
     const [isShowOtherStudents, setIsShowOtherStudents] = useState(true);
     const [slideDirection, setSlideDirection] = useState(0);
@@ -103,10 +107,13 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const [mobileSelectedActivity, setMobileSelectedActivity] =
         useState<Activity | null>(null);
 
-    const studentId = useMemo(() => {
-        const id = params?.id || searchParams.get('studentId');
-        return id ? Number(id) : null;
-    }, [params?.id, searchParams]);
+    // FIX: Local state prevents Next.js routing destruction on student switch
+    const [activeStudentId, setActiveStudentId] = useState<number | null>(
+        () => {
+            const id = params?.id || searchParams.get('studentId');
+            return id ? Number(id) : null;
+        },
+    );
 
     const initialIso = useMemo(() => getOperatingHoursForDate(new Date()), []);
 
@@ -114,15 +121,14 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const [endAt, setEndAt] = useState(initialIso.end);
 
     const { data: student } = useQuery({
-        queryKey: ['student', studentId],
+        queryKey: ['student', activeStudentId],
         queryFn: getStudent,
-        enabled: !!studentId,
+        enabled: !!activeStudentId,
     });
 
     const { data: studentsList = [] } = useQuery({
         queryKey: ['students', searchQuery],
         queryFn: getStudents,
-        enabled: !studentId,
     });
 
     const filteredStudents = useMemo(() => {
@@ -175,10 +181,41 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         queryClient.invalidateQueries({ queryKey: ['activity-sessions'] });
     };
 
-    const handleRequestClose = () =>
-        isDirty ? setShowExitConfirm(true) : performClose();
+    const handleRequestClose = () => {
+        if (isDirty) {
+            setPendingStudentId(null);
+            setShowExitConfirm(true);
+        } else {
+            performClose();
+        }
+    };
 
-    const handleSubmit = async () => {
+    const performStudentSwitch = (newId: number) => {
+        reset();
+        setPendingStudentId(null);
+        setShowExitConfirm(false);
+
+        // Instantly switch the UI using local state
+        setActiveStudentId(newId);
+
+        // Safely update the URL (Requires LayoutWrapper Suspense key fix)
+        const p = new URLSearchParams(searchParams.toString());
+        p.set('studentId', newId.toString());
+        router.replace(`${pathname}?${p.toString()}`, { scroll: false });
+    };
+
+    const handleStudentSwitchRequest = (newId: number) => {
+        if (newId === activeStudentId) return;
+        if (isDirty) {
+            setPendingStudentId(newId);
+            setShowExitConfirm(true);
+        } else {
+            performStudentSwitch(newId);
+        }
+    };
+
+    // FIX: Accepts a boolean to determine if the modal should close after saving
+    const handleSubmit = async (closeAfter: boolean) => {
         if (isSubmitting) return;
         setIsSubmitting(true);
         try {
@@ -200,7 +237,17 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                 }
             }
             toast.success('Session plan synchronized successfully');
-            performClose();
+
+            // Refetch the data to sync accurate backend Document IDs into the timeline
+            await queryClient.invalidateQueries({
+                queryKey: ['activity-sessions'],
+            });
+            if (closeAfter) {
+                performClose();
+            } else {
+                reset();
+                setPendingStudentId(null);
+            }
         } catch (error) {
             console.error('Save Error:', error);
             toast.error('Failed to sync schedule. Check connection.');
@@ -299,291 +346,314 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     };
 
     const renderMainContent = () => {
-        if (!studentId) {
-            return (
-                <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden w-full">
+        return (
+            <div
+                className={cn(
+                    'flex flex-col h-full relative w-full overflow-hidden transition-colors duration-200',
+                    !activeStudentId ? 'bg-slate-50' : 'bg-white',
+                )}
+            >
+                {/* Background grid pattern only shown when selecting a learner */}
+                {!activeStudentId && (
                     <div
-                        className="absolute inset-0 pointer-events-none opacity-[0.4]"
+                        className="absolute inset-0 pointer-events-none opacity-[0.4] z-0"
                         style={{
                             backgroundImage:
                                 'linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)',
                             backgroundSize: '40px 40px',
                         }}
                     />
+                )}
 
-                    <div className="relative z-10 flex flex-col h-full max-w-5xl mx-auto w-full p-6 sm:p-12">
-                        <div className="flex flex-col items-center text-center space-y-4 mb-6 sm:mb-10">
-                            <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-white border border-slate-200 shadow-xl flex items-center justify-center mb-2">
-                                <User
-                                    size={32}
-                                    className="text-indigo-600 max-sm:scale-75"
-                                    strokeWidth={1.5}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-                                    Select Learner
-                                </h2>
-                                <p className="text-sm sm:text-base text-slate-500 font-medium px-4">
-                                    Initiate a planning session by selecting a
-                                    target profile
-                                </p>
-                            </div>
-                            <div className="w-full max-w-md relative group mt-2">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Search className="h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
-                                </div>
-                                <Input
-                                    className="pl-10 h-12 bg-white border-slate-200 shadow-sm rounded-xl focus:ring-2 focus:ring-indigo-100 transition-all text-base w-full touch-auto select-text"
-                                    placeholder="Search by name or ID..."
-                                    value={searchQuery}
-                                    onChange={(e) =>
-                                        setSearchQuery(e.target.value)
-                                    }
-                                    autoFocus
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 overflow-y-auto pb-20 pr-2">
-                            {filteredStudents.map((s: UserResponse) => (
-                                <button
-                                    key={s.id}
-                                    onClick={() => {
-                                        const p = new URLSearchParams(
-                                            searchParams.toString(),
-                                        );
-                                        p.set('studentId', s.id.toString());
-                                        router.replace(
-                                            `${pathname}?${p.toString()}`,
-                                        );
-                                    }}
-                                    className="group relative flex items-center sm:items-start gap-4 p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-500 hover:shadow-lg transition-all duration-200 text-left"
-                                >
-                                    <Avatar className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg border border-slate-100 shadow-sm group-hover:scale-105 transition-transform shrink-0">
-                                        <AvatarImage
-                                            src={FormatService.formatStrapiMedia(
-                                                s.profilePicture,
-                                                'thumbnail',
-                                            )}
-                                        />
-                                        <AvatarFallback className="bg-slate-50 text-slate-600 font-bold rounded-lg text-sm">
-                                            {s.fullName?.charAt(0)}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="font-bold text-sm sm:text-base text-slate-900 truncate pr-2 group-hover:text-indigo-700 transition-colors">
-                                            {s.fullName}
-                                        </h3>
-                                        <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
-                                            <IdCard
-                                                size={12}
-                                                className="text-slate-400"
-                                            />
-                                            <span className="text-[10px] sm:text-xs font-mono text-slate-500">
-                                                ID:{' '}
-                                                {s.id
-                                                    .toString()
-                                                    .padStart(4, '0')}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        return (
-            <div className="flex flex-col h-full relative">
-                <Header
-                    undo={undo}
-                    redo={redo}
-                    canRedo={canRedo}
-                    canUndo={canUndo}
-                    user={student}
-                    startAt={startAt}
-                    endAt={endAt}
-                    onChange={handleTimeChange}
-                    isDirty={isDirty}
-                    isShowOtherUsers={isShowOtherStudents}
-                    setIsShowOtherUsers={setIsShowOtherStudents}
-                    onClose={handleRequestClose}
-                />
-
-                <div className="flex-1 flex flex-row overflow-hidden relative">
-                    <ActivitiesSiderbar
-                        remainingMinutes={capacityMetrics.remainingMinutes}
-                        onDragStart={(e, a) => {
-                            e.dataTransfer.setData(
-                                'newActivity',
-                                JSON.stringify(a),
-                            );
-                            setIsDragging(true);
-                        }}
-                        onDragEnd={() => setIsDragging(false)}
-                        onActivityTap={(act) => setMobileSelectedActivity(act)}
+                {/* Unified Header always sits at the top */}
+                <div className="relative z-10 flex flex-col h-full w-full">
+                    <Header
+                        hasStudent={!!activeStudentId}
+                        user={student}
+                        students={studentsList}
+                        onSelectStudent={handleStudentSwitchRequest}
+                        undo={undo}
+                        redo={redo}
+                        canRedo={canRedo}
+                        canUndo={canUndo}
+                        startAt={startAt}
+                        endAt={endAt}
+                        onChange={handleTimeChange}
+                        isDirty={isDirty}
+                        isShowOtherUsers={isShowOtherStudents}
+                        setIsShowOtherUsers={setIsShowOtherStudents}
+                        onClose={handleRequestClose}
                     />
 
-                    <main
-                        className="flex-1 flex flex-col bg-white overflow-hidden relative min-w-0"
-                        onDragOver={(e) => {
-                            e.preventDefault();
-                            e.dataTransfer.dropEffect = 'move';
-                        }}
-                        onDragEnter={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }}
-                        onDrop={handleExternalDrop}
-                    >
-                        <div className="h-14 border-b border-slate-100 flex justify-between bg-white items-center shrink-0 px-3 sm:px-6 z-30">
-                            <CapacityGauge
-                                percent={capacityMetrics.percentUsed}
-                                className="max-w-[130px] sm:max-w-[200px] w-full"
-                            />
-                            <div className="flex items-center gap-3 font-mono text-xs font-semibold text-slate-700">
-                                {FormatService.formatTime(endAt, '12h-simple')}
+                    {!activeStudentId ? (
+                        /* Select Learner View */
+                        <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full px-6 pb-6 pt-2 sm:px-12 sm:pb-12 sm:pt-6 overflow-y-auto">
+                            <div className="flex flex-col items-center text-center space-y-4 mb-6 sm:mb-8">
+                                <div className="space-y-2">
+                                    <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                                        Select Learner
+                                    </h2>
+                                    <p className="text-sm sm:text-base text-slate-500 font-medium px-4">
+                                        Initiate a planning session by selecting
+                                        a target profile
+                                    </p>
+                                </div>
+                                <div className="w-full max-w-md relative group mt-2">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                                    </div>
+                                    <Input
+                                        className="pl-10 h-12 bg-white border-slate-200 shadow-sm rounded-xl focus:ring-2 focus:ring-indigo-100 transition-all text-base w-full touch-auto select-text"
+                                        placeholder="Search by name or ID..."
+                                        value={searchQuery}
+                                        onChange={(e) =>
+                                            setSearchQuery(e.target.value)
+                                        }
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 pb-20 pr-2">
+                                {filteredStudents.map((s: UserResponse) => (
+                                    <button
+                                        key={s.id}
+                                        onClick={() =>
+                                            handleStudentSwitchRequest(s.id)
+                                        }
+                                        className="group relative flex items-center sm:items-start gap-4 p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-500 hover:shadow-lg transition-all duration-200 text-left"
+                                    >
+                                        <UserAvatar
+                                            src={
+                                                FormatService.formatStrapiMedia(
+                                                    s.profilePicture,
+                                                    'thumbnail',
+                                                ) || undefined
+                                            }
+                                            name={s.fullName}
+                                            size="md"
+                                            className="group-hover:scale-105 transition-transform shrink-0"
+                                        />
+                                        <div className="flex-1 min-w-0 flex flex-col justify-center sm:mt-1">
+                                            <h3 className="font-bold text-sm sm:text-base text-slate-900 truncate pr-2 group-hover:text-indigo-700 transition-colors">
+                                                {s.fullName}
+                                            </h3>
+                                            <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
+                                                <IdCard
+                                                    size={12}
+                                                    className="text-slate-400"
+                                                />
+                                                <span className="text-[10px] sm:text-xs font-mono text-slate-500">
+                                                    ID:{' '}
+                                                    {s.id
+                                                        .toString()
+                                                        .padStart(4, '0')}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
                             </div>
                         </div>
+                    ) : (
+                        /* Planner View */
+                        <div className="flex-1 flex flex-row overflow-hidden relative bg-white">
+                            <ActivitiesSiderbar
+                                remainingMinutes={
+                                    capacityMetrics.remainingMinutes
+                                }
+                                onDragStart={(e, a) => {
+                                    e.dataTransfer.setData(
+                                        'newActivity',
+                                        JSON.stringify(a),
+                                    );
+                                    setIsDragging(true);
+                                }}
+                                onDragEnd={() => setIsDragging(false)}
+                                onActivityTap={(act) =>
+                                    setMobileSelectedActivity(act)
+                                }
+                            />
 
-                        <div className="flex-1 bg-slate-50/30 relative overflow-hidden">
-                            <AnimatePresence
-                                mode="popLayout"
-                                custom={slideDirection}
-                                initial={false}
+                            <main
+                                className="flex-1 flex flex-col bg-white overflow-hidden relative min-w-0"
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = 'move';
+                                }}
+                                onDragEnter={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }}
+                                onDrop={handleExternalDrop}
                             >
-                                <motion.div
-                                    key={startAt.split('T')[0]}
-                                    custom={slideDirection}
-                                    variants={timelineVariants}
-                                    initial="enter"
-                                    animate="center"
-                                    exit="exit"
-                                    transition={{
-                                        type: 'spring',
-                                        stiffness: 300,
-                                        damping: 30,
-                                    }}
-                                    className="w-full h-full overflow-y-auto touch-pan-y"
-                                >
-                                    <div className="w-full max-w-4xl mx-auto pl-1 pr-2 sm:pr-4 lg:pr-6 py-4 sm:py-8 relative z-10">
-                                        <AnimatePresence mode="popLayout">
-                                            <Reorder.Group
-                                                axis="y"
-                                                values={draft}
-                                                onReorder={reorderActivities}
-                                                className="space-y-0 relative"
-                                            >
-                                                <TimelineEndpoint
-                                                    type="start"
-                                                    time={FormatService.formatTime(
-                                                        startAt,
-                                                        '12h-simple',
-                                                    )}
-                                                />
-                                                <div className="my-2 relative">
-                                                    {timelineItems
-                                                        .filter(
-                                                            (item) =>
-                                                                isShowOtherStudents ||
-                                                                item.student
-                                                                    ?.id ===
-                                                                    studentId,
-                                                        )
-                                                        .map((item) => (
-                                                            <TimelineItem
-                                                                key={
-                                                                    item.instanceId
-                                                                }
-                                                                variant={
-                                                                    item.type
-                                                                }
-                                                                data={item}
-                                                                currentStudentId={
-                                                                    studentId
-                                                                }
-                                                                isDraggingAny={
-                                                                    isDragging
-                                                                }
-                                                                sessionStart={
-                                                                    startAt
-                                                                }
-                                                                sessionEnd={
-                                                                    endAt
-                                                                }
-                                                                onDragStart={() =>
-                                                                    setIsDragging(
-                                                                        true,
-                                                                    )
-                                                                }
-                                                                onDragEnd={() =>
-                                                                    setIsDragging(
-                                                                        false,
-                                                                    )
-                                                                }
-                                                                onRemove={() =>
-                                                                    removeActivity(
-                                                                        item.instanceId,
-                                                                    )
-                                                                }
-                                                                onToggleLock={() =>
-                                                                    toggleLock(
-                                                                        item.instanceId,
-                                                                    )
-                                                                }
-                                                                onGapDrop={(
-                                                                    act,
-                                                                ) =>
-                                                                    insertAtGap(
-                                                                        item.instanceId,
-                                                                        act,
-                                                                    )
-                                                                }
-                                                                onTimeChange={(
-                                                                    time,
-                                                                ) =>
-                                                                    updateActivityStartTime(
-                                                                        item.instanceId,
-                                                                        time,
-                                                                    )
-                                                                }
-                                                            />
-                                                        ))}
-                                                </div>
-                                                <TimelineEndpoint
-                                                    type="end"
-                                                    time={FormatService.formatTime(
-                                                        endAt,
-                                                        '12h-simple',
-                                                    )}
-                                                />
-                                            </Reorder.Group>
-                                        </AnimatePresence>
+                                <div className="h-14 border-b border-slate-100 flex justify-between bg-white items-center shrink-0 px-3 sm:px-6 z-30">
+                                    <CapacityGauge
+                                        percent={capacityMetrics.percentUsed}
+                                        className="max-w-[130px] sm:max-w-[200px] w-full"
+                                    />
+                                    <div className="flex items-center gap-3 font-mono text-xs font-semibold text-slate-700">
+                                        {FormatService.formatTime(
+                                            endAt,
+                                            '12h-simple',
+                                        )}
                                     </div>
-                                </motion.div>
-                            </AnimatePresence>
-                        </div>
+                                </div>
 
-                        <div className="h-16 sm:h-20 border-t border-slate-100 flex items-center justify-end px-4 sm:px-8 bg-white shrink-0 z-50 gap-2 sm:gap-3">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleRequestClose}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                size="sm"
-                                onClick={handleSubmit}
-                                disabled={!isDirty || isSubmitting}
-                            >
-                                Save Schedule
-                            </Button>
+                                <div className="flex-1 bg-slate-50/30 relative overflow-hidden">
+                                    <AnimatePresence
+                                        mode="popLayout"
+                                        custom={slideDirection}
+                                        initial={false}
+                                    >
+                                        <motion.div
+                                            key={startAt.split('T')[0]}
+                                            custom={slideDirection}
+                                            variants={timelineVariants}
+                                            initial="enter"
+                                            animate="center"
+                                            exit="exit"
+                                            transition={{
+                                                type: 'spring',
+                                                stiffness: 300,
+                                                damping: 30,
+                                            }}
+                                            className="w-full h-full overflow-y-auto touch-pan-y"
+                                        >
+                                            <div className="w-full max-w-4xl mx-auto pl-1 pr-2 sm:pr-4 lg:pr-6 py-4 sm:py-8 relative z-10">
+                                                <AnimatePresence mode="popLayout">
+                                                    <Reorder.Group
+                                                        axis="y"
+                                                        values={draft}
+                                                        onReorder={
+                                                            reorderActivities
+                                                        }
+                                                        className="space-y-0 relative"
+                                                    >
+                                                        <TimelineEndpoint
+                                                            type="start"
+                                                            time={FormatService.formatTime(
+                                                                startAt,
+                                                                '12h-simple',
+                                                            )}
+                                                        />
+                                                        <div className="my-2 relative">
+                                                            {timelineItems
+                                                                .filter(
+                                                                    (item) =>
+                                                                        isShowOtherStudents ||
+                                                                        item
+                                                                            .student
+                                                                            ?.id ===
+                                                                            activeStudentId,
+                                                                )
+                                                                .map((item) => (
+                                                                    <TimelineItem
+                                                                        key={
+                                                                            item.instanceId
+                                                                        }
+                                                                        variant={
+                                                                            item.type
+                                                                        }
+                                                                        data={
+                                                                            item
+                                                                        }
+                                                                        currentStudentId={
+                                                                            activeStudentId
+                                                                        }
+                                                                        isDraggingAny={
+                                                                            isDragging
+                                                                        }
+                                                                        sessionStart={
+                                                                            startAt
+                                                                        }
+                                                                        sessionEnd={
+                                                                            endAt
+                                                                        }
+                                                                        onDragStart={() =>
+                                                                            setIsDragging(
+                                                                                true,
+                                                                            )
+                                                                        }
+                                                                        onDragEnd={() =>
+                                                                            setIsDragging(
+                                                                                false,
+                                                                            )
+                                                                        }
+                                                                        onRemove={() =>
+                                                                            removeActivity(
+                                                                                item.instanceId,
+                                                                            )
+                                                                        }
+                                                                        onToggleLock={() =>
+                                                                            toggleLock(
+                                                                                item.instanceId,
+                                                                            )
+                                                                        }
+                                                                        onGapDrop={(
+                                                                            act,
+                                                                        ) =>
+                                                                            insertAtGap(
+                                                                                item.instanceId,
+                                                                                act,
+                                                                            )
+                                                                        }
+                                                                        onTimeChange={(
+                                                                            time,
+                                                                        ) =>
+                                                                            updateActivityStartTime(
+                                                                                item.instanceId,
+                                                                                time,
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                ))}
+                                                        </div>
+                                                        <TimelineEndpoint
+                                                            type="end"
+                                                            time={FormatService.formatTime(
+                                                                endAt,
+                                                                '12h-simple',
+                                                            )}
+                                                        />
+                                                    </Reorder.Group>
+                                                </AnimatePresence>
+                                            </div>
+                                        </motion.div>
+                                    </AnimatePresence>
+                                </div>
+
+                                {/* FIX: 3-Button Layout Footer */}
+                                <div className="h-16 sm:h-20 border-t border-slate-100 flex items-center justify-end px-4 sm:px-8 bg-white shrink-0 z-50 gap-2 sm:gap-3">
+                                    <Button
+                                        variant="ghost"
+                                        className="text-slate-500 hover:text-slate-700 font-semibold"
+                                        onClick={handleRequestClose}
+                                        disabled={isSubmitting}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold shadow-sm"
+                                        onClick={() => handleSubmit(false)}
+                                        disabled={!isDirty || isSubmitting}
+                                    >
+                                        {isSubmitting
+                                            ? 'Saving...'
+                                            : 'Save Only'}
+                                    </Button>
+                                    <Button
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200"
+                                        onClick={() => handleSubmit(true)}
+                                        disabled={!isDirty || isSubmitting}
+                                    >
+                                        Save & Close
+                                    </Button>
+                                </div>
+                            </main>
                         </div>
-                    </main>
+                    )}
                 </div>
             </div>
         );
@@ -598,15 +668,16 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
             />
 
             <Dialog open onOpenChange={(open) => !open && handleRequestClose()}>
-                {/* Reduced maximum width here to 1152px (max-w-6xl) for a more pleasant card size */}
                 <DialogContent
-                    onPointerDownOutside={(e) => {
-                        if (isDirty) e.preventDefault();
+                    onInteractOutside={(e) => {
+                        // Prevent all outside clicks from closing the modal.
+                        // Forces the user to click the "X" or Cancel button, ensuring stability.
+                        e.preventDefault();
                     }}
                     onEscapeKeyDown={(e) => {
                         if (isDirty) e.preventDefault();
                     }}
-                    className="!max-w-[900px] w-full sm:!w-[95vw] h-[100dvh] sm:h-[92vh] p-0 flex flex-col bg-white overflow-hidden rounded-none sm:rounded-3xl shadow-2xl border-none"
+                    className="!max-w-[900px] w-full sm:!w-[95vw] h-[100dvh] sm:h-[92vh] p-0 flex flex-col bg-white overflow-hidden rounded-none sm:rounded-3xl shadow-2xl border-none [&>button]:hidden"
                 >
                     <DialogTitle className="sr-only">
                         Session Planner
@@ -619,14 +690,16 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                 open={!!mobileSelectedActivity}
                 onOpenChange={(o) => !o && setMobileSelectedActivity(null)}
             >
-                <DialogContent className="w-[85vw] max-w-sm rounded-[24px] p-0 overflow-hidden bg-white border-none shadow-2xl gap-0">
+                <DialogContent className="w-[85vw] max-w-sm rounded-[24px] p-0 overflow-hidden bg-white border-none shadow-2xl gap-0 [&>button]:hidden">
                     <div className="w-full h-36 sm:h-40 bg-slate-100 relative shrink-0">
                         {mobileSelectedActivity?.banner ? (
                             <img
-                                src={FormatService.formatStrapiMedia(
-                                    mobileSelectedActivity.banner,
-                                    'medium',
-                                )}
+                                src={
+                                    FormatService.formatStrapiMedia(
+                                        mobileSelectedActivity.banner,
+                                        'medium',
+                                    ) || undefined
+                                }
                                 className="w-full h-full object-cover"
                                 alt=""
                             />
@@ -675,21 +748,41 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
 
             <AlertDialog
                 open={showExitConfirm}
-                onOpenChange={setShowExitConfirm}
+                onOpenChange={(open) => {
+                    setShowExitConfirm(open);
+                    if (!open) setPendingStudentId(null);
+                }}
             >
                 <AlertDialogContent className="rounded-2xl w-[90vw] max-w-sm">
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Discard Changes?</AlertDialogTitle>
+                        {/* Dynamic learner name based on active student */}
+                        <AlertDialogTitle>
+                            Discard changes for{' '}
+                            {student?.firstName ||
+                                student?.fullName ||
+                                'this learner'}
+                            ?
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Your current draft has unsaved changes.
+                            Your current draft has unsaved changes. If you
+                            leave, these changes will be lost permanently.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter className="max-sm:flex-col gap-2">
-                        <AlertDialogCancel className="mt-0">
+                        <AlertDialogCancel
+                            className="mt-0"
+                            onClick={() => setPendingStudentId(null)}
+                        >
                             Stay
                         </AlertDialogCancel>
                         <AlertDialogAction
-                            onClick={performClose}
+                            onClick={() => {
+                                if (pendingStudentId) {
+                                    performStudentSwitch(pendingStudentId);
+                                } else {
+                                    performClose();
+                                }
+                            }}
                             className="bg-red-600 text-white hover:bg-red-700"
                         >
                             Discard

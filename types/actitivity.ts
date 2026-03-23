@@ -1,7 +1,7 @@
 import { StrapiMedia } from '.';
 import { Category } from './categories';
 
-export interface Activity {
+export interface ActivityResponse {
     id: number;
     documentId: string;
     activityId: string;
