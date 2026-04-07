@@ -1344,7 +1344,7 @@ export default function Dashboard() {
                                             size={18}
                                             className="text-indigo-600"
                                         />{' '}
-                                        Clinical Schedule
+                                        Events Schedule
                                     </CardTitle>
                                     <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
                                         Timeline view of all assigned activities

@@ -16,10 +16,10 @@ import {
     Activity,
     LayoutGrid,
     Plus,
-    Settings2,
-    Users2,
     Settings,
+    Users2,
     Loader2,
+    CalendarPlus, // <-- Imported for the collapsed appointment button
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -34,9 +34,57 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { InitializeSessionButton } from './SessionPlanningModal/components/InitializeSessionPlanningButton';
-import { FormatService } from '@/utils/helpers';
 
-// --- Tooltip Wrapper (Outside render to avoid component-in-render errors) ---
+import { FormatService } from '@/utils/helpers';
+import { ScheduleAppointmentButton } from './AppointmentSchedulingModal/components/ScheduleAppointmentButton';
+
+// --- Static Navigation Items ---
+const NAV_ITEMS = [
+    {
+        path: '/',
+        label: 'Overview',
+        icon: PieChart,
+        allowedRoles: ['admin', 'therapist', 'secretary'],
+    },
+    {
+        path: '/students',
+        label: 'Learners',
+        icon: Users,
+        allowedRoles: ['therapist', 'secretary'],
+    },
+    {
+        path: '/activities',
+        label: 'Activity Center',
+        icon: Gamepad2,
+        allowedRoles: ['therapist'],
+    },
+    {
+        path: '/activity-manager',
+        label: 'Activity Manager',
+        icon: Gamepad2,
+        allowedRoles: ['admin'],
+    },
+    {
+        path: '/activity-sessions',
+        label: 'Sessions',
+        icon: Activity,
+        allowedRoles: ['admin', 'therapist', 'secretary'],
+    },
+    {
+        path: '/users',
+        label: 'Users Directory',
+        icon: Users2,
+        allowedRoles: ['admin', 'secretary'],
+    },
+    {
+        path: '/settings',
+        label: 'Settings',
+        icon: Settings,
+        allowedRoles: ['admin', 'therapist', 'secretary'],
+    },
+];
+
+// --- Tooltip Wrapper ---
 const TooltipWrapper = ({
     children,
     tooltipText,
@@ -77,8 +125,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
     const [pendingPath, setPendingPath] = useState<string | null>(null);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-    // --- FIX: Reset state during render instead of in useEffect ---
-    // If the URL matches the path we were waiting for, clear it immediately
+    // Clear pending state immediately on route match
     if (pendingPath === pathname) {
         setPendingPath(null);
     }
@@ -100,60 +147,17 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
     }, [setIsCollapsed]);
 
     const userRole = user?.role?.type;
-    if (userRole === 'student') return null;
-
-    const navItems = [
-        {
-            path: '/',
-            label: 'Overview',
-            icon: PieChart,
-            allowedRoles: ['admin', 'therapist', 'secretary'],
-        },
-        {
-            path: '/students',
-            label: 'Learners',
-            icon: Users,
-            allowedRoles: ['therapist', 'secretary'],
-        },
-        {
-            path: '/activities',
-            label: 'Activity Center',
-            icon: Gamepad2,
-            allowedRoles: ['therapist'],
-        },
-        {
-            path: '/activity-manager',
-            label: 'Activity Manager',
-            icon: Gamepad2,
-            allowedRoles: ['admin'],
-        },
-        {
-            path: '/activity-sessions',
-            label: 'Sessions',
-            icon: Activity,
-            allowedRoles: ['admin', 'therapist', 'secretary'],
-        },
-        {
-            path: '/users',
-            label: 'Users Directory',
-            icon: Users2,
-            allowedRoles: ['admin', 'secretary'],
-        },
-        {
-            path: '/settings',
-            label: 'Settings',
-            icon: Settings,
-            allowedRoles: ['admin', 'therapist', 'secretary'],
-        },
-    ];
 
     const visibleNavItems = useMemo(
         () =>
-            navItems.filter(
+            NAV_ITEMS.filter(
                 (item) => !userRole || item.allowedRoles.includes(userRole),
             ),
         [userRole],
     );
+
+    // Early return for students
+    if (userRole === 'student') return null;
 
     const handleLogout = async () => {
         setIsLoggingOut(true);
@@ -164,6 +168,12 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
             setIsLoggingOut(false);
         }
     };
+
+    // Role-based Action Permissions
+    const canPlanSession = ['therapist', 'secretary'].includes(userRole || '');
+    const canScheduleAppointment = ['admin', 'secretary'].includes(
+        userRole || '',
+    );
 
     return (
         <TooltipProvider delayDuration={100}>
@@ -241,42 +251,100 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }: SidebarProps) => {
                     </div>
                 </div>
 
-                {/* Action Button */}
-                {['therapist', 'secretary'].includes(userRole || '') && (
+                {/* --- Dynamic Action Buttons --- */}
+                {(canPlanSession || canScheduleAppointment) && (
                     <div
                         className={cn(
-                            'px-3 mb-6 shrink-0',
-                            isCollapsed && 'flex justify-center',
+                            'px-3 mb-6 shrink-0 flex flex-col gap-2',
+                            isCollapsed && 'items-center',
                         )}
                     >
-                        {isCollapsed ? (
-                            <TooltipWrapper
-                                shouldWrap
-                                tooltipText="Initialize Session"
-                                isMobile={isMobile}
-                            >
-                                <Button
-                                    size="icon"
-                                    className="h-10 w-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200"
-                                    onClick={() => {
-                                        const params = new URLSearchParams(
-                                            window.location.search,
-                                        );
-                                        params.set(
-                                            'isActivitySessionPlanningOpen',
-                                            'true',
-                                        );
-                                        router.push(
-                                            `${pathname}?${params.toString()}`,
-                                        );
-                                    }}
+                        {/* 1. Admin/Secretary: Schedule Clinical Appointments */}
+                        {canScheduleAppointment &&
+                            (isCollapsed ? (
+                                <TooltipWrapper
+                                    shouldWrap
+                                    tooltipText="Book Appointment"
+                                    isMobile={isMobile}
                                 >
-                                    <Plus size={20} className="text-white" />
-                                </Button>
-                            </TooltipWrapper>
-                        ) : (
-                            <InitializeSessionButton className="w-full" />
-                        )}
+                                    <Button
+                                        size="icon"
+                                        className="h-10 w-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200 shrink-0"
+                                        onClick={() => {
+                                            const params = new URLSearchParams(
+                                                window.location.search,
+                                            );
+                                            params.set(
+                                                'isAppointmentModalOpen',
+                                                'true',
+                                            );
+                                            router.push(
+                                                `${pathname}?${params.toString()}`,
+                                                { scroll: false },
+                                            );
+                                        }}
+                                    >
+                                        <CalendarPlus
+                                            size={20}
+                                            className="text-white"
+                                        />
+                                    </Button>
+                                </TooltipWrapper>
+                            ) : (
+                                <ScheduleAppointmentButton className="w-full" />
+                            ))}
+
+                        {/* 2. Therapist/Secretary: Plan Activity Sessions */}
+                        {canPlanSession &&
+                            (isCollapsed ? (
+                                <TooltipWrapper
+                                    shouldWrap
+                                    tooltipText="Plan Activity Session"
+                                    isMobile={isMobile}
+                                >
+                                    <Button
+                                        size="icon"
+                                        className={cn(
+                                            'h-10 w-10 rounded-xl shadow-md shrink-0 transition-colors',
+                                            // Make the second button visually distinct if both exist (e.g. for Secretary)
+                                            canScheduleAppointment
+                                                ? 'bg-white border border-slate-200 text-indigo-600 hover:bg-slate-50'
+                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200',
+                                        )}
+                                        onClick={() => {
+                                            const params = new URLSearchParams(
+                                                window.location.search,
+                                            );
+                                            params.set(
+                                                'isActivitySessionPlanningOpen',
+                                                'true',
+                                            );
+                                            router.push(
+                                                `${pathname}?${params.toString()}`,
+                                                { scroll: false },
+                                            );
+                                        }}
+                                    >
+                                        <Plus
+                                            size={20}
+                                            className={
+                                                canScheduleAppointment
+                                                    ? 'text-indigo-600'
+                                                    : 'text-white'
+                                            }
+                                        />
+                                    </Button>
+                                </TooltipWrapper>
+                            ) : (
+                                // Adding logic to make the second button a secondary variant if the first one rendered
+                                <InitializeSessionButton
+                                    className={cn(
+                                        'w-full',
+                                        canScheduleAppointment &&
+                                            'bg-slate-800 hover:bg-slate-900 border-slate-700 shadow-slate-300',
+                                    )}
+                                />
+                            ))}
                     </div>
                 )}
 

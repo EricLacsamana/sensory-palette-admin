@@ -256,6 +256,7 @@ export default function AppAdminDashboard() {
         queryKey: ['me'],
         queryFn: me,
         enabled: isAuthenticated && !!token,
+        staleTime: 5 * 60 * 1000, // 5 minutes cache
     });
 
     const {
@@ -278,7 +279,8 @@ export default function AppAdminDashboard() {
         ],
         queryFn: getActivitySessionsNew,
         enabled: !!token && isAuthenticated,
-        refetchInterval: 3000,
+        refetchInterval: 30000, // Reduced polling: every 30 seconds
+        staleTime: 15000, // Avoid duplicate fetches within 15 seconds
     });
 
     const { data: activities = [] } = useQuery({
@@ -291,12 +293,14 @@ export default function AppAdminDashboard() {
         ],
         queryFn: getActivities,
         enabled: !!token && isAuthenticated,
+        staleTime: 5 * 60 * 1000, // 5 minutes cache
     });
 
     const { data: platformUsers = [] } = useQuery({
         queryKey: ['users', { populate: '*' }],
         queryFn: getUsers,
         enabled: !!token && isAuthenticated,
+        staleTime: 5 * 60 * 1000, // 5 minutes cache
     });
 
     // --- SENSIBLE METRICS PROCESSING ---

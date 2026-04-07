@@ -1,5 +1,6 @@
 import { User, UserResponse } from '.';
 import { ActivityResponse } from './actitivity';
+import { AppointmentResponse } from './appointment';
 
 export enum ActivitySessionStatus {
     Pending = 'pending',
@@ -67,6 +68,7 @@ export interface ActivitySessionResponse {
     extraTimeSeconds: number;
     nextActivitySession: ActivitySessionResponse | null;
     previousActivitySession: ActivitySessionResponse | null;
+    appointment: AppointmentResponse;
 }
 
 export type ActivitySessionEntry = Omit<
@@ -88,6 +90,7 @@ export type ActivitySessionEntry = Omit<
     type: 'activity' | 'gap';
     enableLearnerControls?: boolean;
     rawTelemetry: unknown[];
+    appointment?: string;
 };
 
 export type CreateActivitySessionPayload = {
@@ -99,6 +102,7 @@ export type CreateActivitySessionPayload = {
     student: number;
     activity: string;
     previousActivitySession?: string | null;
+    appointment?: string;
 };
 
 export type UpdatectivitySessionPayload = {

@@ -57,7 +57,7 @@ export function UserAvatar({
                         sizeStyles[size],
                     )}
                 >
-                    {name.charAt(0) || (
+                    {name?.charAt(0) || (
                         <User size={iconSizes[size]} strokeWidth={1.5} />
                     )}
                 </AvatarFallback>

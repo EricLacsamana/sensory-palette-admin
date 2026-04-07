@@ -1,7 +1,14 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, IdCard, Clock, Plus } from 'lucide-react';
+import {
+    CalendarDays,
+    Clock,
+    Plus,
+    CalendarIcon,
+    ChevronRight,
+    Users,
+} from 'lucide-react';
 import { Reorder, AnimatePresence, motion } from 'framer-motion';
 import {
     Dialog,
@@ -21,65 +28,26 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toaster, toast } from 'sonner';
 import { useSessionPlan } from '@/hooks/useSessionPlan';
 import CapacityGauge from './components/CapacityGauge';
 import { TimelineEndpoint, TimelineItem } from './components/TimelineItem';
 import { Header } from './components/Header';
 import { ActivitiesSiderbar } from './components/ActivitiesSidebar';
-import {
-    useSearchParams,
-    useRouter,
-    usePathname,
-    useParams,
-} from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getStudent, getStudents } from '@/api/students';
+import { getAppointments } from '@/api/appointment';
 import {
     createActivitySession,
     updateActivitySession,
     deleteActivitySession,
 } from '@/api/activity-session';
 import { FormatService } from '@/utils/helpers';
-import { Input } from '@base-ui/react';
-import { UserResponse } from '@/types';
+import { AppointmentResponse } from '@/types/appointment';
 import { UserAvatar } from '@/components/UserAvatar';
 import { ActivityResponse } from '@/types/actitivity';
 import { cn } from '@/lib/utils';
-
-export const getOperatingHoursForDate = (targetDate: Date | string) => {
-    const base = new Date(targetDate);
-    const startStr = process.env.NEXT_PUBLIC_OPERATING_START || '08:00';
-    const endStr = process.env.NEXT_PUBLIC_OPERATING_END || '18:00';
-
-    const [startHour, startMin] = startStr.split(':').map(Number);
-    const [endHour, endMin] = endStr.split(':').map(Number);
-
-    const s = new Date(base);
-    s.setHours(startHour, startMin, 0, 0);
-
-    const e = new Date(base);
-    e.setHours(endHour, endMin, 0, 0);
-
-    const now = new Date();
-    const isToday =
-        s.getFullYear() === now.getFullYear() &&
-        s.getMonth() === now.getMonth() &&
-        s.getDate() === now.getDate();
-
-    if (isToday) {
-        const coeff = 1000 * 60 * 5;
-        const roundedNow = new Date(Math.ceil(now.getTime() / coeff) * coeff);
-        if (roundedNow > s) {
-            s.setTime(roundedNow.getTime());
-        }
-    }
-
-    let finalEnd = new Date(e);
-    if (s > e) s.setTime(e.getTime());
-
-    return { start: s.toISOString(), end: finalEnd.toISOString() };
-};
 
 const timelineVariants = {
     enter: (direction: number) => ({ x: direction > 0 ? 60 : -60, opacity: 0 }),
@@ -87,58 +55,130 @@ const timelineVariants = {
     exit: (direction: number) => ({ x: direction < 0 ? 60 : -60, opacity: 0 }),
 };
 
+const listVariants = {
+    enter: { opacity: 0, y: 15 },
+    center: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -15 },
+};
+
+// Helper for sleek time formatting in the timeline
+const formatTimeSplit = (isoString: string) => {
+    const formatted = FormatService.formatTime(isoString, '12h-simple'); // "10:00 AM"
+    const [time, ampm] = formatted.split(' ');
+    return { time, ampm };
+};
+
 const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const params = useParams();
     const queryClient = useQueryClient();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
     const [showExitConfirm, setShowExitConfirm] = useState(false);
-    const [pendingStudentId, setPendingStudentId] = useState<number | null>(
-        null,
-    );
+
+    const [pendingAppointmentId, setPendingAppointmentId] = useState<
+        string | null
+    >(null);
     const [isDragging, setIsDragging] = useState(false);
-    const [isShowOtherStudents, setIsShowOtherStudents] = useState(true);
     const [slideDirection, setSlideDirection] = useState(0);
 
     const [mobileSelectedActivity, setMobileSelectedActivity] =
         useState<ActivityResponse | null>(null);
 
-    // FIX: Local state prevents Next.js routing destruction on student switch
-    const [activeStudentId, setActiveStudentId] = useState<number | null>(
-        () => {
-            const id = params?.id || searchParams.get('studentId');
-            return id ? Number(id) : null;
-        },
-    );
-
-    const initialIso = useMemo(() => getOperatingHoursForDate(new Date()), []);
-
-    const [startAt, setStartAt] = useState(initialIso.start);
-    const [endAt, setEndAt] = useState(initialIso.end);
-
-    const { data: student } = useQuery({
-        queryKey: ['student', activeStudentId],
-        queryFn: getStudent,
-        enabled: !!activeStudentId,
+    const [activeAppointmentId, setActiveAppointmentId] = useState<
+        string | null
+    >(() => {
+        return searchParams.get('planAppointmentId') || null;
     });
 
-    const { data: studentsList = [] } = useQuery({
-        queryKey: ['students', searchQuery],
-        queryFn: getStudents,
+    const [currentDate, setCurrentDate] = useState<Date>(new Date());
+
+    const { data: appointmentsList = [] } = useQuery({
+        queryKey: ['appointments', { populate: '*' }],
+        queryFn: getAppointments,
     });
 
-    const filteredStudents = useMemo(() => {
-        if (!searchQuery) return studentsList;
-        return studentsList.filter(
-            (s: UserResponse) =>
-                s.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                s.id?.toString().includes(searchQuery),
+    console.log('Appointments for planning', appointmentsList);
+    // --- FORECASTING LOGIC (Grouped by Date) ---
+    const groupedUpcomingAppointments = useMemo(() => {
+        const list = appointmentsList as AppointmentResponse[];
+        const targetDate = new Date();
+        targetDate.setHours(0, 0, 0, 0);
+
+        const filtered = list.filter((a) => {
+            const apptDate = new Date(a.startAt);
+            if (apptDate.getTime() < targetDate.getTime()) return false;
+            return (
+                a.appointmentStatus === 'pending' ||
+                a.appointmentStatus === 'reschedule'
+            );
+        });
+
+        filtered.sort(
+            (a, b) =>
+                new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
         );
-    }, [studentsList, searchQuery]);
+
+        const grouped: Record<string, AppointmentResponse[]> = {};
+        filtered.forEach((app) => {
+            const dateStr = new Date(app.startAt).toISOString().split('T')[0];
+            if (!grouped[dateStr]) grouped[dateStr] = [];
+            grouped[dateStr].push(app);
+        });
+
+        return grouped;
+    }, [appointmentsList]);
+
+    const sortedDateStrings = useMemo(() => {
+        return Object.keys(groupedUpcomingAppointments).sort();
+    }, [groupedUpcomingAppointments]);
+
+    const selectedDateStr = currentDate.toISOString().split('T')[0];
+
+    const filteredAppointments = useMemo(() => {
+        return groupedUpcomingAppointments[selectedDateStr] || [];
+    }, [groupedUpcomingAppointments, selectedDateStr]);
+
+    // --- Group strictly by Exact Time (for same-time stacking) ---
+    const groupedByTime = useMemo(() => {
+        const groups: Record<string, AppointmentResponse[]> = {};
+        filteredAppointments.forEach((app) => {
+            const timeKey = new Date(app.startAt).getTime().toString();
+            if (!groups[timeKey]) groups[timeKey] = [];
+            groups[timeKey].push(app);
+        });
+
+        return Object.keys(groups)
+            .sort()
+            .map((key) => ({
+                timestamp: Number(key),
+                timeString: groups[key][0].startAt,
+                appointments: groups[key],
+            }));
+    }, [filteredAppointments]);
+
+    const activeAppointment = useMemo(() => {
+        return (appointmentsList as AppointmentResponse[]).find(
+            (a) =>
+                a.documentId === activeAppointmentId ||
+                a.id.toString() === activeAppointmentId,
+        );
+    }, [appointmentsList, activeAppointmentId]);
+
+    const sessionStudent = activeAppointment?.student;
+
+    const defaultBounds = useMemo(() => {
+        const d = new Date();
+        d.setHours(8, 0, 0, 0);
+        const start = d.toISOString();
+        d.setHours(17, 0, 0, 0);
+        const end = d.toISOString();
+        return { start, end };
+    }, []);
+
+    const sessionStartAt = activeAppointment?.startAt || defaultBounds.start;
+    const sessionEndAt = activeAppointment?.endAt || defaultBounds.end;
 
     const {
         timelineItems,
@@ -157,7 +197,12 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         redo,
         canUndo,
         canRedo,
-    } = useSessionPlan({ startAt, endAt, student });
+    } = useSessionPlan({
+        appointmentId: activeAppointment?.documentId,
+        startAt: sessionStartAt,
+        endAt: sessionEndAt,
+        student: sessionStudent,
+    });
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -175,52 +220,61 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         setShowExitConfirm(false);
         const p = new URLSearchParams(searchParams.toString());
         p.delete('isActivitySessionPlanningOpen');
-        p.delete('studentId');
+        p.delete('planAppointmentId');
         router.replace(`${pathname}?${p.toString()}`);
         if (onClose) onClose();
-        queryClient.invalidateQueries({ queryKey: ['activity-sessions'] });
     };
 
     const handleRequestClose = () => {
         if (isDirty) {
-            setPendingStudentId(null);
+            setPendingAppointmentId(null);
             setShowExitConfirm(true);
         } else {
             performClose();
         }
     };
 
-    const performStudentSwitch = (newId: number) => {
+    const performAppointmentSwitch = (newId: string | null) => {
         reset();
-        setPendingStudentId(null);
+        setPendingAppointmentId(null);
         setShowExitConfirm(false);
+        setActiveAppointmentId(newId);
 
-        // Instantly switch the UI using local state
-        setActiveStudentId(newId);
-
-        // Safely update the URL (Requires LayoutWrapper Suspense key fix)
         const p = new URLSearchParams(searchParams.toString());
-        p.set('studentId', newId.toString());
+        if (newId) {
+            p.set('planAppointmentId', newId);
+        } else {
+            p.delete('planAppointmentId');
+        }
         router.replace(`${pathname}?${p.toString()}`, { scroll: false });
     };
 
-    const handleStudentSwitchRequest = (newId: number) => {
-        if (newId === activeStudentId) return;
+    const handleAppointmentSwitchRequest = (newId: string) => {
+        if (newId === activeAppointmentId) return;
         if (isDirty) {
-            setPendingStudentId(newId);
+            setPendingAppointmentId(newId);
             setShowExitConfirm(true);
         } else {
-            performStudentSwitch(newId);
+            performAppointmentSwitch(newId);
         }
     };
 
-    // FIX: Accepts a boolean to determine if the modal should close after saving
+    const handleBackClick = () => {
+        if (isDirty) {
+            setPendingAppointmentId('BACK');
+            setShowExitConfirm(true);
+        } else {
+            performAppointmentSwitch(null);
+        }
+    };
+
     const handleSubmit = async (closeAfter: boolean) => {
-        if (isSubmitting) return;
+        if (isSubmitting || !sessionStudent || !activeAppointment) return;
         setIsSubmitting(true);
         try {
-            for (const id of deletedDocumentIds)
+            for (const id of deletedDocumentIds) {
                 await deleteActivitySession(id);
+            }
             for (const session of draft) {
                 const payload = {
                     startAt: session.startAt,
@@ -228,17 +282,17 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                 };
                 if (session.documentId) {
                     await updateActivitySession(session.documentId, payload);
-                } else if (session.student?.id) {
+                } else if (session.activity?.documentId) {
                     await createActivitySession({
                         ...payload,
-                        activity: session.activity?.documentId,
-                        student: session.student?.id,
+                        activity: session.activity.documentId,
+                        student: sessionStudent.id,
+                        appointment: activeAppointment.documentId,
                     });
                 }
             }
             toast.success('Session plan synchronized successfully');
 
-            // Refetch the data to sync accurate backend Document IDs into the timeline
             await queryClient.invalidateQueries({
                 queryKey: ['activity-sessions'],
             });
@@ -246,7 +300,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                 performClose();
             } else {
                 reset();
-                setPendingStudentId(null);
+                setPendingAppointmentId(null);
             }
         } catch (error) {
             console.error('Save Error:', error);
@@ -276,85 +330,15 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         }
     };
 
-    const handleTimeChange = (type: 'start' | 'end' | 'date', val1: string) => {
-        const oldDateNum = new Date(startAt).setHours(0, 0, 0, 0);
-
-        if (type === 'date' && val1) {
-            const newBounds = getOperatingHoursForDate(val1);
-            const newDateNum = new Date(newBounds.start).setHours(0, 0, 0, 0);
-
-            if (oldDateNum !== newDateNum)
-                setSlideDirection(newDateNum > oldDateNum ? 1 : -1);
-
-            const now = new Date();
-            const originalStartStr =
-                process.env.NEXT_PUBLIC_OPERATING_START || '08:00';
-            const [startHour, startMin] = originalStartStr
-                .split(':')
-                .map(Number);
-
-            if (
-                newDateNum === now.setHours(0, 0, 0, 0) &&
-                new Date(newBounds.start) >
-                    new Date(new Date().setHours(startHour, startMin, 0, 0))
-            ) {
-                toast.warning(
-                    'Adjusted to current time (cannot schedule in the past)',
-                    { id: 'past-schedule' },
-                );
-            }
-
-            setStartAt(newBounds.start);
-            setEndAt(newBounds.end);
-            return;
-        }
-
-        let newDate = new Date(val1);
-        if (type === 'start') {
-            const now = new Date();
-            const isToday =
-                newDate.getFullYear() === now.getFullYear() &&
-                newDate.getMonth() === now.getMonth() &&
-                newDate.getDate() === now.getDate();
-
-            if (isToday && newDate < now) {
-                toast.error(
-                    'Adjusted to current time (cannot schedule in the past)',
-                    { id: 'past-schedule' },
-                );
-                const coeff = 1000 * 60 * 5;
-                newDate = new Date(Math.ceil(now.getTime() / coeff) * coeff);
-            }
-
-            const newDateNum = new Date(newDate).setHours(0, 0, 0, 0);
-            if (oldDateNum !== newDateNum)
-                setSlideDirection(newDateNum > oldDateNum ? 1 : -1);
-
-            setStartAt(newDate.toISOString());
-            let currentEnd = new Date(endAt);
-            currentEnd.setFullYear(
-                newDate.getFullYear(),
-                newDate.getMonth(),
-                newDate.getDate(),
-            );
-            if (newDate >= currentEnd)
-                currentEnd = new Date(newDate.getTime() + 2 * 60 * 60 * 1000);
-            setEndAt(currentEnd.toISOString());
-        } else if (type === 'end') {
-            setEndAt(newDate.toISOString());
-        }
-    };
-
     const renderMainContent = () => {
         return (
             <div
                 className={cn(
                     'flex flex-col h-full relative w-full overflow-hidden transition-colors duration-200',
-                    !activeStudentId ? 'bg-slate-50' : 'bg-white',
+                    !activeAppointmentId ? 'bg-slate-50' : 'bg-white',
                 )}
             >
-                {/* Background grid pattern only shown when selecting a learner */}
-                {!activeStudentId && (
+                {!activeAppointmentId && (
                     <div
                         className="absolute inset-0 pointer-events-none opacity-[0.4] z-0"
                         style={{
@@ -365,94 +349,460 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                     />
                 )}
 
-                {/* Unified Header always sits at the top */}
-                <div className="relative z-10 flex flex-col h-full w-full">
+                <div className="relative z-10 flex flex-col h-full w-full overflow-hidden">
                     <Header
-                        hasStudent={!!activeStudentId}
-                        user={student}
-                        students={studentsList}
-                        onSelectStudent={handleStudentSwitchRequest}
+                        hasAppointment={!!activeAppointmentId}
+                        activeAppointment={activeAppointment}
+                        onBack={handleBackClick}
+                        startAt={sessionStartAt}
+                        endAt={sessionEndAt}
                         undo={undo}
                         redo={redo}
                         canRedo={canRedo}
                         canUndo={canUndo}
-                        startAt={startAt}
-                        endAt={endAt}
-                        onChange={handleTimeChange}
                         isDirty={isDirty}
-                        isShowOtherUsers={isShowOtherStudents}
-                        setIsShowOtherUsers={setIsShowOtherStudents}
                         onClose={handleRequestClose}
                     />
 
-                    {!activeStudentId ? (
-                        /* Select Learner View */
-                        <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full px-6 pb-6 pt-2 sm:px-12 sm:pb-12 sm:pt-6 overflow-y-auto">
-                            <div className="flex flex-col items-center text-center space-y-4 mb-6 sm:mb-8">
-                                <div className="space-y-2">
-                                    <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-                                        Select Learner
-                                    </h2>
-                                    <p className="text-sm sm:text-base text-slate-500 font-medium px-4">
-                                        Initiate a planning session by selecting
-                                        a target profile
-                                    </p>
-                                </div>
-                                <div className="w-full max-w-md relative group mt-2">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Search className="h-4 w-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
-                                    </div>
-                                    <Input
-                                        className="pl-10 h-12 bg-white border-slate-200 shadow-sm rounded-xl focus:ring-2 focus:ring-indigo-100 transition-all text-base w-full touch-auto select-text"
-                                        placeholder="Search by name or ID..."
-                                        value={searchQuery}
-                                        onChange={(e) =>
-                                            setSearchQuery(e.target.value)
-                                        }
-                                        autoFocus
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 pb-20 pr-2">
-                                {filteredStudents.map((s: UserResponse) => (
-                                    <button
-                                        key={s.id}
-                                        onClick={() =>
-                                            handleStudentSwitchRequest(s.id)
-                                        }
-                                        className="group relative flex items-center sm:items-start gap-4 p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-500 hover:shadow-lg transition-all duration-200 text-left"
-                                    >
-                                        <UserAvatar
-                                            src={
-                                                FormatService.formatStrapiMedia(
-                                                    s.profilePicture,
-                                                    'thumbnail',
-                                                ) || undefined
-                                            }
-                                            name={s.fullName}
-                                            size="md"
-                                            className="group-hover:scale-105 transition-transform shrink-0"
+                    {!activeAppointmentId ? (
+                        /* ==================================================
+                            SELECT APPOINTMENT VIEW (Sidebar + Timeline)
+                           ================================================== */
+                        <div className="flex flex-1 h-full overflow-hidden relative z-10">
+                            {/* DYNAMIC FORECASTING SIDEBAR */}
+                            <aside
+                                className={cn(
+                                    'flex flex-col bg-slate-50 border-r border-slate-200 h-full shrink-0 z-40 transition-all duration-300',
+                                    'w-[84px] lg:w-[320px]',
+                                )}
+                            >
+                                {/* Header */}
+                                <div className="h-14 p-2 lg:p-4 border-b border-slate-200 bg-white shrink-0 flex items-center justify-center lg:justify-start">
+                                    <h3 className="hidden lg:block text-sm font-black text-slate-800 tracking-tight">
+                                        Forecast
+                                    </h3>
+                                    <h3 className="lg:hidden text-[10px] font-black text-slate-800 tracking-widest uppercase">
+                                        <CalendarIcon
+                                            size={14}
+                                            className="inline mb-0.5 mr-1"
                                         />
-                                        <div className="flex-1 min-w-0 flex flex-col justify-center sm:mt-1">
-                                            <h3 className="font-bold text-sm sm:text-base text-slate-900 truncate pr-2 group-hover:text-indigo-700 transition-colors">
-                                                {s.fullName}
-                                            </h3>
-                                            <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
-                                                <IdCard
-                                                    size={12}
-                                                    className="text-slate-400"
-                                                />
-                                                <span className="text-[10px] sm:text-xs font-mono text-slate-500">
-                                                    ID:{' '}
-                                                    {s.id
-                                                        .toString()
-                                                        .padStart(4, '0')}
-                                                </span>
+                                    </h3>
+                                </div>
+
+                                <div className="flex-1 min-h-0 relative w-full bg-slate-50/50">
+                                    <ScrollArea className="h-full w-full">
+                                        <div className="p-3 pr-3 lg:p-4 lg:pr-5 space-y-4 lg:space-y-6 w-full">
+                                            <div className="w-full">
+                                                <div className="flex flex-col lg:flex-row items-center justify-center lg:justify-between px-1 mb-2 lg:mb-3">
+                                                    <h3 className="hidden lg:block text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate pr-2">
+                                                        Active Dates
+                                                    </h3>
+                                                    <div className="h-px w-8 bg-slate-200 lg:hidden my-1 mx-auto" />
+                                                </div>
+
+                                                <div className="flex flex-col items-stretch gap-2.5 pb-20 w-full">
+                                                    {sortedDateStrings.length >
+                                                    0 ? (
+                                                        sortedDateStrings.map(
+                                                            (dateStr) => {
+                                                                const count =
+                                                                    groupedUpcomingAppointments[
+                                                                        dateStr
+                                                                    ].length;
+                                                                const isSelected =
+                                                                    selectedDateStr ===
+                                                                    dateStr;
+                                                                const d =
+                                                                    new Date(
+                                                                        dateStr +
+                                                                            'T12:00:00',
+                                                                    );
+                                                                const isToday =
+                                                                    new Date()
+                                                                        .toISOString()
+                                                                        .split(
+                                                                            'T',
+                                                                        )[0] ===
+                                                                    dateStr;
+
+                                                                return (
+                                                                    <button
+                                                                        key={
+                                                                            dateStr
+                                                                        }
+                                                                        onClick={() =>
+                                                                            setCurrentDate(
+                                                                                d,
+                                                                            )
+                                                                        }
+                                                                        className={cn(
+                                                                            'group relative flex flex-col items-center lg:items-start p-2.5 lg:p-3 rounded-2xl transition-all duration-200 border text-left w-full',
+                                                                            isSelected
+                                                                                ? 'bg-white border-indigo-200 shadow-[0_2px_10px_-3px_rgba(99,102,241,0.2)]'
+                                                                                : 'bg-transparent border-transparent hover:bg-white hover:border-slate-200 hover:shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)]',
+                                                                        )}
+                                                                    >
+                                                                        <div className="flex flex-col lg:flex-row lg:items-center justify-between w-full gap-2">
+                                                                            {/* Collapsed View */}
+                                                                            <div className="lg:hidden flex flex-col items-center justify-center w-full gap-1">
+                                                                                <span
+                                                                                    className={cn(
+                                                                                        'text-[9px] font-black uppercase tracking-widest',
+                                                                                        isSelected
+                                                                                            ? 'text-indigo-600'
+                                                                                            : 'text-slate-400',
+                                                                                    )}
+                                                                                >
+                                                                                    {isToday
+                                                                                        ? 'TDY'
+                                                                                        : d.toLocaleDateString(
+                                                                                              'en-US',
+                                                                                              {
+                                                                                                  weekday:
+                                                                                                      'short',
+                                                                                              },
+                                                                                          )}
+                                                                                </span>
+                                                                                <div
+                                                                                    className={cn(
+                                                                                        'h-10 w-10 rounded-full flex items-center justify-center font-black text-sm border-2',
+                                                                                        isSelected
+                                                                                            ? 'bg-indigo-50 border-indigo-100 text-indigo-700'
+                                                                                            : 'bg-slate-50 border-white text-slate-700',
+                                                                                    )}
+                                                                                >
+                                                                                    {d.getDate()}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {/* Expanded View Text */}
+                                                                            <div className="hidden lg:flex items-center gap-3 w-full">
+                                                                                <div
+                                                                                    className={cn(
+                                                                                        'flex flex-col items-center justify-center h-11 w-11 rounded-xl shrink-0 transition-colors border',
+                                                                                        isSelected
+                                                                                            ? 'bg-indigo-50 border-indigo-100 text-indigo-600'
+                                                                                            : 'bg-white border-slate-100 text-slate-400 group-hover:text-indigo-500 group-hover:border-indigo-100',
+                                                                                    )}
+                                                                                >
+                                                                                    <span className="text-[10px] font-black uppercase leading-none mt-1">
+                                                                                        {d.toLocaleDateString(
+                                                                                            'en-US',
+                                                                                            {
+                                                                                                month: 'short',
+                                                                                            },
+                                                                                        )}
+                                                                                    </span>
+                                                                                    <span className="text-sm font-bold leading-none">
+                                                                                        {d.getDate()}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div className="flex flex-col flex-1 min-w-0">
+                                                                                    <span
+                                                                                        className={cn(
+                                                                                            'text-[10px] font-black uppercase tracking-widest truncate',
+                                                                                            isSelected
+                                                                                                ? 'text-indigo-600'
+                                                                                                : 'text-slate-400 group-hover:text-slate-500',
+                                                                                        )}
+                                                                                    >
+                                                                                        {isToday
+                                                                                            ? 'Today'
+                                                                                            : d.toLocaleDateString(
+                                                                                                  'en-US',
+                                                                                                  {
+                                                                                                      weekday:
+                                                                                                          'long',
+                                                                                                  },
+                                                                                              )}
+                                                                                    </span>
+                                                                                    <span
+                                                                                        className={cn(
+                                                                                            'text-sm font-bold truncate',
+                                                                                            isSelected
+                                                                                                ? 'text-slate-900'
+                                                                                                : 'text-slate-700',
+                                                                                        )}
+                                                                                    >
+                                                                                        {d.toLocaleDateString(
+                                                                                            'en-US',
+                                                                                            {
+                                                                                                month: 'short',
+                                                                                                day: 'numeric',
+                                                                                            },
+                                                                                        )}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div
+                                                                                className={cn(
+                                                                                    'hidden lg:flex items-center gap-1.5 px-2 py-1 rounded-md shrink-0',
+                                                                                    isSelected
+                                                                                        ? 'bg-indigo-100 text-indigo-700'
+                                                                                        : 'bg-slate-100 text-slate-500',
+                                                                                )}
+                                                                            >
+                                                                                <Users
+                                                                                    size={
+                                                                                        12
+                                                                                    }
+                                                                                />
+                                                                                <span className="text-[10px] font-black">
+                                                                                    {
+                                                                                        count
+                                                                                    }
+                                                                                </span>
+                                                                            </div>
+
+                                                                            {/* Micro count for collapsed view */}
+                                                                            <span
+                                                                                className={cn(
+                                                                                    'lg:hidden absolute -top-1 -right-1 h-5 w-5 rounded-full text-[9px] font-black flex items-center justify-center border-2 border-slate-50 shadow-sm',
+                                                                                    isSelected
+                                                                                        ? 'bg-indigo-600 text-white'
+                                                                                        : 'bg-slate-700 text-white',
+                                                                                )}
+                                                                            >
+                                                                                {
+                                                                                    count
+                                                                                }
+                                                                            </span>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            },
+                                                        )
+                                                    ) : (
+                                                        <div className="text-center py-6 lg:py-8 text-slate-400 w-full bg-white rounded-xl border border-slate-100 border-dashed">
+                                                            <CalendarDays
+                                                                size={20}
+                                                                className="opacity-30 mx-auto mb-2 hidden lg:block"
+                                                            />
+                                                            <p className="text-[9px] lg:text-xs font-bold text-slate-400 text-center px-1">
+                                                                <span className="lg:hidden">
+                                                                    Empty
+                                                                </span>
+                                                                <span className="hidden lg:inline">
+                                                                    No dates
+                                                                    found
+                                                                </span>
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
-                                    </button>
-                                ))}
+                                    </ScrollArea>
+                                    <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
+                                </div>
+                            </aside>
+
+                            {/* MAIN CONTENT (Perfectly Aligned Timeline Row List) */}
+                            <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50">
+                                <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-8 custom-scrollbar relative">
+                                    <AnimatePresence mode="wait">
+                                        <motion.div
+                                            key={selectedDateStr}
+                                            variants={listVariants}
+                                            initial="enter"
+                                            animate="center"
+                                            exit="exit"
+                                            transition={{
+                                                duration: 0.25,
+                                                ease: 'easeOut',
+                                            }}
+                                            className="w-full max-w-4xl mx-auto"
+                                        >
+                                            {/* Date Header for Selection Timeline */}
+                                            <div className="flex flex-row items-center w-full relative z-10 pb-6 pt-2">
+                                                <div className="w-[60px] sm:w-[88px] shrink-0" />
+                                                <div className="flex flex-col items-center w-6 shrink-0 relative z-10">
+                                                    <div className="h-2 w-2 rounded-full bg-slate-300 ring-4 ring-slate-50" />
+                                                </div>
+                                                <div className="pl-3 sm:pl-5">
+                                                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-700">
+                                                        <CalendarDays
+                                                            size={14}
+                                                            className="text-slate-400"
+                                                        />
+                                                        <span className="text-sm font-bold tracking-tight">
+                                                            {new Date(
+                                                                selectedDateStr +
+                                                                    'T12:00:00',
+                                                            ).toLocaleDateString(
+                                                                'en-US',
+                                                                {
+                                                                    weekday:
+                                                                        'long',
+                                                                    month: 'long',
+                                                                    day: 'numeric',
+                                                                    year: 'numeric',
+                                                                },
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {groupedByTime.length > 0 ? (
+                                                <div className="relative">
+                                                    {/* Continuous Vertical Timeline Line */}
+                                                    <div className="absolute left-[71px] sm:left-[99px] top-0 bottom-10 w-[2px] bg-slate-200/60 z-0" />
+
+                                                    <div className="flex flex-col gap-6 relative z-10 pb-20">
+                                                        {groupedByTime.map(
+                                                            (slot) => {
+                                                                const {
+                                                                    time,
+                                                                    ampm,
+                                                                } =
+                                                                    formatTimeSplit(
+                                                                        slot.timeString,
+                                                                    );
+
+                                                                return (
+                                                                    <div
+                                                                        key={
+                                                                            slot.timestamp
+                                                                        }
+                                                                        className="flex flex-row items-stretch w-full relative z-10"
+                                                                    >
+                                                                        {/* Time Column */}
+                                                                        <div className="flex flex-col items-end w-[60px] sm:w-[88px] shrink-0 pr-3 sm:pr-4 pt-5">
+                                                                            <span className="text-[13px] sm:text-[15px] font-medium sm:font-semibold text-slate-900 leading-none">
+                                                                                {
+                                                                                    time
+                                                                                }
+                                                                            </span>
+                                                                            <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest mt-1">
+                                                                                {
+                                                                                    ampm
+                                                                                }
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {/* Node Column */}
+                                                                        <div className="flex flex-col top-3.5 items-center w-6 shrink-0 relative z-10 pt-[24px]">
+                                                                            <div className="h-3 w-3 rounded-full bg-white border-[3px] border-indigo-400 ring-4 ring-slate-50 shadow-sm z-10" />
+                                                                        </div>
+
+                                                                        {/* Cards Column */}
+                                                                        <div className="flex-1 flex flex-col gap-2.5 sm:gap-3 pl-3 sm:pl-5 min-w-0 relative pb-4 sm:pb-6">
+                                                                            {/* Connecting bracket line for multiple appointments */}
+                                                                            {slot
+                                                                                .appointments
+                                                                                .length >
+                                                                                1 && (
+                                                                                <div className="absolute left-[5px] sm:left-[9px] top-[36px] bottom-[36px] w-[2px] bg-indigo-100 rounded-full z-0" />
+                                                                            )}
+
+                                                                            {slot.appointments.map(
+                                                                                (
+                                                                                    app: AppointmentResponse,
+                                                                                ) => (
+                                                                                    <button
+                                                                                        key={
+                                                                                            app.id
+                                                                                        }
+                                                                                        onClick={() =>
+                                                                                            handleAppointmentSwitchRequest(
+                                                                                                app.documentId,
+                                                                                            )
+                                                                                        }
+                                                                                        className="group relative flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white shadow-sm border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all duration-200 text-left w-full z-10"
+                                                                                    >
+                                                                                        {/* Removed absolute accent hover line entirely */}
+
+                                                                                        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pl-2">
+                                                                                            <UserAvatar
+                                                                                                src={
+                                                                                                    FormatService.formatStrapiMedia(
+                                                                                                        app
+                                                                                                            .student
+                                                                                                            ?.profilePicture,
+                                                                                                        'thumbnail',
+                                                                                                    ) ||
+                                                                                                    undefined
+                                                                                                }
+                                                                                                name={
+                                                                                                    app
+                                                                                                        .student
+                                                                                                        ?.fullName
+                                                                                                }
+                                                                                                size="md"
+                                                                                                className="shrink-0"
+                                                                                            />
+                                                                                            <div className="flex flex-col min-w-0">
+                                                                                                <span className="text-sm font-semibold text-slate-900 truncate">
+                                                                                                    {app
+                                                                                                        .student
+                                                                                                        ?.fullName ||
+                                                                                                        app
+                                                                                                            .student
+                                                                                                            ?.firstName +
+                                                                                                            ' ' +
+                                                                                                            app
+                                                                                                                .student
+                                                                                                                ?.lastName ||
+                                                                                                        'Unknown Learner'}
+                                                                                                </span>
+                                                                                                <span className="text-xs text-slate-500 truncate mt-0.5">
+                                                                                                    {app
+                                                                                                        .student
+                                                                                                        ?.diagnosis ||
+                                                                                                        'No Diagnosis Provided'}
+                                                                                                </span>
+                                                                                                <span className="text-xs text-slate-500 truncate mt-0.5">
+                                                                                                    Age:{' '}
+                                                                                                    {
+                                                                                                        app
+                                                                                                            .student
+                                                                                                            ?.age
+                                                                                                    }
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        </div>
+
+                                                                                        <div className="flex items-center gap-2 sm:gap-3 shrink-0 pl-2">
+                                                                                            <span className="text-xs font-medium text-slate-400">
+                                                                                                {
+                                                                                                    app
+                                                                                                        .service
+                                                                                                        ?.durationMinutes
+                                                                                                }{' '}
+                                                                                                min
+                                                                                            </span>
+                                                                                            <div className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-50 group-hover:bg-slate-100 transition-colors">
+                                                                                                <ChevronRight
+                                                                                                    size={
+                                                                                                        14
+                                                                                                    }
+                                                                                                    className="text-slate-400 group-hover:text-slate-600 transition-all"
+                                                                                                />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </button>
+                                                                                ),
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            },
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center text-center text-slate-500 py-12">
+                                                    <p className="text-sm font-medium mt-1">
+                                                        No appointments found
+                                                        for this date.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </motion.div>
+                                    </AnimatePresence>
+                                </div>
                             </div>
                         </div>
                     ) : (
@@ -487,17 +837,12 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                 }}
                                 onDrop={handleExternalDrop}
                             >
-                                <div className="h-14 border-b border-slate-100 flex justify-between bg-white items-center shrink-0 px-3 sm:px-6 z-30">
+                                {/* CAPACITY GAUGE ON TOP OF TIMELINE CANVAS */}
+                                <div className="h-14 border-b border-slate-200 flex justify-between bg-white items-center shrink-0 px-4 sm:px-6 z-30 shadow-[0_4px_15px_-10px_rgba(0,0,0,0.05)]">
                                     <CapacityGauge
                                         percent={capacityMetrics.percentUsed}
-                                        className="max-w-[130px] sm:max-w-[200px] w-full"
+                                        className="w-full"
                                     />
-                                    <div className="flex items-center gap-3 font-mono text-xs font-semibold text-slate-700">
-                                        {FormatService.formatTime(
-                                            endAt,
-                                            '12h-simple',
-                                        )}
-                                    </div>
                                 </div>
 
                                 <div className="flex-1 bg-slate-50/30 relative overflow-hidden">
@@ -507,7 +852,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                         initial={false}
                                     >
                                         <motion.div
-                                            key={startAt.split('T')[0]}
+                                            key={sessionStartAt}
                                             custom={slideDirection}
                                             variants={timelineVariants}
                                             initial="enter"
@@ -530,24 +875,18 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                                         }
                                                         className="space-y-0 relative"
                                                     >
+                                                        {/* TIMELINE ENDPOINT FOR PLANNER VIEW */}
                                                         <TimelineEndpoint
                                                             type="start"
                                                             time={FormatService.formatTime(
-                                                                startAt,
+                                                                sessionStartAt,
                                                                 '12h-simple',
                                                             )}
                                                         />
+
                                                         <div className="my-2 relative">
-                                                            {timelineItems
-                                                                .filter(
-                                                                    (item) =>
-                                                                        isShowOtherStudents ||
-                                                                        item
-                                                                            .student
-                                                                            ?.id ===
-                                                                            activeStudentId,
-                                                                )
-                                                                .map((item) => (
+                                                            {timelineItems.map(
+                                                                (item) => (
                                                                     <TimelineItem
                                                                         key={
                                                                             item.instanceId
@@ -559,16 +898,17 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                                                             item
                                                                         }
                                                                         currentStudentId={
-                                                                            activeStudentId
+                                                                            sessionStudent?.id ||
+                                                                            null
                                                                         }
                                                                         isDraggingAny={
                                                                             isDragging
                                                                         }
                                                                         sessionStart={
-                                                                            startAt
+                                                                            sessionStartAt
                                                                         }
                                                                         sessionEnd={
-                                                                            endAt
+                                                                            sessionEndAt
                                                                         }
                                                                         onDragStart={() =>
                                                                             setIsDragging(
@@ -607,12 +947,15 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                                                             )
                                                                         }
                                                                     />
-                                                                ))}
+                                                                ),
+                                                            )}
                                                         </div>
+
+                                                        {/* TIMELINE ENDPOINT FOR PLANNER VIEW */}
                                                         <TimelineEndpoint
                                                             type="end"
                                                             time={FormatService.formatTime(
-                                                                endAt,
+                                                                sessionEndAt,
                                                                 '12h-simple',
                                                             )}
                                                         />
@@ -623,7 +966,6 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                                     </AnimatePresence>
                                 </div>
 
-                                {/* FIX: 3-Button Layout Footer */}
                                 <div className="h-16 sm:h-20 border-t border-slate-100 flex items-center justify-end px-4 sm:px-8 bg-white shrink-0 z-50 gap-2 sm:gap-3">
                                     <Button
                                         variant="ghost"
@@ -669,11 +1011,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
 
             <Dialog open onOpenChange={(open) => !open && handleRequestClose()}>
                 <DialogContent
-                    onInteractOutside={(e) => {
-                        // Prevent all outside clicks from closing the modal.
-                        // Forces the user to click the "X" or Cancel button, ensuring stability.
-                        e.preventDefault();
-                    }}
+                    onInteractOutside={(e) => e.preventDefault()}
                     onEscapeKeyDown={(e) => {
                         if (isDirty) e.preventDefault();
                     }}
@@ -686,6 +1024,7 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                 </DialogContent>
             </Dialog>
 
+            {/* Mobile Adding Dialog */}
             <Dialog
                 open={!!mobileSelectedActivity}
                 onOpenChange={(o) => !o && setMobileSelectedActivity(null)}
@@ -746,22 +1085,20 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                 </DialogContent>
             </Dialog>
 
+            {/* Exit Confirm Dialog */}
             <AlertDialog
                 open={showExitConfirm}
                 onOpenChange={(open) => {
                     setShowExitConfirm(open);
-                    if (!open) setPendingStudentId(null);
+                    if (!open) setPendingAppointmentId(null);
                 }}
             >
                 <AlertDialogContent className="rounded-2xl w-[90vw] max-w-sm">
                     <AlertDialogHeader>
-                        {/* Dynamic learner name based on active student */}
                         <AlertDialogTitle>
-                            Discard changes for{' '}
-                            {student?.firstName ||
-                                student?.fullName ||
-                                'this learner'}
-                            ?
+                            {pendingAppointmentId === 'BACK'
+                                ? 'Discard changes and go back?'
+                                : `Discard changes for ${sessionStudent?.firstName || sessionStudent?.fullName || 'this learner'}?`}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             Your current draft has unsaved changes. If you
@@ -771,14 +1108,18 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
                     <AlertDialogFooter className="max-sm:flex-col gap-2">
                         <AlertDialogCancel
                             className="mt-0"
-                            onClick={() => setPendingStudentId(null)}
+                            onClick={() => setPendingAppointmentId(null)}
                         >
                             Stay
                         </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={() => {
-                                if (pendingStudentId) {
-                                    performStudentSwitch(pendingStudentId);
+                                if (pendingAppointmentId === 'BACK') {
+                                    performAppointmentSwitch(null);
+                                } else if (pendingAppointmentId) {
+                                    performAppointmentSwitch(
+                                        pendingAppointmentId,
+                                    );
                                 } else {
                                     performClose();
                                 }

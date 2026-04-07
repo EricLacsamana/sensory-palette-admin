@@ -17,9 +17,12 @@ import {
 } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { FormatService } from '@/utils/helpers';
-import { ActivitySessionEntry } from '@/types/activitiy-session';
+import {
+    ActivitySessionEntry,
+    ActivitySessionStatus,
+} from '@/types/activitiy-session';
 import { ActivityResponse } from '@/types/actitivity';
-import ItemCard, { ActivitySessionStatus } from './ItemCard';
+import ItemCard from './ItemCard';
 import {
     getInfiniteUserColorVars,
     DYNAMIC_COLOR_CLASSES,
@@ -131,7 +134,7 @@ export const TimelineItem = ({
     const isLocked = data?.isLocked ?? false;
     const hasConflict = data?.hasConflict ?? false;
     const isSaved = !!data.documentId || !!data.id;
-    const status = data.status || 'pending';
+    const status = data.activitySessionStatus;
 
     // Resolve ID and generate variables
     const resolvedStudentId = data.student?.id || currentStudentId || 0;
@@ -259,14 +262,14 @@ export const TimelineItem = ({
         );
     }
 
-    let lineClass = hasConflict
+    const lineClass = hasConflict
         ? 'bg-rose-500 w-[2px] z-10'
         : status === 'cancelled'
           ? 'border-l-2 border-slate-300 border-dashed w-px'
           : cn('w-[2px]', studentColor.line);
 
     // FIX: Using the newly defined dotBorder properly!
-    let dotClass = hasConflict
+    const dotClass = hasConflict
         ? 'bg-rose-500 border-[3px] sm:border-4 border-rose-100 scale-110 shadow-sm'
         : status === 'completed'
           ? cn('border-none', studentColor.dot)
@@ -274,7 +277,7 @@ export const TimelineItem = ({
             ? 'border-slate-300 bg-slate-50'
             : cn('border-2 bg-white', studentColor.dotBorder);
 
-    let connClass = hasConflict
+    const connClass = hasConflict
         ? 'bg-rose-500 h-[2px]'
         : status === 'cancelled'
           ? 'bg-slate-300 h-px'

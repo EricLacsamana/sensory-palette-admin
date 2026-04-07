@@ -1,101 +1,63 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
-    Calendar as CalendarIcon,
     Clock,
-    ChevronRight,
-    ChevronLeft,
     Undo2,
     Redo2,
-    Users,
     X,
-    ChevronsUpDown,
-    Check,
+    ChevronLeft,
+    ChevronRight,
+    CalendarDays,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { UserAvatar } from '@/components/UserAvatar';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from '@/components/ui/command';
-import { UserResponse } from '@/types';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { AppointmentResponse } from '@/types/appointment';
 import { FormatService } from '@/utils/helpers';
 import { cn } from '@/lib/utils';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import {
+    TooltipProvider,
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface HeaderProps {
-    hasStudent?: boolean;
-    user?: UserResponse;
-    students?: UserResponse[];
-    onSelectStudent?: (studentId: number) => void;
+    hasAppointment?: boolean;
+    activeAppointment?: AppointmentResponse | null;
     startAt: string;
     endAt: string;
-    onChange: (
-        type: 'start' | 'end' | 'date',
-        val1: string,
-        val2?: string,
-    ) => void;
     undo: () => void;
     redo: () => void;
     canUndo: boolean;
     canRedo: boolean;
     isDirty: boolean;
-    isShowOtherUsers: boolean;
-    setIsShowOtherUsers: (val: boolean) => void;
     onClose?: () => void;
+    onBack?: () => void;
 }
 
-const slideVariants = {
-    enter: (direction: number) => ({ x: direction > 0 ? 30 : -30, opacity: 0 }),
-    center: { zIndex: 1, x: 0, opacity: 1 },
-    exit: (direction: number) => ({
-        zIndex: 0,
-        x: direction < 0 ? 30 : -30,
-        opacity: 0,
-    }),
+const getInitials = (first?: string, last?: string, user?: string) => {
+    if (first && last) return `${first[0]}${last[0]}`.toUpperCase();
+    if (user) return user.substring(0, 2).toUpperCase();
+    return 'U';
 };
 
 export const Header = ({
-    hasStudent = true,
-    user,
-    students = [],
-    onSelectStudent,
+    hasAppointment = true,
+    activeAppointment,
     startAt,
     endAt,
-    onChange,
     undo,
     redo,
     canUndo,
     canRedo,
     isDirty,
-    isShowOtherUsers,
-    setIsShowOtherUsers,
     onClose,
+    onBack,
 }: HeaderProps) => {
-    const [direction, setDirection] = useState(0);
-    const [openPopover, setOpenPopover] = useState(false);
-
-    const dStart = new Date(startAt);
-    const dEnd = new Date(endAt);
-    const now = new Date();
-    const isToday =
-        dStart.getFullYear() === now.getFullYear() &&
-        dStart.getMonth() === now.getMonth() &&
-        dStart.getDate() === now.getDate();
-    const todayStr = now.toLocaleDateString('en-CA');
-    const _dateValue = dStart.toISOString().split('T')[0];
+    const dStart = new Date(startAt || new Date());
+    const dEnd = new Date(endAt || new Date());
 
     const _toTimeStr = (d: Date) =>
         d.toLocaleTimeString('en-US', {
@@ -103,320 +65,221 @@ export const Header = ({
             minute: '2-digit',
             hour12: true,
         });
+
     const _displayDate = dStart.toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',
         day: 'numeric',
     });
 
-    const handleUpdate = (type: 'date', newVal: string) => {
-        if (type === 'date') {
-            const [y, m, d] = newVal.split('-').map(Number);
-            const nStart = new Date(startAt);
-            const nEnd = new Date(endAt);
-            [nStart, nEnd].forEach((date) => date.setFullYear(y, m - 1, d));
-            onChange('date', nStart.toISOString(), nEnd.toISOString());
-        }
-    };
-
-    const handleShiftDate = (offset: number) => {
-        const currentStart = new Date(startAt);
-        const currentEnd = new Date(endAt);
-        currentStart.setDate(currentStart.getDate() + offset);
-        currentEnd.setDate(currentEnd.getDate() + offset);
-
-        const checkDate = new Date(currentStart);
-        checkDate.setHours(0, 0, 0, 0);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (checkDate.getTime() < today.getTime()) return;
-
-        setDirection(offset > 0 ? 1 : -1);
-        onChange('date', currentStart.toISOString(), currentEnd.toISOString());
-    };
+    const student = activeAppointment?.student;
+    const service = activeAppointment?.service;
 
     return (
         <TooltipProvider delayDuration={0}>
-            <div
-                className={cn(
-                    'flex flex-col w-full shrink-0 z-30 transition-all duration-200',
-                    hasStudent
-                        ? 'bg-white/95 backdrop-blur-sm border-b border-slate-200'
-                        : 'bg-transparent',
-                )}
-            >
-                <div className="flex items-center justify-between h-14 px-4 sm:px-6 gap-2">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {hasStudent && (
-                            <Popover
-                                open={openPopover}
-                                onOpenChange={setOpenPopover}
+            <header className="flex items-center justify-between w-full h-[72px] shrink-0 z-30 transition-all duration-200 border-b border-slate-200 bg-white px-4 sm:px-6 gap-4 shadow-sm">
+                {hasAppointment ? (
+                    /* =========================================
+                        ACTIVE APPOINTMENT MODE
+                    ========================================= */
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 overflow-x-auto no-scrollbar">
+                        {/* 1. Back Navigation */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={onBack}
+                                    className="h-10 w-10 rounded-full border border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 shadow-sm shrink-0 transition-all"
+                                >
+                                    <ChevronLeft
+                                        size={20}
+                                        className="-ml-0.5"
+                                    />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent
+                                side="bottom"
+                                className="text-xs font-bold"
                             >
-                                <PopoverTrigger asChild>
-                                    <button
-                                        className="flex items-center gap-3 flex-1 min-w-0 hover:bg-slate-50 p-1 -ml-1 rounded-lg transition-colors text-left outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                                        aria-label="Select student"
-                                    >
-                                        <div className="relative group shrink-0">
-                                            {/* Refactored to use UserAvatar */}
-                                            <UserAvatar
-                                                src={FormatService.formatStrapiMedia(
-                                                    user?.profilePicture,
-                                                    'thumbnail',
-                                                )}
-                                                name={
-                                                    user?.firstName ||
-                                                    user?.fullName ||
-                                                    'S'
-                                                }
-                                                size="sm"
-                                                className="ring-1 ring-slate-200"
-                                            />
-                                            {/* Custom status dot overlay for unsaved changes */}
-                                            <div className="absolute -bottom-0.5 -right-0.5 p-[1px] bg-white rounded-full z-10">
-                                                <div
-                                                    className={cn(
-                                                        'h-2.5 w-2.5 rounded-full',
-                                                        isDirty
-                                                            ? 'bg-amber-500 animate-pulse'
-                                                            : 'bg-emerald-500',
-                                                    )}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col min-w-0 justify-center pr-1">
-                                            <div className="flex items-center gap-1.5">
-                                                <h2 className="text-sm font-bold text-slate-800 truncate">
-                                                    {user?.fullName}
-                                                </h2>
-                                                <ChevronsUpDown className="h-3 w-3 text-slate-400 shrink-0" />
-                                            </div>
-                                            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                                    Schedule
-                                                </span>
-                                                {isDirty && (
-                                                    <span className="text-[8px] font-bold text-amber-600 bg-amber-50 px-1 py-[1px] rounded-sm border border-amber-100 uppercase">
-                                                        Unsaved
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                    className="w-[260px] p-0 shadow-xl rounded-xl"
-                                    align="start"
-                                >
-                                    <Command>
-                                        <CommandInput
-                                            placeholder="Search learners..."
-                                            className="h-10 text-sm"
-                                        />
-                                        <CommandList className="max-h-[300px]">
-                                            <CommandEmpty>
-                                                No learner found.
-                                            </CommandEmpty>
-                                            <CommandGroup>
-                                                {students.map((student) => (
-                                                    <CommandItem
-                                                        key={student.id}
-                                                        value={student.fullName}
-                                                        onSelect={() => {
-                                                            onSelectStudent?.(
-                                                                student.id,
-                                                            );
-                                                            setOpenPopover(
-                                                                false,
-                                                            );
-                                                        }}
-                                                        className="flex items-center gap-3 cursor-pointer py-2 px-3"
-                                                    >
-                                                        {/* Refactored to use UserAvatar inside dropdown */}
-                                                        <UserAvatar
-                                                            src={FormatService.formatStrapiMedia(
-                                                                student.profilePicture,
-                                                                'thumbnail',
-                                                            )}
-                                                            name={
-                                                                student.fullName
-                                                            }
-                                                            size="sm"
-                                                            className="scale-[0.85] origin-left border border-slate-100 -my-1"
-                                                        />
-                                                        <span className="flex-1 truncate text-sm font-medium text-slate-700">
-                                                            {student.fullName}
-                                                        </span>
-                                                        {student.id ===
-                                                            user?.id && (
-                                                            <Check className="h-4 w-4 text-indigo-600 shrink-0" />
-                                                        )}
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                    </div>
+                                Back to Selection
+                            </TooltipContent>
+                        </Tooltip>
 
-                    <div className="flex items-center justify-end gap-1 sm:gap-2 shrink-0">
-                        {hasStudent && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                        setIsShowOtherUsers(!isShowOtherUsers)
-                                    }
-                                    className={cn(
-                                        'h-8 w-8 rounded-md',
-                                        isShowOtherUsers
-                                            ? 'bg-indigo-100 text-indigo-700'
-                                            : 'text-slate-500',
-                                    )}
-                                >
-                                    <Users size={16} />
-                                </Button>
-                                <Separator
-                                    orientation="vertical"
-                                    className="h-5 bg-slate-200 shrink-0 mx-0.5 hidden sm:block"
-                                />
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={undo}
-                                    disabled={!canUndo}
-                                    className="h-8 w-8 text-slate-500 hidden sm:flex"
-                                >
-                                    <Undo2 size={16} />
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={redo}
-                                    disabled={!canRedo}
-                                    className="h-8 w-8 text-slate-500 hidden sm:flex"
-                                >
-                                    <Redo2 size={16} />
-                                </Button>
-                                <Separator
-                                    orientation="vertical"
-                                    className="h-5 bg-slate-200 shrink-0 mx-0.5"
-                                />
-                            </>
-                        )}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={onClose}
-                            className={cn(
-                                'h-8 w-8 rounded-full transition-colors',
-                                hasStudent
-                                    ? 'text-slate-500 hover:text-red-600 hover:bg-red-50'
-                                    : 'text-slate-500 hover:text-red-600 hover:bg-white/60 bg-white/40 backdrop-blur-sm',
-                            )}
-                        >
-                            <X size={20} />
-                        </Button>
-                    </div>
-                </div>
+                        <Separator
+                            orientation="vertical"
+                            className="h-8 bg-slate-200 shrink-0 hidden sm:block"
+                        />
 
-                {hasStudent && (
-                    <div className="flex items-center justify-between sm:justify-center h-12 px-3 sm:px-4 bg-slate-50/50 border-t border-slate-100 gap-3">
-                        <div className="flex items-center bg-white border border-slate-200 shadow-sm rounded-md h-8 flex-1 max-w-[200px] sm:max-w-[240px]">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={isToday}
-                                onClick={() => handleShiftDate(-1)}
-                                className="h-8 w-8 rounded-l-md text-slate-500 shrink-0"
-                            >
-                                <ChevronLeft size={14} />
-                            </Button>
-                            <div className="relative flex items-center justify-center flex-1 h-full cursor-pointer overflow-hidden border-x border-slate-100">
-                                <CalendarIcon
-                                    size={12}
-                                    className="absolute left-2 text-slate-400 hidden sm:block"
-                                />
-                                <AnimatePresence
-                                    mode="popLayout"
-                                    custom={direction}
-                                    initial={false}
-                                >
-                                    <motion.span
-                                        key={_dateValue}
-                                        custom={direction}
-                                        variants={slideVariants}
-                                        initial="enter"
-                                        animate="center"
-                                        exit="exit"
-                                        transition={{
-                                            type: 'spring',
-                                            stiffness: 300,
-                                            damping: 30,
-                                        }}
-                                        className="text-[11px] sm:text-xs font-semibold text-slate-700 sm:pl-4"
-                                    >
-                                        {_displayDate}
-                                    </motion.span>
-                                </AnimatePresence>
-                                <input
-                                    type="date"
-                                    min={todayStr}
-                                    className="absolute inset-0 opacity-0 cursor-pointer z-20 w-full"
-                                    value={_dateValue}
-                                    onChange={(e) => {
-                                        if (!e.target.value) return;
-                                        setDirection(
-                                            new Date(e.target.value) >
-                                                new Date(_dateValue)
-                                                ? 1
-                                                : -1,
-                                        );
-                                        handleUpdate('date', e.target.value);
-                                    }}
-                                />
+                        {/* 2. Learner & Service Stack */}
+                        <div className="flex items-center gap-3 shrink-0 min-w-0 pr-2">
+                            <div className="relative shrink-0">
+                                <Avatar className="h-10 w-10 shrink-0 border border-slate-200 shadow-sm">
+                                    <AvatarImage
+                                        src={FormatService.formatStrapiMedia(
+                                            student?.profilePicture,
+                                            'thumbnail',
+                                        )}
+                                        className="object-cover"
+                                    />
+                                    <AvatarFallback className="bg-indigo-50 text-indigo-700 font-bold text-xs">
+                                        {getInitials(
+                                            student?.firstName,
+                                            student?.lastName,
+                                            student?.username,
+                                        )}
+                                    </AvatarFallback>
+                                </Avatar>
+                                {isDirty && (
+                                    <div className="absolute -bottom-0.5 -right-0.5 p-[2px] bg-white rounded-full z-10">
+                                        <div className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse border border-white" />
+                                    </div>
+                                )}
                             </div>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleShiftDate(1)}
-                                className="h-8 w-8 rounded-r-md text-slate-500 shrink-0"
-                            >
-                                <ChevronRight size={14} />
-                            </Button>
-                        </div>
 
-                        <div className="flex items-center h-8 bg-white border border-slate-200 rounded-md shadow-sm px-2.5 gap-2 shrink-0">
-                            <div className="flex items-center gap-1.5 shrink-0">
-                                <Clock
-                                    size={12}
-                                    className={
-                                        isToday
-                                            ? 'text-amber-500'
-                                            : 'text-emerald-500'
-                                    }
-                                />
-                                <span className="text-[11px] font-semibold text-slate-700">
-                                    {_toTimeStr(dStart)}
+                            <div className="flex flex-col justify-center min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-slate-900 truncate">
+                                        {student?.fullName ||
+                                            student?.firstName +
+                                                ' ' +
+                                                student?.lastName ||
+                                            'Unknown Learner'}
+                                    </span>
+                                    {isDirty && (
+                                        <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-100 px-1 py-0.5 rounded shadow-sm uppercase tracking-wider shrink-0 leading-none">
+                                            Unsaved
+                                        </span>
+                                    )}
+                                </div>
+                                <span className="text-xs font-medium text-slate-500 truncate mt-0.5">
+                                    {student?.diagnosis ||
+                                        'No Diagnosis Provided'}
                                 </span>
                             </div>
-                            <ChevronRight
-                                size={10}
-                                className="text-slate-300 shrink-0"
-                            />
-                            <div className="flex items-center gap-1.5 shrink-0">
-                                <Clock size={12} className="text-rose-500" />
-                                <span className="text-[11px] font-semibold text-slate-700">
+                        </div>
+
+                        <Separator
+                            orientation="vertical"
+                            className="h-8 bg-slate-100 shrink-0"
+                        />
+
+                        {/* 3. Date & Time Pill */}
+                        <div className="flex items-center bg-slate-50 p-1 rounded-xl border border-slate-200 shadow-sm shrink-0 h-10">
+                            <div className="px-3 flex items-center gap-2 border-r border-slate-200 h-full">
+                                <CalendarDays
+                                    size={14}
+                                    className="text-indigo-400"
+                                />
+                                <span className="font-semibold text-[13px] text-slate-800 whitespace-nowrap">
+                                    {_displayDate}
+                                </span>
+                            </div>
+                            <div className="px-3 flex items-center gap-2 h-full">
+                                <Clock size={14} className="text-emerald-500" />
+                                <span className="font-semibold text-[13px] text-slate-700 whitespace-nowrap">
+                                    {_toTimeStr(dStart)}
+                                </span>
+                                <ChevronRight
+                                    size={14}
+                                    className="text-slate-300"
+                                />
+                                <Clock size={14} className="text-rose-500" />
+                                <span className="font-semibold text-[13px] text-slate-700 whitespace-nowrap">
                                     {_toTimeStr(dEnd)}
                                 </span>
                             </div>
                         </div>
                     </div>
+                ) : (
+                    /* =========================================
+                        SELECT APPOINTMENT MODE (Minimal Header)
+                    ========================================= */
+                    <div className="flex items-center gap-3 flex-1 pl-1">
+                        <div className="h-10 w-10 bg-indigo-50 rounded-xl flex items-center justify-center shadow-sm border border-indigo-100/50">
+                            <CalendarDays
+                                size={20}
+                                className="text-indigo-600"
+                            />
+                        </div>
+                        <h1 className="text-lg font-black text-slate-900 tracking-tight">
+                            Session Planner
+                        </h1>
+                    </div>
                 )}
-            </div>
+
+                {/* =========================================
+                    RIGHT SIDE TOOLS (Shared)
+                ========================================= */}
+                <div className="flex items-center gap-1 shrink-0 ml-auto bg-slate-50 border border-slate-200 p-1 rounded-xl shadow-inner">
+                    {hasAppointment && (
+                        <>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={undo}
+                                        disabled={!canUndo}
+                                        className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white hover:shadow-sm transition-all hidden sm:flex shrink-0"
+                                    >
+                                        <Undo2 size={16} />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent
+                                    side="bottom"
+                                    className="text-xs font-bold"
+                                >
+                                    Undo (Ctrl+Z)
+                                </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={redo}
+                                        disabled={!canRedo}
+                                        className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white hover:shadow-sm transition-all hidden sm:flex shrink-0"
+                                    >
+                                        <Redo2 size={16} />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent
+                                    side="bottom"
+                                    className="text-xs font-bold"
+                                >
+                                    Redo (Ctrl+Shift+Z)
+                                </TooltipContent>
+                            </Tooltip>
+                            <Separator
+                                orientation="vertical"
+                                className="h-5 bg-slate-200 mx-1 hidden sm:block shrink-0"
+                            />
+                        </>
+                    )}
+
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={onClose}
+                                className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg transition-all text-slate-500 hover:text-rose-600 hover:bg-rose-50 hover:shadow-sm shrink-0"
+                            >
+                                <X size={20} />
+                            </Button>
+                        </TooltipTrigger>
+                        {/* <TooltipContent
+                            side="bottom"
+                            className="text-xs font-bold text-rose-600"
+                        >
+                            Close Planner
+                        </TooltipContent> */}
+                    </Tooltip>
+                </div>
+            </header>
         </TooltipProvider>
     );
 };

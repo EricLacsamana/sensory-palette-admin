@@ -12,12 +12,14 @@ interface SessionPlanProps {
     startAt: string;
     endAt: string;
     student?: UserResponse;
+    appointmentId?: string; // Explicitly binding to the appointment
 }
 
 export const useSessionPlan = ({
     startAt,
     endAt,
     student,
+    appointmentId,
 }: SessionPlanProps) => {
     const [localDraft, setLocalDraft] = useState<ActivitySessionEntry[] | null>(
         null,
@@ -25,31 +27,22 @@ export const useSessionPlan = ({
     const [deletedDocumentIds, setDeletedDocumentIds] = useState<string[]>([]);
     const [past, setPast] = useState<ActivitySessionEntry[][]>([]);
     const [future, setFuture] = useState<ActivitySessionEntry[][]>([]);
-    const [prevStartAt, setPrevStartAt] = useState(startAt);
 
-    if (startAt !== prevStartAt) {
-        setPrevStartAt(startAt);
+    // FIX: Render-Phase State Update (React Recommended Pattern)
+    // Replaces the offending useEffect. This checks if the appointment context changed,
+    // and if so, safely resets the state *during* the render to prevent cascading loops.
+    const currentContextKey = `${appointmentId}-${student?.id}`;
+    const [prevContextKey, setPrevContextKey] = useState(currentContextKey);
+
+    if (currentContextKey !== prevContextKey) {
+        setPrevContextKey(currentContextKey);
         setLocalDraft(null);
         setDeletedDocumentIds([]);
         setPast([]);
         setFuture([]);
     }
 
-    const startOfDay = new Date(endAt);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(endAt);
-
-    const now = new Date();
-    const isToday =
-        startOfDay.getFullYear() === now.getFullYear() &&
-        startOfDay.getMonth() === now.getMonth() &&
-        startOfDay.getDate() === now.getDate();
-
-    const queryStartBound = isToday
-        ? now.toISOString()
-        : startOfDay.toISOString();
-
+    // THE CORRECT QUERY
     const { data: activitySessions, isLoading: isQueryLoading } = useQuery({
         queryKey: [
             'activity-sessions',
@@ -57,12 +50,13 @@ export const useSessionPlan = ({
                 populate: {
                     activity: { populate: '*' },
                     student: { populate: '*' },
+                    appointment: { populate: '*' },
                 },
                 filters: {
-                    startAt: {
-                        $gte: queryStartBound,
-                        $lte: endOfDay.toISOString(),
-                    },
+                    // Strictly fetch activities tied to this appointment
+                    appointment: appointmentId
+                        ? { documentId: { $eq: appointmentId } }
+                        : undefined,
                     actualStartAt: { $null: true },
                     activitySessionStatus: {
                         $in: ['pending', 'reschedule'],
@@ -71,7 +65,7 @@ export const useSessionPlan = ({
             },
         ],
         queryFn: getActivitySessionsNew,
-        enabled: true,
+        enabled: !!appointmentId,
         staleTime: 0,
     });
 
@@ -82,7 +76,21 @@ export const useSessionPlan = ({
             ? activitySessions
             : activitySessions?.data || [];
 
+        const appointmentStart = new Date(startAt).getTime();
+        const appointmentEnd = new Date(endAt).getTime();
+
         return [...rawData]
+            .filter((s: any) => {
+                if (
+                    appointmentId &&
+                    s.appointment?.documentId === appointmentId
+                )
+                    return true;
+
+                const sTime = new Date(s.startAt).getTime();
+                const eTime = new Date(s.endAt).getTime();
+                return sTime >= appointmentStart && eTime <= appointmentEnd;
+            })
             .sort(
                 (a, b) =>
                     new Date(a.startAt).getTime() -
@@ -107,7 +115,7 @@ export const useSessionPlan = ({
                     rawTelemetry: s.rawTelemetry || [],
                 } as ActivitySessionEntry;
             });
-    }, [localDraft, activitySessions]);
+    }, [localDraft, activitySessions, startAt, endAt, appointmentId]);
 
     const commitChange = useCallback(
         (newDraft: ActivitySessionEntry[]) => {
@@ -153,9 +161,10 @@ export const useSessionPlan = ({
             const itemStart = new Date(item.startAt).getTime();
             const itemEnd = new Date(item.endAt).getTime();
 
+            // Boundary enforcement
             if (itemEnd > sessionEndMs) {
                 hasConflict = true;
-                conflictReason = 'Exceeds session time';
+                conflictReason = 'Exceeds appointment capacity';
             }
 
             if (!hasConflict) {
@@ -276,11 +285,7 @@ export const useSessionPlan = ({
                     newEndIso = new Date(currentCursor).toISOString();
                 }
 
-                return {
-                    ...item,
-                    startAt: newStartIso,
-                    endAt: newEndIso,
-                };
+                return { ...item, startAt: newStartIso, endAt: newEndIso };
             });
             commitChange(finalDraft);
         },
@@ -288,9 +293,8 @@ export const useSessionPlan = ({
     );
 
     const generateId = () => {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID)
             return crypto.randomUUID();
-        }
         return `id-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     };
 
@@ -340,7 +344,7 @@ export const useSessionPlan = ({
 
             const duration = activity.durationMinutes || 30;
             const entry: ActivitySessionEntry = {
-                instanceId: crypto.randomUUID(),
+                instanceId: generateId(),
                 activity,
                 durationMinutes: duration,
                 isLocked: true,
@@ -351,6 +355,7 @@ export const useSessionPlan = ({
                 ).toISOString(),
                 documentId: '',
                 rawTelemetry: [],
+                ...(student ? { student } : {}),
             };
 
             const copy = [...currentBaseEntries];
@@ -358,7 +363,7 @@ export const useSessionPlan = ({
             else copy.push(entry);
             commitChange(copy);
         },
-        [currentBaseEntries, commitChange, startAt],
+        [currentBaseEntries, commitChange, startAt, student],
     );
 
     const removeActivity = useCallback(

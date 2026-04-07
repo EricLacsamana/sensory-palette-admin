@@ -32,6 +32,7 @@ import {
     AlertCircle,
     AlertTriangle,
     Info,
+    LayoutDashboard, // For appointment icon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -106,10 +107,8 @@ const statusConfig: Record<
     },
 };
 
-// --- HELPER: STRIP EMOJIS FROM BACKEND TEXT ---
 const stripEmojis = (str: string) => {
     if (!str) return '';
-    // Removes standard emojis and pictographs to keep the UI clean
     return str.replace(/\p{Emoji_Presentation}/gu, '').trim();
 };
 
@@ -120,8 +119,6 @@ export const NotificationCenter = () => {
     const [viewMode, setViewMode] = useState<'all' | 'unread'>('all');
     const [isOpen, setIsOpen] = useState(false);
     const [expandedId, setExpandedId] = useState<string | null>(null);
-
-    // ✨ THE FIX: Remember which items were marked read during THIS viewing session
     const [localReadIds, setLocalReadIds] = useState<Set<string>>(new Set());
 
     const { data: notifications = [] } = useQuery({
@@ -148,7 +145,6 @@ export const NotificationCenter = () => {
 
     const unreadCount = notifications.filter((n: any) => !n.isRead).length;
 
-    // ✨ THE FIX: If an item was just marked read locally, keep it in the "unread" view so it doesn't vanish!
     const displayedNotifications =
         viewMode === 'unread'
             ? notifications.filter(
@@ -162,23 +158,39 @@ export const NotificationCenter = () => {
         );
 
         if (!notif.isRead && !localReadIds.has(notif.documentId)) {
-            // Mark read in DB
             markReadMutation.mutate(notif.documentId);
-            // Remember it locally so it doesn't disappear from the unread tab
             setLocalReadIds((prev) => new Set(prev).add(notif.documentId));
         }
     };
 
-    const handleRouteToSession = (sessionId: string) => {
+    /**
+     * Universal action handler for both types
+     */
+    const handleNotificationAction = (notif: any) => {
         setIsOpen(false);
-        setLocalReadIds(new Set()); // Reset local memory on close
-        router.push(`/activity-sessions/${sessionId}`);
+        setLocalReadIds(new Set());
+
+        // Check for Appointment assigned (Routes to root planner)
+        if (notif.appointment) {
+            const appId = notif.appointment.documentId || notif.appointment.id;
+            router.push(
+                `/?isActivitySessionPlanningOpen=true&planAppointmentId=${appId}`,
+            );
+            return;
+        }
+
+        // Check for Activity Session (Routes to session detail)
+        if (notif.activitySession?.documentId) {
+            router.push(
+                `/activity-sessions/${notif.activitySession.documentId}`,
+            );
+            return;
+        }
     };
 
     const handleOpenChange = (open: boolean) => {
         setIsOpen(open);
         if (!open) {
-            // Reset local memory when popover is closed so they are truly filtered out next time
             setLocalReadIds(new Set());
             setExpandedId(null);
         }
@@ -186,7 +198,7 @@ export const NotificationCenter = () => {
 
     const handleTabChange = (mode: 'all' | 'unread') => {
         setViewMode(mode);
-        setLocalReadIds(new Set()); // Reset local memory when switching tabs
+        setLocalReadIds(new Set());
     };
 
     const getPriorityIcon = (priority: string) => {
@@ -197,7 +209,6 @@ export const NotificationCenter = () => {
                 return <AlertTriangle size={18} className="text-amber-600" />;
             case 'success':
                 return <CheckCircle2 size={18} className="text-emerald-600" />;
-            case 'info':
             default:
                 return <Info size={18} className="text-blue-600" />;
         }
@@ -248,8 +259,7 @@ export const NotificationCenter = () => {
                                     e.stopPropagation();
                                     markAllReadMutation.mutate();
                                 }}
-                                disabled={markAllReadMutation.isPending}
-                                className="h-8 text-[10px] uppercase font-bold tracking-widest text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                className="h-8 text-[10px] uppercase font-bold tracking-widest text-slate-400 hover:text-indigo-600 rounded-lg"
                             >
                                 <Check className="mr-1.5 h-3.5 w-3.5" /> Mark
                                 all Read
@@ -257,7 +267,6 @@ export const NotificationCenter = () => {
                         )}
                     </div>
 
-                    {/* --- TABS --- */}
                     <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl">
                         <button
                             onClick={() => handleTabChange('all')}
@@ -265,7 +274,7 @@ export const NotificationCenter = () => {
                                 'flex-1 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all',
                                 viewMode === 'all'
                                     ? 'bg-white text-slate-900 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50',
+                                    : 'text-slate-500',
                             )}
                         >
                             All Inbox
@@ -273,30 +282,17 @@ export const NotificationCenter = () => {
                         <button
                             onClick={() => handleTabChange('unread')}
                             className={cn(
-                                'flex-1 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1.5',
+                                'flex-1 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-all',
                                 viewMode === 'unread'
                                     ? 'bg-white text-indigo-600 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50',
+                                    : 'text-slate-500',
                             )}
                         >
                             Unread
-                            {unreadCount > 0 && (
-                                <span
-                                    className={cn(
-                                        'px-1.5 py-0.5 rounded-md text-[9px] leading-none',
-                                        viewMode === 'unread'
-                                            ? 'bg-indigo-100 text-indigo-700'
-                                            : 'bg-slate-200 text-slate-600',
-                                    )}
-                                >
-                                    {unreadCount}
-                                </span>
-                            )}
                         </button>
                     </div>
                 </div>
 
-                {/* --- BODY --- */}
                 <div className="max-h-[450px] overflow-y-auto custom-scrollbar bg-slate-50/30">
                     {displayedNotifications.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-12 text-center h-[200px]">
@@ -304,33 +300,26 @@ export const NotificationCenter = () => {
                                 <CheckCircle2 size={32} />
                             </div>
                             <h4 className="text-base font-bold text-slate-900 mb-1">
-                                {viewMode === 'unread'
-                                    ? 'No unread alerts'
-                                    : 'Inbox Zero!'}
+                                Inbox Zero!
                             </h4>
-                            <p className="text-xs font-medium text-slate-500">
-                                {viewMode === 'unread'
-                                    ? "You've checked everything."
-                                    : "You're completely caught up."}
-                            </p>
                         </div>
                     ) : (
                         <div className="flex flex-col p-2 gap-2">
                             {displayedNotifications.map((notif: any) => {
                                 const isExpanded =
                                     expandedId === notif.documentId;
-                                // Combine DB status and local memory to get true visual status
                                 const isEffectivelyRead =
                                     notif.isRead ||
                                     localReadIds.has(notif.documentId);
 
+                                // Detection logic
+                                const isAppointment = !!notif.appointment;
                                 const sessionStatus =
                                     notif.activitySession?.activitySessionStatus?.toLowerCase() ||
                                     'pending';
                                 const badgeConfig =
                                     statusConfig[sessionStatus] ||
                                     statusConfig.pending;
-                                const cleanTitle = stripEmojis(notif.title);
 
                                 return (
                                     <Collapsible
@@ -348,7 +337,6 @@ export const NotificationCenter = () => {
                                     >
                                         <CollapsibleTrigger asChild>
                                             <div className="flex gap-3 p-4 cursor-pointer items-start outline-none pr-10">
-                                                {/* DOT INDICATOR */}
                                                 <div className="pt-1.5 shrink-0 flex items-center justify-center w-4">
                                                     <div
                                                         className={cn(
@@ -368,18 +356,9 @@ export const NotificationCenter = () => {
                                                             : 'opacity-100',
                                                     )}
                                                 >
-                                                    {/* Header Row */}
                                                     <div className="flex items-start gap-2 mb-1">
                                                         <div className="flex items-center gap-1.5 min-w-0">
-                                                            {/* REAL ICON REPLACING EMOJIS */}
-                                                            <div
-                                                                className={cn(
-                                                                    'shrink-0 flex items-center justify-center',
-                                                                    isEffectivelyRead
-                                                                        ? 'text-slate-400'
-                                                                        : 'text-slate-600',
-                                                                )}
-                                                            >
+                                                            <div className="shrink-0 flex items-center justify-center">
                                                                 {getPriorityIcon(
                                                                     notif.priority,
                                                                 )}
@@ -392,24 +371,22 @@ export const NotificationCenter = () => {
                                                                         : 'font-black text-slate-900',
                                                                 )}
                                                             >
-                                                                {cleanTitle}
+                                                                {stripEmojis(
+                                                                    notif.title,
+                                                                )}
                                                             </span>
                                                         </div>
                                                     </div>
-
-                                                    {/* Preview Message (Truncated) */}
                                                     <p
                                                         className={cn(
                                                             'text-xs leading-relaxed line-clamp-1 break-words',
                                                             isEffectivelyRead
-                                                                ? 'text-slate-400 font-normal'
+                                                                ? 'text-slate-400'
                                                                 : 'text-slate-500 font-medium',
                                                         )}
                                                     >
                                                         {notif.message}
                                                     </p>
-
-                                                    {/* Sub-data: Time */}
                                                     <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">
                                                         <Clock size={10} />
                                                         {formatDistanceToNow(
@@ -418,8 +395,6 @@ export const NotificationCenter = () => {
                                                             ),
                                                         )}
                                                     </div>
-
-                                                    {/* Chevron Icon */}
                                                     <ChevronDown
                                                         size={14}
                                                         className={cn(
@@ -432,41 +407,51 @@ export const NotificationCenter = () => {
                                             </div>
                                         </CollapsibleTrigger>
 
-                                        <CollapsibleContent className="overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-top-2 data-[state=closed]:slide-out-to-top-2">
+                                        <CollapsibleContent className="overflow-hidden">
                                             <div className="px-4 pb-4 pt-1 ml-7 border-t border-slate-100/60 mt-1">
-                                                {/* Full Expanded Message */}
                                                 <p className="text-xs leading-relaxed text-slate-600 mb-4 whitespace-pre-wrap mt-2">
                                                     {notif.message}
                                                 </p>
 
-                                                {/* Session Badge & Action Button */}
-                                                {notif.activitySession && (
+                                                {/* ACTION AREA - SAME BUTTON VIEW FOR BOTH */}
+                                                {(notif.activitySession ||
+                                                    isAppointment) && (
                                                     <div className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
                                                         <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
                                                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                                                Linked Activity
+                                                                {isAppointment
+                                                                    ? 'Schedule Assignment'
+                                                                    : 'Linked Activity'}
                                                             </span>
                                                             <div className="flex items-center gap-2 max-w-full">
                                                                 <span className="text-xs font-bold text-slate-700 truncate">
-                                                                    {notif
-                                                                        .activitySession
-                                                                        .activity
-                                                                        ?.name ||
-                                                                        'Activity Session'}
+                                                                    {isAppointment
+                                                                        ? notif
+                                                                              .appointment
+                                                                              .service
+                                                                              ?.name ||
+                                                                          'Therapy Appointment'
+                                                                        : notif
+                                                                              .activitySession
+                                                                              .activity
+                                                                              ?.name ||
+                                                                          'Activity Session'}
                                                                 </span>
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className={cn(
-                                                                        'h-5 px-1.5 text-[9px] font-black uppercase tracking-widest border shrink-0',
-                                                                        badgeConfig.bg,
-                                                                        badgeConfig.border,
-                                                                        badgeConfig.text,
-                                                                    )}
-                                                                >
-                                                                    {
-                                                                        badgeConfig.label
-                                                                    }
-                                                                </Badge>
+                                                                {!isAppointment && (
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={cn(
+                                                                            'h-5 px-1.5 text-[9px] font-black uppercase tracking-widest border shrink-0',
+                                                                            badgeConfig.bg,
+                                                                            badgeConfig.border,
+                                                                            badgeConfig.text,
+                                                                        )}
+                                                                    >
+                                                                        {
+                                                                            badgeConfig.label
+                                                                        }
+                                                                    </Badge>
+                                                                )}
                                                             </div>
                                                         </div>
 
@@ -474,19 +459,31 @@ export const NotificationCenter = () => {
                                                             size="sm"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                handleRouteToSession(
-                                                                    notif
-                                                                        .activitySession
-                                                                        .documentId,
+                                                                handleNotificationAction(
+                                                                    notif,
                                                                 );
                                                             }}
-                                                            className="shrink-0 h-8 rounded-lg bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 font-bold text-[10px] uppercase tracking-widest shadow-sm transition-all"
+                                                            className={cn(
+                                                                'shrink-0 h-8 rounded-lg font-bold text-[10px] uppercase shadow-sm transition-all px-3',
+                                                                isAppointment
+                                                                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                                                    : 'bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50',
+                                                            )}
                                                         >
-                                                            View{' '}
-                                                            <ExternalLink
-                                                                size={12}
-                                                                className="ml-1.5"
-                                                            />
+                                                            {isAppointment
+                                                                ? 'Open Planner'
+                                                                : 'View Session'}
+                                                            {isAppointment ? (
+                                                                <LayoutDashboard
+                                                                    size={12}
+                                                                    className="ml-1.5"
+                                                                />
+                                                            ) : (
+                                                                <ExternalLink
+                                                                    size={12}
+                                                                    className="ml-1.5"
+                                                                />
+                                                            )}
                                                         </Button>
                                                     </div>
                                                 )}

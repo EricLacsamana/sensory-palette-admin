@@ -1,7 +1,11 @@
+import { ClinicalSpecialty } from './clinical';
+
 export interface Role {
+    id?: number;
     type: string;
     name: string;
 }
+
 export interface User {
     id: number;
     documentId: string;
@@ -42,6 +46,7 @@ export interface UserResponse {
     publishedAt?: string;
     activePasscode: string;
     diagnosis: string;
+    specialty?: ClinicalSpecialty; // Clinical Identifier
     role?:
         | {
               id: number;
@@ -51,7 +56,6 @@ export interface UserResponse {
         | string;
     blocked: boolean;
 }
-// types/strapi.ts
 
 export interface StrapiImageFormat {
     url: string;

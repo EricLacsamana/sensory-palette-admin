@@ -16,13 +16,23 @@ import { cn } from '@/lib/utils';
 import { RootState } from '@/redux/store';
 import { me } from '@/api/users';
 import SessionPlanningModal from './SessionPlanningModal';
+import { AppointmentSchedulingModal } from './AppointmentSchedulingModal';
+// Import the new Appointment Modal (Adjust the path if necessary based on your folder structure)
 
-// Modal Manager logic restored
+// --- Modal Manager logic updated to handle both modals ---
 function ModalManager() {
     const searchParams = useSearchParams();
-    const isOpen = searchParams.get('isActivitySessionPlanningOpen') === 'true';
-    if (!isOpen) return null;
-    return <SessionPlanningModal />;
+    const isSessionOpen =
+        searchParams.get('isActivitySessionPlanningOpen') === 'true';
+    const isAppointmentOpen =
+        searchParams.get('isAppointmentModalOpen') === 'true';
+
+    return (
+        <>
+            {isSessionOpen && <SessionPlanningModal />}
+            {isAppointmentOpen && <AppointmentSchedulingModal />}
+        </>
+    );
 }
 
 const subscribe = () => () => {};

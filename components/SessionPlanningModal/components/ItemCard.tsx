@@ -26,16 +26,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { FormatService } from '@/utils/helpers';
 import { UserResponse } from '@/types';
 import { DYNAMIC_COLOR_CLASSES } from '@/utils/colors';
-
-export type ActivitySessionStatus =
-    | 'pending'
-    | 'queued'
-    | 'in_progress'
-    | 'completed'
-    | 'cancelled'
-    | 'interrupted'
-    | 'abandoned'
-    | 'reschedule';
+import { ActivitySessionStatus } from '@/types/activitiy-session';
 
 interface ItemCardProps {
     id: string;
@@ -75,6 +66,10 @@ const STATUS_CONFIG: Record<
     abandoned: { icon: AlertCircle, label: 'Abandoned' },
     reschedule: { icon: CalendarClock, label: 'Reschedule' },
     queued: { icon: 'symbol', label: '' },
+    [ActivitySessionStatus.Paused]: {
+        icon: 'symbol',
+        label: '',
+    },
 };
 
 const ItemCard = ({
@@ -87,7 +82,7 @@ const ItemCard = ({
     student,
     error,
     conflictReason,
-    status = 'pending',
+    status = ActivitySessionStatus.Pending,
     actionIcon,
     onActionClick,
     onToggleLock,
