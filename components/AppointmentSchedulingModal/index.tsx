@@ -909,7 +909,7 @@ export const AppointmentSchedulingModal = ({
                     {/* Main Content Wrapper */}
                     <div className="flex-1 flex flex-col min-h-0 px-4 pt-16 pb-20 sm:px-8 sm:pt-20 sm:pb-8 md:px-12 md:py-12 bg-white">
                         <AnimatePresence mode="wait">
-                            {/* STEP 1: PATIENT/STUDENT SELECTION */}
+                            {/* STEP 1: LEARNER/STUDENT SELECTION */}
                             {step === 1 && !isRescheduling && (
                                 <motion.div
                                     key="s1"
@@ -922,7 +922,7 @@ export const AppointmentSchedulingModal = ({
                                         Who is this for?
                                     </h1>
                                     <p className="shrink-0 text-slate-500 mb-3 sm:mb-6 text-xs sm:text-base">
-                                        Search and select a patient to begin
+                                        Search and select a learner to begin
                                         scheduling.
                                     </p>
 
@@ -942,7 +942,7 @@ export const AppointmentSchedulingModal = ({
                                             </div>
                                         ) : filteredStudents.length === 0 ? (
                                             <div className="text-center p-8 bg-slate-50 rounded-xl sm:rounded-2xl border border-slate-200 border-dashed text-slate-400 text-sm">
-                                                No patients found matching "
+                                                No learners found matching "
                                                 {searchQuery}"
                                             </div>
                                         ) : (
@@ -1075,7 +1075,7 @@ export const AppointmentSchedulingModal = ({
                                         What service does{' '}
                                         <span className="font-bold text-slate-700">
                                             {displayedStudent?.firstName ||
-                                                'the patient'}
+                                                'the learner'}
                                         </span>{' '}
                                         need?
                                     </p>
@@ -1538,7 +1538,7 @@ export const AppointmentSchedulingModal = ({
                                                         </p>
                                                         <p className="text-[10px] sm:text-xs font-medium mt-0.5 text-slate-400">
                                                             Either the provider
-                                                            or the patient is
+                                                            or the learner is
                                                             busy.
                                                         </p>
                                                     </div>
@@ -1735,7 +1735,7 @@ export const AppointmentSchedulingModal = ({
                                             )}
 
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                {/* Patient Summary Node */}
+                                                {/* Student Summary Node */}
                                                 <div className="p-4 border border-slate-200 rounded-xl sm:rounded-2xl bg-white shadow-sm flex items-start gap-3">
                                                     <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
                                                         {displayedStudent?.profilePicture ? (
@@ -1756,7 +1756,7 @@ export const AppointmentSchedulingModal = ({
                                                     </div>
                                                     <div className="min-w-0">
                                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
-                                                            Patient
+                                                            Student
                                                         </p>
                                                         <p className="text-sm font-bold text-slate-900 truncate">
                                                             {

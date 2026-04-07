@@ -17,7 +17,7 @@ export const getAppointmentsNew = async (ctx: any = {}) => {
     return res;
 };
 
-// 2. List view for Dashboard (Patient or Therapist perspective)
+// 2. List view for Dashboard (Learner or Therapist perspective)
 export const getAppointments = async (ctx: any = {}) => {
     const [
         ,
@@ -28,8 +28,8 @@ export const getAppointments = async (ctx: any = {}) => {
             page,
             startAt, // ISO String
             endAt, // ISO String
-            studentId, // Patient ID
-            therapistId, // Doctor ID
+            studentId, // Learner ID
+            therapistId, // Therapist ID
         } = {},
     ] = ctx.queryKey || [null, {}];
 

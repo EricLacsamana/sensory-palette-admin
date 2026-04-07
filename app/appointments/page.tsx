@@ -661,7 +661,7 @@ export default function MultiViewAppointmentsPage() {
                         </div>
                         <Input
                             className="pl-11 bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50/50 transition-all rounded-xl h-11 text-sm font-medium placeholder:text-slate-400 shadow-inner"
-                            placeholder="Search patients, providers..."
+                            placeholder="Search learners, providers..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -868,10 +868,10 @@ export default function MultiViewAppointmentsPage() {
                                                         Time
                                                     </th>
                                                     <th className="p-4">
-                                                        Patient
+                                                        Learner
                                                     </th>
                                                     <th className="p-4">
-                                                        Provider
+                                                        Therapist
                                                     </th>
                                                     <th className="p-4">
                                                         Service
@@ -1201,7 +1201,7 @@ function AppointmentCard({
                     </Avatar>
                     <div className="min-w-0">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                            Patient
+                            Learner
                         </p>
                         <p className="text-base font-black text-slate-900 truncate">
                             {app.student?.fullName ||

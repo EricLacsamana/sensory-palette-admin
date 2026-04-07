@@ -15,7 +15,7 @@ export interface AppointmentResponse {
 
     // Relations
     service?: ServiceResponse;
-    student?: UserResponse; // Patient
+    student?: UserResponse; // Student
     therapist?: UserResponse; // Provider
 
     createdAt: string;

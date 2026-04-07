@@ -19,5 +19,5 @@ export type AppointmentStatus =
     | 'in_progress' // Session active
     | 'completed' // Success
     | 'cancelled' // Voided
-    | 'no_show' // Patient missed
+    | 'no_show' // Student missed
     | 'reschedule'; // Needs moving
