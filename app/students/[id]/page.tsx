@@ -55,7 +55,7 @@ import { getActivitySessionsNew } from '@/api/activity-session';
 import { getStudentAnalytics } from '@/api/analytics';
 import { getStudent } from '@/api/students';
 import { cn } from '@/lib/utils';
-import { FormatService } from '@/utils/helpers';
+import { FormatService, formatTherapyTime } from '@/utils/helpers';
 import { UserAvatar } from '@/components/UserAvatar';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { ActivitySessionResponse } from '@/types/activitiy-session';
@@ -665,7 +665,9 @@ export default function StudentDashboard() {
                     { align: 'center' },
                 );
                 doc.text(
-                    `${analytics?.overviewMetrics?.totalTherapyHours || 0}h`,
+                    formatTherapyTime(
+                        analytics?.overviewMetrics?.totalTherapyHours,
+                    ),
                     102.5,
                     yPos + 15,
                     { align: 'center' },
@@ -959,7 +961,9 @@ export default function StudentDashboard() {
                     />
                     <DashboardStatCard
                         title="Therapy Time"
-                        value={`${overviewMetrics?.totalTherapyHours || 0}h`}
+                        value={formatTherapyTime(
+                            overviewMetrics?.totalTherapyHours,
+                        )}
                         trend="Total Logged"
                         icon={Clock}
                         colorClass="text-amber-500"

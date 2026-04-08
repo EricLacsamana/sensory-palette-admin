@@ -231,3 +231,15 @@ export const calculateElapsedSeconds = (
 
     return Math.max(0, Math.floor(totalActiveMs / 1000));
 };
+
+export const formatTherapyTime = (hoursDecimal?: number) => {
+    if (!hoursDecimal) return '0 mins';
+
+    const hrs = Math.floor(hoursDecimal);
+    const mins = Math.round((hoursDecimal - hrs) * 60);
+
+    const hrStr = hrs > 0 ? `${hrs} ${hrs === 1 ? 'hr' : 'hrs'}` : '';
+    const minStr = mins > 0 ? `${mins} mins` : '';
+
+    return [hrStr, minStr].filter(Boolean).join(' ');
+};

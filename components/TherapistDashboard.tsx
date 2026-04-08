@@ -135,7 +135,7 @@ import {
 } from '@/api/activity-session';
 import { getGlobalAnalytics, getStudentAnalytics } from '@/api/analytics';
 import { cn } from '@/lib/utils';
-import { FormatService } from '@/utils/helpers';
+import { FormatService, formatTherapyTime } from '@/utils/helpers';
 import {
     ActivitySessionResponse,
     ActivitySessionStatus,
@@ -148,6 +148,7 @@ import { ActivityCalendar } from '@/components/ActivityCalendar';
 import { NotificationCenter } from './NotificationCenter';
 import { DateRangePicker } from './DateRangePicker';
 import { UserResponse } from '@/types';
+import { getStudents } from '@/api/students';
 
 const PATTERN_ICONS: Record<string, any> = {
     'Impulsive Responding': Zap,
@@ -346,7 +347,7 @@ const CustomRadarTooltip = ({ active, payload }: any) => {
 const StudentComparisonPanel = ({
     uniqueStudents,
 }: {
-    uniqueStudents: any[];
+    uniqueStudents: UserResponse[];
 }) => {
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [dateRange, setDateRange] = useState(() => {
@@ -1028,6 +1029,15 @@ export default function Dashboard() {
         queryFn: getActivitySessionsNew,
     });
 
+    const {
+        data: studentsList = [],
+        isFetching,
+        isLoading,
+    } = useQuery({
+        queryKey: ['students', {}],
+        queryFn: getStudents,
+    });
+
     const dateRange = useMemo(() => {
         const end = new Date();
         const start = new Date();
@@ -1042,16 +1052,6 @@ export default function Dashboard() {
         queryKey: ['global-analytics', dateRange],
         queryFn: getGlobalAnalytics,
     });
-
-    const uniqueStudents = useMemo(() => {
-        const map = new Map();
-        activitySessions.forEach((s: any) => {
-            if (s.student && s.student.id) {
-                map.set(s.student.id, s.student);
-            }
-        });
-        return Array.from(map.values());
-    }, [activitySessions]);
 
     const pendingQueue = activitySessions
         .filter(
@@ -1318,7 +1318,9 @@ export default function Dashboard() {
                     />
                     <DashboardStatCard
                         title="Total Therapy Time"
-                        value={`${overviewMetrics?.totalTherapyHours || 0}h`}
+                        value={formatTherapyTime(
+                            overviewMetrics?.totalTherapyHours,
+                        )}
                         trend="Hours Logged 30d"
                         icon={<Clock />}
                         colorClass="text-blue-500"
@@ -1483,7 +1485,7 @@ export default function Dashboard() {
                 </section>
 
                 <section>
-                    <StudentComparisonPanel uniqueStudents={uniqueStudents} />
+                    <StudentComparisonPanel uniqueStudents={studentsList} />
                 </section>
 
                 <div className="h-24 w-full shrink-0" aria-hidden="true" />
