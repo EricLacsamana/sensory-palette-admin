@@ -159,7 +159,6 @@ export const getAppointment = async (ctx: any = {}) => {
     const url = `${ENDPOINTS.APPOINTMENTS}/${id}?${queryString}`;
 
     const res = await api.get(url).then(({ data }) => data.data);
-    console.log('quack', res);
 
     return res;
 };

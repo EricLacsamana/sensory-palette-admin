@@ -10,12 +10,10 @@ export const getActivitySessionsNew = async (ctx: any = {}) => {
     const [queryKey, query] = ctx.queryKey;
 
     const queryString = qs.stringify(query, { encodeValuesOnly: true });
-    console.log(queryKey, queryString);
-    // console.log('query', queryString);
+
     const url = `${ENDPOINTS.ACTIVITY_SESSIONS}?${queryString}`;
 
     const res = await api.get(url).then(({ data }) => data.data);
-    console.log('quack', res);
 
     return res;
 };
@@ -70,7 +68,6 @@ export const getActivitySessions = async (ctx: any = {}) => {
 
     const queryString = qs.stringify(query, { encodeValuesOnly: true });
 
-    // console.log('query', queryString);
     const url = `${ENDPOINTS.ACTIVITY_SESSIONS}?${queryString}`;
 
     return api.get(url).then(({ data }) => data.data);
@@ -85,7 +82,6 @@ export const getActivitySession = async (id: string) => {
 export const createActivitySession = async (
     payload: CreateActivitySessionPayload,
 ) => {
-    console.log('create payload', payload);
     const { data } = await api.post(ENDPOINTS.ACTIVITY_SESSIONS, {
         data: payload,
     });
@@ -96,7 +92,6 @@ export const updateActivitySession = async (
     id: string,
     payload: UpdatectivitySessionPayload,
 ) => {
-    console.log('update payload', payload);
     const { data } = await api.put(`${ENDPOINTS.ACTIVITY_SESSIONS}/${id}`, {
         data: payload,
     });

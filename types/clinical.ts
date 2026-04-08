@@ -20,4 +20,5 @@ export type AppointmentStatus =
     | 'completed' // Success
     | 'cancelled' // Voided
     | 'no_show' // Student missed
-    | 'reschedule'; // Needs moving
+    | 'reschedule' // Needs moving
+    | 'partial';

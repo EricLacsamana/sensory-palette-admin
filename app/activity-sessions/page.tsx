@@ -108,7 +108,8 @@ export default function ActivitySessions() {
                     fetchNextPage();
                 }
             },
-            { threshold: 1.0 },
+            // FIX 1: Lowered threshold so it triggers as soon as 10% of the target is visible
+            { threshold: 0.1 },
         );
 
         if (observerTarget.current) {
@@ -116,7 +117,9 @@ export default function ActivitySessions() {
         }
 
         return () => observer.disconnect();
-    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+        // FIX 2: Added `viewMode` so the observer re-attaches when switching between Grid and Table
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage, viewMode]);
 
     const activitySessions = data?.pages.flat() || [];
 

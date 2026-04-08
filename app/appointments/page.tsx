@@ -121,6 +121,10 @@ const STATUS_CONFIG: Record<
         label: 'Reschedule',
         style: 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200/60',
     },
+    partial: {
+        label: 'Partial',
+        style: 'bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200/60',
+    },
 };
 
 // --- Sub-component: Clickable Status Dropdown ---
@@ -639,13 +643,6 @@ export default function MultiViewAppointmentsPage() {
                                 </Button>
                             </div>
                         </div>
-
-                        <Button
-                            onClick={handleOpenBookModal}
-                            className="h-12 w-full sm:w-auto px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shrink-0"
-                        >
-                            <Plus className="mr-2 h-5 w-5" /> Book Appt
-                        </Button>
                     </div>
                 </header>
 

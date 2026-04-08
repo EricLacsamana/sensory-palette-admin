@@ -31,7 +31,6 @@ export const getTherapists = async (ctx: any): Promise<UserResponse[]> => {
 
     // FIX: Await the response and extract .data
     const response = await api.get(`${ENDPOINTS.USERS}?${params.toString()}`);
-    console.log('getTherapists response', response);
     return response.data;
 };
 

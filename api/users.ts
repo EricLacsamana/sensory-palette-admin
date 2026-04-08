@@ -8,7 +8,6 @@ export const me = () => {
 export const createUser = async (payload: any) => {
     const { data } = await api.post(ENDPOINTS.USERS, payload);
 
-    console.log('data create', data);
     return data;
 };
 
@@ -25,7 +24,6 @@ export const getUsers = async (ctx: any) => {
 
     const response = await api.get(url);
 
-    console.log('res', response?.data);
     return response?.data ?? [];
 };
 

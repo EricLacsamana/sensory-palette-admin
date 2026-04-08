@@ -99,7 +99,6 @@ const SessionPlanningModal = ({ onClose }: { onClose?: () => void }) => {
         queryFn: getAppointments,
     });
 
-    console.log('Appointments for planning', appointmentsList);
     // --- FORECASTING LOGIC (Grouped by Date) ---
     const groupedUpcomingAppointments = useMemo(() => {
         const list = appointmentsList as AppointmentResponse[];

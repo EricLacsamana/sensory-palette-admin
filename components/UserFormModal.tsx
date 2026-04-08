@@ -51,7 +51,6 @@ export default function UserFormModal({
                     ],
                 });
 
-                console.log('users res', userRes);
                 const users = Array.isArray(userRes)
                     ? userRes
                     : userRes?.data || [];

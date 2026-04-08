@@ -19,7 +19,8 @@ import {
     Settings,
     Users2,
     Loader2,
-    CalendarPlus, // <-- Imported for the collapsed appointment button
+    CalendarPlus,
+    CalendarDays, // <-- Imported for the collapsed appointment button
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -63,6 +64,12 @@ const NAV_ITEMS = [
         label: 'Activity Manager',
         icon: Gamepad2,
         allowedRoles: ['admin'],
+    },
+    {
+        path: '/appointments', // <-- 2. Added Appointments Tab
+        label: 'Appointments',
+        icon: CalendarDays,
+        allowedRoles: ['admin'], // <-- Restricted to admin only
     },
     {
         path: '/activity-sessions',

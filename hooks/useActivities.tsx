@@ -47,8 +47,6 @@ export const useUpdateActivity = () => {
             // to avoid TS errors if your Activity type doesn't strictly define these Strapi fields
             payload: ActivityResponse;
         }) => {
-            console.log('Original payload before cleaning:', payload);
-
             // Destructure out the read-only keys that Strapi rejects on update
             const {
                 id: _id,
