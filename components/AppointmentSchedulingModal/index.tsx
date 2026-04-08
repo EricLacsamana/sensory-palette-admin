@@ -41,10 +41,10 @@ import {
     updateAppointment,
     getAppointments,
     getAppointment,
-} from '@/api/appointment';
+} from '@/api/service-appointments';
 import { getStudent, getStudents } from '@/api/students';
 import { getTherapists } from '@/api/therapist';
-import { getServices } from '@/api/service';
+import { getServices } from '@/api/service-appointments';
 import { UserResponse } from '@/types';
 import { ServiceResponse } from '@/types/service';
 import {

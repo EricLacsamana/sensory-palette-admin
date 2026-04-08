@@ -50,7 +50,7 @@ import { Toaster, toast } from 'sonner';
 
 // Custom Components & Types
 import { cn } from '@/lib/utils';
-import { getAppointments, updateAppointment } from '@/api/appointment';
+import { getAppointments, updateAppointment } from '@/api/service-appointments';
 import { AppointmentResponse } from '@/types/appointment';
 import { AppointmentSchedulingModal } from '@/components/AppointmentSchedulingModal';
 import { FormatService } from '@/utils/helpers';

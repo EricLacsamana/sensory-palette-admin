@@ -37,7 +37,7 @@ import { Header } from './components/Header';
 import { ActivitiesSiderbar } from './components/ActivitiesSidebar';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getAppointments } from '@/api/appointment';
+import { getAppointments } from '@/api/service-appointments';
 import {
     createActivitySession,
     updateActivitySession,
