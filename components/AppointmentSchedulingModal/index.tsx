@@ -427,9 +427,11 @@ export const AppointmentSchedulingModal = ({
             return [];
         const slots: string[] = [];
         const clinicStartHour = 8,
-            clinicEndHour = 17,
-            intervalMinutes = 30;
-        const serviceDuration = selectedService.durationMinutes || 30;
+            clinicEndHour = 17;
+
+        const serviceDuration = selectedService.durationMinutes || 60;
+
+        const intervalMinutes = serviceDuration;
 
         const currentSlot = new Date(`${selectedDate}T00:00:00`);
         currentSlot.setHours(clinicStartHour, 0, 0, 0);
