@@ -46,10 +46,11 @@ import {
     Layers,
     BrainCircuit,
     User,
+    ChevronDown,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
 import { getActivitySessionsNew } from '@/api/activity-session';
 import { getStudentAnalytics } from '@/api/analytics';
@@ -171,7 +172,7 @@ const EmptyWidgetState = ({
 }) => (
     <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-3 opacity-80 min-h-[200px]">
         <Icon size={32} className="text-slate-200" />
-        <span className="text-xs font-bold uppercase tracking-widest text-center px-4">
+        <span className="text-xs font-bold uppercase tracking-widest text-center px-4 leading-relaxed">
             {message}
         </span>
     </div>
@@ -406,6 +407,10 @@ export default function StudentDashboard() {
     const historyScrollRef = useRef<HTMLDivElement>(null);
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
+    // Custom Dropdown State
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
     const [dateRange, setDateRange] = useState(() => {
         const end = new Date();
         const start = new Date();
@@ -415,6 +420,21 @@ export default function StudentDashboard() {
             to: format(end, 'yyyy-MM-dd'),
         };
     });
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                dropdownRef.current &&
+                !dropdownRef.current.contains(event.target as Node)
+            ) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () =>
+            document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const { data: student, isLoading: isLoadingStudent } = useQuery({
         queryKey: ['student', studentId],
@@ -487,6 +507,7 @@ export default function StudentDashboard() {
         return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
     };
 
+    // Global aggregated timeline data from the backend
     const mergedTimelineData = useMemo(() => {
         if (!analytics?.charts?.performanceTimeline) return [];
         return analytics.charts.performanceTimeline.map((item: any) => ({
@@ -495,6 +516,78 @@ export default function StudentDashboard() {
             prevAccuracy: item.prevAccuracy || 0,
         }));
     }, [analytics?.charts?.performanceTimeline]);
+
+    // 1. Extract unique activities (FOOLPROOF STRAPI EXTRACTION + BANNER SUPPORT)
+    const uniqueActivities = useMemo(() => {
+        const activitiesMap = new Map();
+
+        (activitySessions || []).forEach((session: any) => {
+            let actId = session?.activity?.documentId || session?.activity?.id;
+            let actName = session?.activity?.name;
+            let actBanner = session?.activity?.banner;
+
+            // Handle nested Strapi v4/v5 format
+            if (!actId && session?.activity?.data) {
+                actId =
+                    session.activity.data.documentId ||
+                    session.activity.data.id;
+                actName =
+                    session.activity.data.attributes?.name ||
+                    session.activity.data.name;
+                actBanner = session.activity.data.attributes?.banner;
+            }
+
+            // Only map activities we actually have records for
+            if (actId && !activitiesMap.has(String(actId))) {
+                activitiesMap.set(String(actId), {
+                    id: String(actId),
+                    name: actName || 'Unknown Activity',
+                    banner: actBanner,
+                });
+            }
+        });
+
+        return Array.from(activitiesMap.values());
+    }, [activitySessions]);
+
+    // Track the selected activity for filtering the Line Chart
+    const [selectedActivityId, setSelectedActivityId] = useState<string>('all');
+
+    // For rendering the selected item in our custom dropdown
+    const activeDropdownItem =
+        selectedActivityId === 'all'
+            ? null
+            : uniqueActivities.find((a) => a.id === selectedActivityId);
+
+    // 2. Compute dynamic timeline data based on selection
+    const filteredTimelineData = useMemo(() => {
+        if (selectedActivityId === 'all') {
+            return mergedTimelineData;
+        }
+
+        const specificSessions = (activitySessions || [])
+            .filter((s: any) => {
+                let actId = s?.activity?.documentId || s?.activity?.id;
+                if (!actId && s?.activity?.data) {
+                    actId = s.activity.data.documentId || s.activity.data.id;
+                }
+                return (
+                    String(actId) === String(selectedActivityId) &&
+                    !!s.actualStartAt
+                );
+            })
+            .sort(
+                (a: any, b: any) =>
+                    new Date(a.actualStartAt).getTime() -
+                    new Date(b.actualStartAt).getTime(),
+            );
+
+        return specificSessions.map((s: any, index: number, arr: any[]) => ({
+            date: format(new Date(s.actualStartAt), 'MMM dd, h:mm a'),
+            currentAccuracy: s.accuracy ?? 0,
+            prevAccuracy: index > 0 ? (arr[index - 1].accuracy ?? null) : null,
+        }));
+    }, [selectedActivityId, mergedTimelineData, activitySessions]);
 
     // ✨ AESTHETIC BRANDED PDF GENERATOR ✨
     const handleDownloadPDF = async () => {
@@ -987,7 +1080,7 @@ export default function StudentDashboard() {
                     {/* LINE CHART */}
                     <Card
                         id="pdf-line-chart"
-                        className="col-span-1 xl:col-span-3 rounded-[32px] border-slate-200 shadow-sm bg-white h-[420px] flex flex-col relative overflow-hidden"
+                        className="col-span-1 xl:col-span-3 rounded-[32px] border-slate-200 shadow-sm bg-white h-[420px] flex flex-col relative overflow-hidden z-20"
                     >
                         <CardHeader className="py-5 px-8 border-b border-slate-50 flex flex-row items-center justify-between shrink-0">
                             <div className="flex items-center gap-2">
@@ -999,12 +1092,142 @@ export default function StudentDashboard() {
                                     Accuracy Progress Over Time
                                 </TechnicalLabel>
                             </div>
+
+                            {/* CUSTOM ACTIVITY FILTER DROPDOWN */}
+                            {uniqueActivities.length === 0 ? (
+                                <div className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 flex items-center gap-1.5 shadow-inner">
+                                    <AlertTriangle
+                                        size={12}
+                                        className="text-amber-500"
+                                    />
+                                    No sessions in{' '}
+                                    {format(new Date(dateRange.from), 'MMM d')}{' '}
+                                    - {format(new Date(dateRange.to), 'MMM d')}
+                                </div>
+                            ) : (
+                                <div className="relative" ref={dropdownRef}>
+                                    <button
+                                        onClick={() =>
+                                            setIsDropdownOpen(!isDropdownOpen)
+                                        }
+                                        className="flex items-center gap-2 text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none hover:bg-slate-50 transition-colors shadow-sm min-w-[200px] justify-between"
+                                    >
+                                        <div className="flex items-center gap-2 truncate">
+                                            {activeDropdownItem ? (
+                                                <>
+                                                    <img
+                                                        src={
+                                                            FormatService.formatStrapiMedia(
+                                                                activeDropdownItem.banner,
+                                                                'thumbnail',
+                                                            ) ||
+                                                            'https://via.placeholder.com/40'
+                                                        }
+                                                        alt={
+                                                            activeDropdownItem.name
+                                                        }
+                                                        className="w-5 h-5 rounded flex-shrink-0 object-cover border border-slate-100"
+                                                    />
+                                                    <span className="truncate">
+                                                        {
+                                                            activeDropdownItem.name
+                                                        }
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="w-5 h-5 rounded bg-indigo-50 flex items-center justify-center text-indigo-500 flex-shrink-0">
+                                                        <Activity size={12} />
+                                                    </div>
+                                                    <span>All Activities</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        <ChevronDown
+                                            size={14}
+                                            className={cn(
+                                                'text-slate-400 shrink-0 transition-transform',
+                                                isDropdownOpen && 'rotate-180',
+                                            )}
+                                        />
+                                    </button>
+
+                                    {isDropdownOpen && (
+                                        <div className="absolute right-0 top-full mt-1.5 w-full min-w-[220px] bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div className="max-h-[250px] overflow-y-auto custom-scrollbar p-1.5">
+                                                {/* "All Activities" Option */}
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedActivityId(
+                                                            'all',
+                                                        );
+                                                        setIsDropdownOpen(
+                                                            false,
+                                                        );
+                                                    }}
+                                                    className={cn(
+                                                        'flex items-center gap-2 w-full text-left px-2 py-2 rounded-lg text-[11px] font-bold transition-colors',
+                                                        selectedActivityId ===
+                                                            'all'
+                                                            ? 'bg-indigo-50 text-indigo-700'
+                                                            : 'text-slate-600 hover:bg-slate-50',
+                                                    )}
+                                                >
+                                                    <div className="w-6 h-6 rounded bg-indigo-100 flex items-center justify-center text-indigo-500 flex-shrink-0">
+                                                        <Activity size={12} />
+                                                    </div>
+                                                    All Activities
+                                                </button>
+
+                                                <div className="h-px bg-slate-100 my-1 mx-2" />
+
+                                                {/* Unique Activities from API */}
+                                                {uniqueActivities.map((act) => (
+                                                    <button
+                                                        key={act.id}
+                                                        onClick={() => {
+                                                            setSelectedActivityId(
+                                                                act.id,
+                                                            );
+                                                            setIsDropdownOpen(
+                                                                false,
+                                                            );
+                                                        }}
+                                                        className={cn(
+                                                            'flex items-center gap-2 w-full text-left px-2 py-2 rounded-lg text-[11px] font-bold transition-colors',
+                                                            selectedActivityId ===
+                                                                act.id
+                                                                ? 'bg-indigo-50 text-indigo-700'
+                                                                : 'text-slate-600 hover:bg-slate-50',
+                                                        )}
+                                                    >
+                                                        <img
+                                                            src={
+                                                                FormatService.formatStrapiMedia(
+                                                                    act.banner,
+                                                                    'thumbnail',
+                                                                ) ||
+                                                                'https://via.placeholder.com/40'
+                                                            }
+                                                            alt={act.name}
+                                                            className="w-6 h-6 rounded flex-shrink-0 object-cover border border-slate-100"
+                                                        />
+                                                        <span className="truncate">
+                                                            {act.name}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </CardHeader>
                         <CardContent className="p-6 flex-1 min-h-0 relative">
-                            {mergedTimelineData.length > 0 ? (
+                            {filteredTimelineData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart
-                                        data={mergedTimelineData}
+                                        data={filteredTimelineData}
                                         margin={{
                                             top: 10,
                                             right: 10,
@@ -1116,7 +1339,7 @@ export default function StudentDashboard() {
                         </CardContent>
                     </Card>
 
-                    <Card className="col-span-1 xl:col-span-2 h-[420px] rounded-[32px] border-slate-200 shadow-sm bg-white flex flex-col overflow-hidden">
+                    <Card className="col-span-1 xl:col-span-2 h-[420px] rounded-[32px] border-slate-200 shadow-sm bg-white flex flex-col overflow-hidden z-10">
                         <CardHeader className="py-5 px-8 border-b border-slate-50 flex flex-row items-center gap-2 shrink-0">
                             <Trophy size={16} className="text-amber-500" />
                             <TechnicalLabel>
